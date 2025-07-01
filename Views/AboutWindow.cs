@@ -52,7 +52,7 @@ namespace MyNewsFeeder.Views
 
         private async Task CheckForUpdatesAsync()
         {
-            const string currentVersion = "1.0.0"; // or Assembly…Version.ToString()
+            const string currentVersion = "1.0"; // or Assembly…Version.ToString()
             try
             {
                 using var client = new HttpClient();
