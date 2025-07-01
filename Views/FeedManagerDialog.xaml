@@ -1,0 +1,70 @@
+<Window x:Class="MyNewsFeeder.Views.FeedManagerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Feed Manager"
+        Height="400"
+        Width="600"
+        Style="{StaticResource MaterialDesignWindow}">
+
+    <materialDesign:DialogHost>
+        <Grid Margin="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Überschrift -->
+            <TextBlock Text="Manage your feeds"
+                       Style="{StaticResource MaterialDesignHeadline5TextBlock}"
+                       Margin="0,0,0,16"/>
+
+            <!-- Feed-Liste -->
+            <DataGrid Grid.Row="1"
+                      ItemsSource="{Binding Feeds}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      IsReadOnly="True">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="Enabled"
+                            Binding="{Binding IsEnabled}"
+                            Width="Auto"/>
+                    <DataGridTextColumn Header="Name"
+                            Binding="{Binding Name}"
+                            Width="*"/>
+                    <DataGridTextColumn Header="URL"
+                            Binding="{Binding Url}"
+                            Width="2*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Aktions-Buttons -->
+            <StackPanel Grid.Row="2"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Margin="0,16,0,0">
+                <Button Content="Add"
+                        Command="{Binding AddCommand}"
+                        Margin="8,0"
+                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                <Button Content="Edit"
+                        Command="{Binding EditCommand}"
+                        Margin="8,0"
+                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                <Button Content="Remove"
+                        Command="{Binding RemoveCommand}"
+                        Margin="8,0"
+                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                <Button Content="Import"
+                        Command="{Binding ImportCommand}"
+                        Margin="8,0"
+                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                <Button Content="Export"
+                        Command="{Binding ExportCommand}"
+                        Margin="8,0"
+                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+            </StackPanel>
+        </Grid>
+    </materialDesign:DialogHost>
+</Window>

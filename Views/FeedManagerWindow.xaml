@@ -1,0 +1,156 @@
+<Window x:Class="MyNewsFeeder.Views.FeedManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Feed Manager"
+        Height="600"
+        Width="800"
+        Style="{StaticResource MaterialDesignWindow}"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{DynamicResource MaterialDesignFont}">
+
+        <Grid Margin="16">
+                <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <TextBlock Grid.Row="0"
+                           Text="Manage RSS Feeds"
+                           Style="{StaticResource MaterialDesignHeadline5TextBlock}"
+                           Margin="0,0,0,16"
+                           Foreground="{DynamicResource MaterialDesignBody}"/>
+
+                <!-- Enhanced Feed List with Selective Drag & Drop -->
+                <DataGrid Grid.Row="2"
+                          ItemsSource="{Binding Feeds}"
+                          SelectedItem="{Binding SelectedFeed}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          CanUserReorderColumns="False"
+                          CanUserSortColumns="False"
+                          SelectionMode="Single"
+                          AllowDrop="True"
+                          Style="{StaticResource MaterialDesignDataGrid}"
+                          Background="{DynamicResource MaterialDesignPaper}">
+
+                        <!-- Entfernte Event-Handler vom ItemContainerStyle -->
+                        <DataGrid.ItemContainerStyle>
+                                <Style TargetType="DataGridRow"
+                                                BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                        <Setter Property="AllowDrop"
+                                                        Value="True"/>
+                                        <!-- Entfernte alle EventSetter für bessere Checkbox-Funktionalität -->
+                                        <Style.Triggers>
+                                                <!-- Visual feedback during hover -->
+                                                <Trigger Property="IsMouseOver"
+                                                                Value="True">
+                                                        <Setter Property="Background"
+                                                                        Value="{DynamicResource MaterialDesignSelection}"/>
+                                                </Trigger>
+                                        </Style.Triggers>
+                                </Style>
+                        </DataGrid.ItemContainerStyle>
+
+                        <DataGrid.Columns>
+                                <!-- Drag Handle Column mit spezifischen Event-Handlern -->
+                                <DataGridTemplateColumn Header="⋮⋮"
+                                                Width="40"
+                                                CanUserResize="False">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                        <Border Background="Transparent"
+                                                                AllowDrop="True"
+                                                                PreviewMouseLeftButtonDown="DragHandle_PreviewMouseLeftButtonDown"
+                                                                Drop="DragHandle_Drop"
+                                                                DragOver="DragHandle_DragOver"
+                                                                DragEnter="DragHandle_DragEnter"
+                                                                DragLeave="DragHandle_DragLeave">
+                                                                <TextBlock Text="⋮⋮"
+                                                                           HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"
+                                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                                           FontSize="16"
+                                                                           Cursor="SizeAll"
+                                                                           ToolTip="Drag to reorder feeds"/>
+                                                        </Border>
+                                                </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- Enabled Column mit verbessertem Binding -->
+                                <DataGridCheckBoxColumn Header="Enabled"
+                                                        Binding="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                        Width="80"/>
+
+                                <!-- Name Column -->
+                                <DataGridTextColumn Header="Name"
+                                                    Binding="{Binding Name}"
+                                                    Width="200">
+                                        <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                        <Setter Property="ToolTip"
+                                                                        Value="Double-click to edit"/>
+                                                </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- URL Column -->
+                                <DataGridTextColumn Header="URL"
+                                                    Binding="{Binding Url}"
+                                                    Width="*">
+                                        <DataGridTextColumn.ElementStyle>
+                                                <Style TargetType="TextBlock">
+                                                        <Setter Property="ToolTip"
+                                                                        Value="Double-click to edit"/>
+                                                </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+                        </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Action Buttons -->
+                <StackPanel Grid.Row="3"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,16,0,0">
+                        <Button Content="Add Feed"
+                                Command="{Binding AddFeedCommand}"
+                                Margin="8,0"
+                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                        <Button Content="Remove Feed"
+                                Command="{Binding RemoveFeedCommand}"
+                                Margin="8,0"
+                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                        <Separator Margin="8,0"/>
+                        <Button Content="Import"
+                                Command="{Binding ImportCommand}"
+                                Margin="8,0"
+                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                        <Button Content="Export"
+                                Command="{Binding ExportCommand}"
+                                Margin="8,0"
+                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                        <Separator Margin="8,0"/>
+                        <Button Content="Close"
+                                Command="{Binding CloseCommand}"
+                                CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}"
+                                Margin="8,0"
+                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                </StackPanel>
+
+                <!-- Info Text -->
+                <TextBlock Grid.Row="4"
+                           Text="• Drag the ⋮⋮ to reorder feeds • Click Name or URL to edit • Use checkboxes to enable/disable feeds"
+                           FontSize="10"
+                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                           Margin="0,8,0,0"
+                           TextWrapping="Wrap"/>
+        </Grid>
+</Window>

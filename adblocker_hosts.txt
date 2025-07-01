@@ -1,0 +1,25 @@
+# MyNewsFeeder AdBlocker - Custom Hosts File
+# Add domains to block, one per line
+# Format: domain.com or 0.0.0.0 domain.com
+
+# Social Media Tracking
+0.0.0.0 facebook.com/tr
+0.0.0.0 connect.facebook.net
+0.0.0.0 twitter.com/i/adsct
+0.0.0.0 analytics.twitter.com
+
+# Common Ad Networks
+0.0.0.0 googleadservices.com
+0.0.0.0 googlesyndication.com
+0.0.0.0 doubleclick.net
+0.0.0.0 amazon-adsystem.com
+0.0.0.0 outbrain.com
+0.0.0.0 taboola.com
+
+# Analytics
+0.0.0.0 google-analytics.com
+0.0.0.0 googletagmanager.com
+0.0.0.0 scorecardresearch.com
+0.0.0.0 quantserve.com
+
+# Add your custom domains below:
