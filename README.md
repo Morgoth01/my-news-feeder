@@ -22,6 +22,9 @@ The ad blocker uses multiple filter lists (see below).
 2. Choose an interval from the dropdown: 5, 10, 15, 20, 30, 45, or 60 minutes.
 3. Click Save Feed Settings to start the timer.
 
+### Max articles per feed
+You can set the max articles per feed to control how many posts show up. This lets you decide how many latest articles you want to see in your feed at once.
+
 ### Toggle Dark Mode & Always-On Content
 * Dark Mode respects each website’s native theme via the integrated browser.
 * Show Content Always-On keeps the browser visible and reloads pages on each article selection.
@@ -71,6 +74,9 @@ Light Mode
 
 Integrated Browser
 <img width="1376" alt="3M77CjghVg" src="https://github.com/user-attachments/assets/f046ca95-a706-4041-b86c-14dc12c51b27" />
+
+Settings:
+<img width="313" alt="gHaJbnFoD8" src="https://github.com/user-attachments/assets/b0b71196-ed36-4f5e-a0e8-2ade945a2d93" />
 
 Filter feeds by Keyword
 <img width="1376" alt="RIwECWTp5l" src="https://github.com/user-attachments/assets/ee2733c8-4109-40f0-801a-d9bf76be3c02" />
