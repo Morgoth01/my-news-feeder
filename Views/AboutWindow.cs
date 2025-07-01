@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Navigation;
+using System.Text.Json;
 
 namespace MyNewsFeeder.Views
 {
@@ -51,23 +52,35 @@ namespace MyNewsFeeder.Views
 
         private async Task CheckForUpdatesAsync()
         {
+            const string currentVersion = "1.0.0"; // or Assembly…Version.ToString()
             try
             {
                 using var client = new HttpClient();
                 client.DefaultRequestHeaders.Add("User-Agent", "MyNewsFeeder");
                 client.Timeout = TimeSpan.FromSeconds(10);
 
-                var response = await client.GetStringAsync("https://api.github.com/repos/Morgoth01/My-News-Feeder/releases/latest");
+                var json = await client.GetStringAsync(
+                    "https://api.github.com/repos/Morgoth01/My-News-Feeder/releases/latest");
 
-                MessageBox.Show(
-                    "Update check completed!\n\n" +
-                    "Current Version: 2.0\n" +
-                    "You are running the latest version.\n\n" +
-                    "Visit GitHub for more information.",
-                    "Update Check",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                using var doc = JsonDocument.Parse(json);
+                var latestTag = doc.RootElement.GetProperty("tag_name").GetString();
+
+                if (latestTag.Equals(currentVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(
+                        $"You are running the latest version ({currentVersion}).",
+                        "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show(
+                        $"A new version is available: {latestTag}\n" +
+                        $"You are running: {currentVersion}\n\n" +
+                        "Visit GitHub to download the latest release.",
+                        "Update Available", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
             }
+
             catch (HttpRequestException)
             {
                 MessageBox.Show(
