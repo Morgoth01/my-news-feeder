@@ -75,7 +75,8 @@ Light Mode
 Integrated Browser
 <img width="1376" alt="3M77CjghVg" src="https://github.com/user-attachments/assets/f046ca95-a706-4041-b86c-14dc12c51b27" />
 
-Settings:
+Settings
+
 <img width="313" alt="gHaJbnFoD8" src="https://github.com/user-attachments/assets/b0b71196-ed36-4f5e-a0e8-2ade945a2d93" />
 
 Filter feeds by Keyword
