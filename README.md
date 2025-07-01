@@ -84,7 +84,6 @@ Feed Manager
 | Library                    | Purpose                                    | License                          | Link                                                                 |
 |----------------------------|--------------------------------------------|----------------------------------|----------------------------------------------------------------------|
 | MaterialDesignInXamlToolkit| UI theme and controls for WPF              | MIT                              | https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit   |
-| MaterialDesignColors       | Material Design color palette for WPF      | MIT                              | https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit   |
 | Microsoft.Web.WebView2     | Embedded Edge-based browser                | Microsoft Software License Terms | https://developer.microsoft.com/microsoft-edge/webview2/             |
 | System.Text.Json           | JSON serialization/deserialization         | MIT                              | https://www.nuget.org/packages/System.Text.Json/                     |
 | Microsoft.Extensions.Http  | HTTP client factory and helpers            | MIT                              | https://www.nuget.org/packages/Microsoft.Extensions.Http/            |
