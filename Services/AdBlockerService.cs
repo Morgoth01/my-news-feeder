@@ -28,7 +28,6 @@ namespace MyNewsFeeder.Services
             ["StevenBlackHosts"] = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
             ["AdGuardBase"] = "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/BaseFilter/sections/adservers.txt",
             ["UBlockOriginFilters"] = "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt",
-            ["PeterLowesList"] = "https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext"
         };
 
         public AdBlockerService()
