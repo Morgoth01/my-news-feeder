@@ -81,3 +81,25 @@ Feed Manager
 
 <img width="591" alt="KdRCWnq5Zu" src="https://github.com/user-attachments/assets/7f1cdd78-1bda-4798-93b1-4d93cf557ccf" />
 
+## Application Libraries
+
+| Library                    | Purpose                                    | License                          | Link                                                                 |
+|----------------------------|--------------------------------------------|----------------------------------|----------------------------------------------------------------------|
+| MaterialDesignInXamlToolkit| UI theme and controls for WPF              | MIT                              | https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit   |
+| MaterialDesignColors       | Material Design color palette for WPF      | MIT                              | https://github.com/MaterialDesignInXAML/MaterialDesignInXamlToolkit   |
+| Microsoft.Web.WebView2     | Embedded Edge-based browser                | Microsoft Software License Terms | https://developer.microsoft.com/microsoft-edge/webview2/             |
+| System.Text.Json           | JSON serialization/deserialization         | MIT                              | https://www.nuget.org/packages/System.Text.Json/                     |
+| Microsoft.Extensions.Http  | HTTP client factory and helpers            | MIT                              | https://www.nuget.org/packages/Microsoft.Extensions.Http/            |
+
+## Ad Blocker Filter Lists
+
+| Filter List                  | License                        | Description                                            |
+|------------------------------|--------------------------------|--------------------------------------------------------|
+| AdGuardBase.txt              | GPLv3                          | Core ad-blocking rules for banners and pop-ups         |
+| ClearURLs.txt                | GPLv3                          | Strips tracking parameters from URLs                   |
+| EasyList.txt                 | GPLv3 / CC BY-SA 3.0           | Removes most ads on international websites             |
+| EasyPrivacy.txt              | GPLv3 / CC BY-SA 3.0           | Blocks tracking scripts and web bugs                   |
+| FanboysAnnoyances.txt        | CC BY 3.0                      | Hides overlays, cookie notices, and social widgets     |
+| NoCoinList.txt               | MIT                            | Prevents in-browser cryptocurrency mining              |
+| la–StevenBlackHosts.txt      | CC BY 3.0                      | DNS-level hosts file blocking ads, malware, trackers   |
+| uBlockOriginFilters.txt      | GPLv3                          | Additional rules from the uBlock Origin community      |
