@@ -5,46 +5,23 @@ using System.Windows.Data;
 
 namespace MyNewsFeeder.Converters
 {
-    /// <summary>
-    /// Converts double values to GridLength for dynamic row/column sizing.
-    /// </summary>
+    [ValueConversion(typeof(double), typeof(GridLength))]
     public class DoubleToGridLengthConverter : IValueConverter
     {
+        // ViewModel -> XAML
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            try
-            {
-                if (value is double doubleValue && doubleValue > 0)
-                {
-                    return new GridLength(doubleValue, GridUnitType.Pixel);
-                }
-
-                // Default fallback
-                return new GridLength(350, GridUnitType.Pixel);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error in DoubleToGridLengthConverter: {ex.Message}");
-                return new GridLength(350, GridUnitType.Pixel);
-            }
+            if (value is double d && d >= 0)
+                return new GridLength(d, GridUnitType.Pixel);
+            return DependencyProperty.UnsetValue;
         }
 
+        // XAML -> ViewModel
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            try
-            {
-                if (value is GridLength gridLength && gridLength.GridUnitType == GridUnitType.Pixel)
-                {
-                    return gridLength.Value;
-                }
-
-                return 350.0; // Default fallback
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error in DoubleToGridLengthConverter ConvertBack: {ex.Message}");
-                return 350.0;
-            }
+            if (value is GridLength gl && gl.IsAbsolute)
+                return gl.Value;
+            return DependencyProperty.UnsetValue;
         }
     }
 }

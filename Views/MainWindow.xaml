@@ -3,6 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:vm="clr-namespace:MyNewsFeeder.ViewModels"
+        xmlns:sel="clr-namespace:MyNewsFeeder.Views"
         xmlns:conv="clr-namespace:MyNewsFeeder.Converters"
         Title="My News Feeder"
         Height="700"
@@ -18,13 +20,53 @@
         TextOptions.TextFormattingMode="Ideal"
         TextOptions.TextRenderingMode="Auto"
         Background="{DynamicResource MaterialDesignPaper}"
-        FontFamily="{DynamicResource MaterialDesignFont}">
+        FontFamily="{DynamicResource MaterialDesignFont}"
+        Loaded="MainWindow_Loaded"
+        Closing="Window_Closing">
 
     <!-- Enhanced Converter Registration -->
     <Window.Resources>
         <conv:StringEqualsConverter x:Key="StringEqualsConverter"/>
         <conv:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <conv:DoubleToGridLengthConverter x:Key="DoubleToGridLengthConverter"/>
+        <Style x:Key="CategoryContainerStyle"
+               TargetType="TreeViewItem"
+               BasedOn="{StaticResource MaterialDesignTreeViewItem}">
+            <Setter Property="IsExpanded"
+                    Value="{Binding IsExpanded, Mode=TwoWay}"/>
+            <Setter Property="Foreground"
+                    Value="{DynamicResource MaterialDesignBody}"/>
+            <EventSetter Event="Expanded"
+                         Handler="TreeViewItem_ExpandedCollapsed"/>
+            <EventSetter Event="Collapsed"
+                         Handler="TreeViewItem_ExpandedCollapsed"/>
+        </Style>
+        <Style x:Key="FeedContainerStyle"
+               TargetType="TreeViewItem"
+               BasedOn="{StaticResource MaterialDesignTreeViewItem}">
+            <Setter Property="IsExpanded"
+                    Value="{Binding IsExpanded, Mode=TwoWay}"/>
+            <Setter Property="Foreground"
+                    Value="{DynamicResource MaterialDesignBody}"/>
+            <EventSetter Event="Expanded"
+                         Handler="TreeViewItem_ExpandedCollapsed"/>
+            <EventSetter Event="Collapsed"
+                         Handler="TreeViewItem_ExpandedCollapsed"/>
+        </Style>
+        <Style x:Key="DefaultContainerStyle"
+               TargetType="TreeViewItem"
+               BasedOn="{StaticResource MaterialDesignTreeViewItem}">
+            <Setter Property="Foreground"
+                    Value="{DynamicResource MaterialDesignBody}"/>
+            <EventSetter Event="Expanded"
+                         Handler="TreeViewItem_ExpandedCollapsed"/>
+            <EventSetter Event="Collapsed"
+                         Handler="TreeViewItem_ExpandedCollapsed"/>
+        </Style>
+        <sel:TreeViewItemStyleSelector x:Key="TvItemStyleSelector"
+                                       CategoryStyle="{StaticResource CategoryContainerStyle}"
+                                       FeedStyle="{StaticResource FeedContainerStyle}"
+                                       DefaultStyle="{StaticResource DefaultContainerStyle}"/>
     </Window.Resources>
 
     <Grid>
@@ -227,40 +269,42 @@
         <!-- Main Content with Resizable Splitters -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250"
+                <ColumnDefinition Width="{Binding TreeWidth, Mode=TwoWay, Converter={StaticResource DoubleToGridLengthConverter}}"
                                   MinWidth="200"/>
                 <ColumnDefinition Width="5"/>
                 <ColumnDefinition Width="*"
                                   MinWidth="400"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Feed Tree with Dynamic Colors -->
+            <!-- Feed Tree -->
             <TreeView Grid.Column="0"
-                      ItemsSource="{Binding FeedGroups}"
+                      ItemsSource="{Binding CategoryGroups}"
+                      ItemContainerStyleSelector="{StaticResource TvItemStyleSelector}"
                       SelectedItemChanged="TreeView_SelectedItemChanged"
+                      VirtualizingStackPanel.IsVirtualizing="True"
+                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.CanContentScroll="True"
                       Margin="5"
                       Background="{DynamicResource MaterialDesignPaper}">
-                <TreeView.ItemContainerStyle>
-                    <Style TargetType="TreeViewItem"
-                           BasedOn="{StaticResource MaterialDesignTreeViewItem}">
-                        <Setter Property="IsExpanded"
-                                Value="{Binding IsExpanded, Mode=TwoWay}"/>
-                        <Setter Property="Foreground"
-                                Value="{DynamicResource MaterialDesignBody}"/>
-                    </Style>
-                </TreeView.ItemContainerStyle>
                 <TreeView.ItemTemplate>
-                    <HierarchicalDataTemplate ItemsSource="{Binding Items}">
+                    <HierarchicalDataTemplate ItemsSource="{Binding Feeds}">
                         <TextBlock Text="{Binding Name}"
                                    FontWeight="Bold"
                                    Foreground="{DynamicResource MaterialDesignBody}"/>
                         <HierarchicalDataTemplate.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Title}"
-                                           TextWrapping="Wrap"
-                                           MaxWidth="200"
+                            <HierarchicalDataTemplate ItemsSource="{Binding Items}">
+                                <TextBlock Text="{Binding Name}"
+                                           FontWeight="SemiBold"
                                            Foreground="{DynamicResource MaterialDesignBody}"/>
-                            </DataTemplate>
+                                <HierarchicalDataTemplate.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Title}"
+                                                   TextWrapping="Wrap"
+                                                   MaxWidth="200"
+                                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                                    </DataTemplate>
+                                </HierarchicalDataTemplate.ItemTemplate>
+                            </HierarchicalDataTemplate>
                         </HierarchicalDataTemplate.ItemTemplate>
                     </HierarchicalDataTemplate>
                 </TreeView.ItemTemplate>

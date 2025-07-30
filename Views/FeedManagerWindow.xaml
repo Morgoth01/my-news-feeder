@@ -2,17 +2,25 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:local="clr-namespace:MyNewsFeeder.Converters"
         Title="Feed Manager"
-        Height="600"
-        Width="800"
-        Style="{StaticResource MaterialDesignWindow}"
+        Height="700"
+        Width="1000"
+        WindowStartupLocation="CenterOwner"
         Background="{DynamicResource MaterialDesignPaper}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        TextElement.FontWeight="Regular"
+        TextElement.FontSize="13"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="Auto"
         FontFamily="{DynamicResource MaterialDesignFont}">
 
-        <Grid Margin="16">
+        <Window.Resources>
+                <local:CategoryVisibilityConverter x:Key="CategoryVisibilityConverter"/>
+        </Window.Resources>
+
+        <Grid Margin="20">
                 <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
@@ -21,133 +29,210 @@
 
                 <!-- Header -->
                 <TextBlock Grid.Row="0"
-                           Text="Manage RSS Feeds"
+                           Text="Feed Manager"
                            Style="{StaticResource MaterialDesignHeadline5TextBlock}"
-                           Margin="0,0,0,16"
-                           Foreground="{DynamicResource MaterialDesignBody}"/>
+                           Margin="0,0,0,20"
+                           HorizontalAlignment="Center"/>
 
-                <!-- Enhanced Feed List with Selective Drag & Drop -->
-                <DataGrid Grid.Row="2"
-                          ItemsSource="{Binding Feeds}"
-                          SelectedItem="{Binding SelectedFeed}"
-                          AutoGenerateColumns="False"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          CanUserReorderColumns="False"
-                          CanUserSortColumns="False"
-                          SelectionMode="Single"
-                          AllowDrop="True"
-                          Style="{StaticResource MaterialDesignDataGrid}"
-                          Background="{DynamicResource MaterialDesignPaper}">
+                <!-- Main Content -->
+                <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="300"/>
+                                <ColumnDefinition Width="10"/>
+                                <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
 
-                        <!-- Entfernte Event-Handler vom ItemContainerStyle -->
-                        <DataGrid.ItemContainerStyle>
-                                <Style TargetType="DataGridRow"
-                                                BasedOn="{StaticResource MaterialDesignDataGridRow}">
-                                        <Setter Property="AllowDrop"
-                                                        Value="True"/>
-                                        <!-- Entfernte alle EventSetter für bessere Checkbox-Funktionalität -->
-                                        <Style.Triggers>
-                                                <!-- Visual feedback during hover -->
-                                                <Trigger Property="IsMouseOver"
-                                                                Value="True">
-                                                        <Setter Property="Background"
-                                                                        Value="{DynamicResource MaterialDesignSelection}"/>
-                                                </Trigger>
-                                        </Style.Triggers>
-                                </Style>
-                        </DataGrid.ItemContainerStyle>
+                        <!-- Categories Panel -->
+                        <GroupBox Grid.Column="0"
+                                  Header="Categories"
+                                  Style="{StaticResource MaterialDesignCardGroupBox}"
+                                  Margin="0,0,5,0">
+                                <Grid>
+                                        <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
 
-                        <DataGrid.Columns>
-                                <!-- Drag Handle Column mit spezifischen Event-Handlern -->
-                                <DataGridTemplateColumn Header="⋮⋮"
-                                                Width="40"
-                                                CanUserResize="False">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                        <Border Background="Transparent"
-                                                                AllowDrop="True"
-                                                                PreviewMouseLeftButtonDown="DragHandle_PreviewMouseLeftButtonDown"
-                                                                Drop="DragHandle_Drop"
-                                                                DragOver="DragHandle_DragOver"
-                                                                DragEnter="DragHandle_DragEnter"
-                                                                DragLeave="DragHandle_DragLeave">
-                                                                <TextBlock Text="⋮⋮"
-                                                                           HorizontalAlignment="Center"
-                                                                           VerticalAlignment="Center"
-                                                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                                                           FontSize="16"
-                                                                           Cursor="SizeAll"
-                                                                           ToolTip="Drag to reorder feeds"/>
-                                                        </Border>
-                                                </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                                        <!-- Add Category Section -->
+                                        <StackPanel Grid.Row="0"
+                                                    Orientation="Horizontal"
+                                                    Margin="0,0,0,10">
+                                                <TextBox x:Name="NewCategoryTextBox"
+                                                         materialDesign:HintAssist.Hint="New category name"
+                                                         Text="{Binding NewCategoryName, UpdateSourceTrigger=PropertyChanged}"
+                                                         Width="180"
+                                                         VerticalAlignment="Center"
+                                                         Style="{StaticResource MaterialDesignFilledTextBox}"/>
+                                                <Button Content="Add"
+                                                        Command="{Binding AddCategoryCommand}"
+                                                        Margin="5,0,0,0"
+                                                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                        </StackPanel>
 
-                                <!-- Enabled Column mit verbessertem Binding -->
-                                <DataGridCheckBoxColumn Header="Enabled"
-                                                        Binding="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                        Width="80"/>
+                                        <!-- Categories List -->
+                                        <ListBox Grid.Row="1"
+                                                 ItemsSource="{Binding Categories}"
+                                                 SelectedItem="{Binding SelectedCategory}"
+                                                 Style="{StaticResource MaterialDesignListBox}">
+                                                <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                                <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="*"/>
+                                                                                <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
 
-                                <!-- Name Column -->
-                                <DataGridTextColumn Header="Name"
-                                                    Binding="{Binding Name}"
-                                                    Width="200">
-                                        <DataGridTextColumn.ElementStyle>
-                                                <Style TargetType="TextBlock">
-                                                        <Setter Property="ToolTip"
-                                                                        Value="Double-click to edit"/>
-                                                </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                </DataGridTextColumn>
+                                                                        <TextBlock Grid.Column="0"
+                                                                                   Text="{Binding Name}"
+                                                                                   VerticalAlignment="Center"/>
 
-                                <!-- URL Column -->
-                                <DataGridTextColumn Header="URL"
-                                                    Binding="{Binding Url}"
-                                                    Width="*">
-                                        <DataGridTextColumn.ElementStyle>
-                                                <Style TargetType="TextBlock">
-                                                        <Setter Property="ToolTip"
-                                                                        Value="Double-click to edit"/>
-                                                </Style>
-                                        </DataGridTextColumn.ElementStyle>
-                                </DataGridTextColumn>
-                        </DataGrid.Columns>
-                </DataGrid>
+                                                                        <!-- Show delete button only for non-Default categories -->
+                                                                        <Button Grid.Column="1"
+                                                                                Command="{Binding DataContext.RemoveCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                CommandParameter="{Binding}"
+                                                                                Style="{StaticResource MaterialDesignIconButton}"
+                                                                                ToolTip="Delete Category"
+                                                                                Visibility="{Binding Name, Converter={StaticResource CategoryVisibilityConverter}}">
+                                                                                <materialDesign:PackIcon Kind="Delete"
+                                                                                                         Width="16"
+                                                                                                         Height="16"/>
+                                                                        </Button>
+                                                                </Grid>
+                                                        </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                        </ListBox>
 
-                <!-- Action Buttons -->
-                <StackPanel Grid.Row="3"
+                                        <!-- Remove Category Button -->
+                                        <Button Grid.Row="2"
+                                                Content="Remove Selected Category"
+                                                Command="{Binding RemoveCategoryCommand}"
+                                                Style="{StaticResource MaterialDesignRaisedButton}"
+                                                Margin="0,10,0,0"/>
+                                </Grid>
+                        </GroupBox>
+
+                        <!-- Feeds Panel -->
+                        <GroupBox Grid.Column="2"
+                                  Header="Feeds"
+                                  Style="{StaticResource MaterialDesignCardGroupBox}"
+                                  Margin="5,0,0,0">
+                                <Grid>
+                                        <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <!-- Action Buttons -->
+                                        <StackPanel Grid.Row="0"
+                                                    Orientation="Horizontal"
+                                                    Margin="0,0,0,10">
+                                                <Button Content="Add Feed"
+                                                        Command="{Binding AddFeedCommand}"
+                                                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                                <Button Content="Remove Feed"
+                                                        Command="{Binding RemoveFeedCommand}"
+                                                        Margin="10,0,0,0"
+                                                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                                <Button Content="Import"
+                                                        Command="{Binding ImportCommand}"
+                                                        Margin="10,0,0,0"
+                                                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                                <Button Content="Export"
+                                                        Command="{Binding ExportCommand}"
+                                                        Margin="10,0,0,0"
+                                                        Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                        </StackPanel>
+
+                                        <!-- Feeds DataGrid -->
+                                        <DataGrid Grid.Row="1"
+                                                  ItemsSource="{Binding Feeds}"
+                                                  SelectedItem="{Binding SelectedFeed}"
+                                                  AutoGenerateColumns="False"
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  materialDesign:DataGridAssist.CellPadding="13 8 8 8"
+                                                  materialDesign:DataGridAssist.ColumnHeaderPadding="8"
+                                                  Style="{StaticResource MaterialDesignDataGrid}">
+
+                                                <DataGrid.Columns>
+                                                        <!-- Drag Handle Column -->
+                                                        <DataGridTemplateColumn Header=""
+                                                                                Width="30"
+                                                                                CanUserResize="False">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate>
+                                                                                <Border x:Name="DragHandle"
+                                                                                        Background="Transparent"
+                                                                                        Cursor="SizeAll"
+                                                                                        PreviewMouseLeftButtonDown="DragHandle_PreviewMouseLeftButtonDown"
+                                                                                        AllowDrop="True"
+                                                                                        DragOver="DragHandle_DragOver"
+                                                                                        DragEnter="DragHandle_DragEnter"
+                                                                                        DragLeave="DragHandle_DragLeave"
+                                                                                        Drop="DragHandle_Drop">
+                                                                                        <materialDesign:PackIcon Kind="DragVertical"
+                                                                                                                 Width="16"
+                                                                                                                 Height="16"
+                                                                                                                 Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                                                </Border>
+                                                                        </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                        </DataGridTemplateColumn>
+
+                                                        <!-- Enabled Column -->
+                                                        <DataGridTemplateColumn Header="Enabled"
+                                                                                Width="70">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate>
+                                                                                <CheckBox IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
+                                                                                          HorizontalAlignment="Center"/>
+                                                                        </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                        </DataGridTemplateColumn>
+
+                                                        <!-- Name Column -->
+                                                        <DataGridTextColumn Header="Name"
+                                                                            Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                                                            Width="*"/>
+
+                                                        <!-- Category Column -->
+                                                        <DataGridTemplateColumn Header="Category"
+                                                                                Width="150">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate>
+                                                                                <ComboBox ItemsSource="{Binding DataContext.CategoryNames, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                          SelectedItem="{Binding Category, UpdateSourceTrigger=PropertyChanged}"
+                                                                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                                                        </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                        </DataGridTemplateColumn>
+
+                                                        <!-- URL Column -->
+                                                        <DataGridTextColumn Header="URL"
+                                                                            Binding="{Binding Url, UpdateSourceTrigger=PropertyChanged}"
+                                                                            Width="2*"/>
+                                                </DataGrid.Columns>
+                                        </DataGrid>
+                                </Grid>
+                        </GroupBox>
+                </Grid>
+
+                <!-- Footer Buttons -->
+                <StackPanel Grid.Row="2"
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
-                            Margin="0,16,0,0">
-                        <Button Content="Add Feed"
-                                Command="{Binding AddFeedCommand}"
-                                Margin="8,0"
-                                Style="{StaticResource MaterialDesignRaisedButton}"/>
-                        <Button Content="Remove Feed"
-                                Command="{Binding RemoveFeedCommand}"
-                                Margin="8,0"
-                                Style="{StaticResource MaterialDesignRaisedButton}"/>
-                        <Separator Margin="8,0"/>
-                        <Button Content="Import"
-                                Command="{Binding ImportCommand}"
-                                Margin="8,0"
-                                Style="{StaticResource MaterialDesignRaisedButton}"/>
-                        <Button Content="Export"
-                                Command="{Binding ExportCommand}"
-                                Margin="8,0"
-                                Style="{StaticResource MaterialDesignRaisedButton}"/>
-                        <Separator Margin="8,0"/>
+                            Margin="0,20,0,0">
                         <Button Content="Close"
                                 Command="{Binding CloseCommand}"
                                 CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}"
-                                Margin="8,0"
-                                Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                Style="{StaticResource MaterialDesignRaisedButton}"
+                                Click="CloseButton_Click"/>
                 </StackPanel>
-
                 <!-- Info Text -->
-                <TextBlock Grid.Row="4"
-                           Text="• Drag the ⋮⋮ to reorder feeds • Click Name or URL to edit • Use checkboxes to enable/disable feeds"
+                <TextBlock Grid.Row="3"
+                           Text="• Drag the ⋮⋮ to reorder feeds • Click Name or URL to edit • Use checkboxes to enable/disable feeds • Create new categories and assign feeds"
                            FontSize="10"
                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                            Margin="0,8,0,0"

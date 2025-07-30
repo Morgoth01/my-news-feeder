@@ -10,7 +10,6 @@ using MyNewsFeeder.Models;
 using MyNewsFeeder.Services;
 using MyNewsFeeder.Views;
 using MaterialDesignThemes.Wpf;
-using MaterialDesignColors;
 
 namespace MyNewsFeeder.ViewModels
 {
@@ -38,13 +37,13 @@ namespace MyNewsFeeder.ViewModels
         private System.Windows.Threading.DispatcherTimer _autoRefreshTimer;
         private System.Windows.Threading.DispatcherTimer _cacheCleanupTimer;
 
-        // Window height properties with persistence
+        // Window height properties with persisten
         private double _articleWindowHeight = 350;
         private double _browserWindowHeight = 350;
 
         public int[] AvailableRefreshIntervals => AppSettings.AvailableRefreshIntervals;
 
-        public ObservableCollection<FeedGroupViewModel> FeedGroups { get; set; }
+        public ObservableCollection<CategoryGroupViewModel> CategoryGroups { get; set; }
 
         public string SelectedArticleText
         {
@@ -186,7 +185,7 @@ namespace MyNewsFeeder.ViewModels
 
                 if (!string.IsNullOrEmpty(SelectedArticleHtml))
                 {
-                    var currentArticle = FeedGroups.SelectMany(g => g.Items)
+                    var currentArticle = CategoryGroups.SelectMany(cg => cg.Feeds).SelectMany(fg => fg.Items)
                         .FirstOrDefault(item => item.Link == SelectedArticleLink);
                     if (currentArticle != null)
                     {
@@ -257,14 +256,17 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
-        public int TreeWidth
+        public double TreeWidth
         {
             get => _settings.TreeWidth;
             set
             {
-                _settings.TreeWidth = value;
-                OnPropertyChanged(nameof(TreeWidth));
-                _settingsService.SaveSettings(_settings);
+                if (Math.Abs(_settings.TreeWidth - value) > 0.1)
+                {
+                    _settings.TreeWidth = value;
+                    OnPropertyChanged(nameof(TreeWidth));
+                    _settingsService.SaveSettings(_settings);
+                }
             }
         }
 
@@ -385,8 +387,8 @@ namespace MyNewsFeeder.ViewModels
         public ICommand AboutCommand { get; }
 
         public MainViewModel(FeedService feedService,
-                             SettingsService settingsService,
-                             BrowserService browserService)
+            SettingsService settingsService,
+            BrowserService browserService)
         {
             _feedService = feedService;
             _settingsService = settingsService;
@@ -406,7 +408,7 @@ namespace MyNewsFeeder.ViewModels
                 System.Diagnostics.Debug.WriteLine($"❌ Error loading settings: {ex.Message}");
                 _settings = new AppSettings();
             }
-
+            TreeWidth = _settings.TreeWidth;
             try
             {
                 _feeds = _settingsService.LoadFeeds();
@@ -421,7 +423,7 @@ namespace MyNewsFeeder.ViewModels
                 _feeds = new List<Feed>();
             }
 
-            FeedGroups = new ObservableCollection<FeedGroupViewModel>();
+            CategoryGroups = new ObservableCollection<CategoryGroupViewModel>();
             Keyword = _settings.KeywordFilter ?? string.Empty;
 
             _maxFeeds = _settings.MaxFeeds > 0 ? _settings.MaxFeeds : 10;
@@ -702,7 +704,7 @@ namespace MyNewsFeeder.ViewModels
             max-width: 250px;
             width: 100%;
             height: auto;
-            margin: 8px 0;
+            margin: 8px 16;
             border-radius: 4px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.3);
             display: block;
@@ -780,7 +782,7 @@ namespace MyNewsFeeder.ViewModels
             return htmlTemplate;
         }
 
-        private async void UpdateArticleWebView()
+        private void UpdateArticleWebView()
         {
             if (_articleWebView?.CoreWebView2 != null && !string.IsNullOrEmpty(SelectedArticleHtml))
             {
@@ -812,22 +814,22 @@ namespace MyNewsFeeder.ViewModels
                 {
                     _ = _articleWebView.CoreWebView2.ExecuteScriptAsync(
                         "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight).toString()")
-                        .ContinueWith(task =>
+                    .ContinueWith(task =>
+                    {
+                        if (task.IsCompletedSuccessfully)
                         {
-                            if (task.IsCompletedSuccessfully)
+                            var heightString = task.Result;
+                            if (int.TryParse(heightString.Trim('"'), out int contentHeight))
                             {
-                                var heightString = task.Result;
-                                if (int.TryParse(heightString.Trim('"'), out int contentHeight))
+                                var adjustedHeight = Math.Max(200, Math.Min(contentHeight + 40, 600));
+                                Application.Current.Dispatcher.Invoke(() =>
                                 {
-                                    var adjustedHeight = Math.Max(200, Math.Min(contentHeight + 40, 600));
-                                    Application.Current.Dispatcher.Invoke(() =>
-                                    {
-                                        ArticleWebViewHeight = adjustedHeight;
-                                        System.Diagnostics.Debug.WriteLine($"Article height adjusted to: {adjustedHeight}px (content: {contentHeight}px)");
-                                    });
-                                }
+                                    ArticleWebViewHeight = adjustedHeight;
+                                    System.Diagnostics.Debug.WriteLine($"Article height adjusted to: {adjustedHeight}px (content: {contentHeight}px)");
+                                });
                             }
-                        });
+                        }
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -844,10 +846,14 @@ namespace MyNewsFeeder.ViewModels
             var feedManagerWindow = new FeedManagerWindow
             {
                 DataContext = feedManagerViewModel,
-                Owner = System.Windows.Application.Current.MainWindow
+                Owner = Application.Current.MainWindow
             };
             feedManagerWindow.ShowDialog();
 
+            // Reload settings to pick up new Categories and expanded states
+            _settings = _settingsService.LoadSettings();
+
+            // Reload feeds and refresh the tree
             _feeds = _settingsService.LoadFeeds();
             _ = RefreshFeedsAsync();
         }
@@ -901,9 +907,9 @@ namespace MyNewsFeeder.ViewModels
                 var detailedStats = _browserService.GetDetailedAdBlockerStats();
 
                 var message = $"Enhanced AdBlocker Statistics:\n\n" +
-                              $"Blocked Domains: {stats.domains:N0}\n" +
-                              $"Blocked Patterns: {stats.patterns:N0}\n" +
-                              $"Last Update: {detailedStats.lastUpdate:yyyy-MM-dd HH:mm}\n\n";
+                    $"Blocked Domains: {stats.domains:N0}\n" +
+                    $"Blocked Patterns: {stats.patterns:N0}\n" +
+                    $"Last Update: {detailedStats.lastUpdate:yyyy-MM-dd HH:mm}\n\n";
 
                 if (detailedStats.availableLists.Count > 0)
                 {
@@ -924,9 +930,9 @@ namespace MyNewsFeeder.ViewModels
                 }
 
                 message += $"\nAdBlocker is currently: {(AdBlockerEnabled ? "Enabled" : "Disabled")}\n" +
-                           $"Dark Mode: Native website themes only (no CSS filters)\n\n" +
-                           $"Filter lists update automatically every 24 hours.\n" +
-                           $"You can also customize blocked domains in 'adblocker_hosts.txt'.";
+                    $"Dark Mode: Native website themes only (no CSS filters)\n\n" +
+                    $"Filter lists update automatically every 24 hours.\n" +
+                    $"You can also customize blocked domains in 'adblocker_hosts.txt'.";
 
                 var result = System.Windows.MessageBox.Show(
                     message + "\n\nUpdate filter lists now?",
@@ -957,66 +963,89 @@ namespace MyNewsFeeder.ViewModels
             System.Diagnostics.Debug.WriteLine("Browser cleared on startup.");
         }
 
-        private Dictionary<string, bool> SaveExpandedStates()
+        public Dictionary<string, bool> SaveCategoryExpandedStates()
         {
             var expandedStates = new Dictionary<string, bool>();
-
-            foreach (var group in FeedGroups)
+            foreach (var category in CategoryGroups)
             {
-                expandedStates[group.Name] = group.IsExpanded;
+                expandedStates[category.Name] = category.IsExpanded;
             }
-
-            _settings.TreeViewExpandedStates = expandedStates;
+            _settings.CategoryExpandedStates = expandedStates;
             _settingsService.SaveSettings(_settings);
-
-            System.Diagnostics.Debug.WriteLine($"Saved expanded states for {expandedStates.Count} groups.");
+            System.Diagnostics.Debug.WriteLine($"Saved category expanded states for {expandedStates.Count} categories.");
             return expandedStates;
         }
 
-        private Dictionary<string, bool> LoadExpandedStates()
+        public Dictionary<string, bool> SaveFeedExpandedStates()
         {
-            return _settings.TreeViewExpandedStates ?? new Dictionary<string, bool>();
+            var expandedStates = new Dictionary<string, bool>();
+            foreach (var category in CategoryGroups)
+            {
+                foreach (var feed in category.Feeds)
+                {
+                    expandedStates[feed.Name] = feed.IsExpanded;
+                }
+            }
+            _settings.TreeViewExpandedStates = expandedStates;
+            _settingsService.SaveSettings(_settings);
+            System.Diagnostics.Debug.WriteLine($"Saved feed expanded states for {expandedStates.Count} feeds.");
+            return expandedStates;
         }
 
         private async Task RefreshFeedsAsync()
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"Refreshing feeds. Found {_feeds.Count} feeds, using MaxFeeds: {MaxFeeds}.");
-
+                System.Diagnostics.Debug.WriteLine($"Refreshing feeds with category support. Found {_feeds.Count} feeds, using MaxFeeds: {MaxFeeds}.");
                 if (_feeds.Count == 0)
                 {
                     System.Diagnostics.Debug.WriteLine("No feeds configured. Please add feeds first.");
-                    FeedGroups.Clear();
+                    CategoryGroups.Clear();
                     return;
                 }
 
-                var expandedStates = SaveExpandedStates();
-                var items = await _feedService.FetchArticlesAsync(_feeds, Keyword, MaxFeeds);
+                var categoryExpandedStates = _settings.CategoryExpandedStates ?? new Dictionary<string, bool>();
+                var feedExpandedStates = _settings.TreeViewExpandedStates ?? new Dictionary<string, bool>();
 
+                var items = await _feedService.FetchArticlesAsync(_feeds, Keyword, MaxFeeds);
                 System.Diagnostics.Debug.WriteLine($"Fetched {items.Count} articles total (limited to {MaxFeeds} per feed).");
 
-                var groupedItems = items.GroupBy(item => item.FeedName);
-
-                FeedGroups.Clear();
-
-                foreach (var group in groupedItems)
+                var categorizedItems = items.GroupBy(item =>
                 {
-                    var feedGroup = new FeedGroupViewModel
+                    var feed = _feeds.FirstOrDefault(f => f.Name == item.FeedName);
+                    return feed?.Category ?? "Default";
+                });
+
+                CategoryGroups.Clear();
+
+                foreach (var categoryGroup in categorizedItems)
+                {
+                    var categoryViewModel = new CategoryGroupViewModel
                     {
-                        Name = group.Key,
-                        Items = new ObservableCollection<FeedItem>(group.ToList())
+                        Name = categoryGroup.Key,
+                        IsExpanded = categoryExpandedStates.TryGetValue(categoryGroup.Key, out var expanded) ? expanded : true
                     };
 
-                    feedGroup.IsExpanded = expandedStates.ContainsKey(group.Key)
-                        ? expandedStates[group.Key]
-                        : true;
+                    var feedGroups = categoryGroup.GroupBy(item => item.FeedName);
 
-                    FeedGroups.Add(feedGroup);
-                    System.Diagnostics.Debug.WriteLine($"Added group '{group.Key}' with {group.Count()} items. Expanded: {feedGroup.IsExpanded}");
+                    foreach (var feedGroup in feedGroups)
+                    {
+                        var feedViewModel = new FeedGroupViewModel
+                        {
+                            Name = feedGroup.Key,
+                            Category = categoryGroup.Key,
+                            Items = new ObservableCollection<FeedItem>(feedGroup.ToList()),
+                            IsExpanded = feedExpandedStates.TryGetValue(feedGroup.Key, out var feedExpanded) ? feedExpanded : true
+                        };
+
+                        categoryViewModel.Feeds.Add(feedViewModel);
+                    }
+
+                    CategoryGroups.Add(categoryViewModel);
+                    System.Diagnostics.Debug.WriteLine($"Added category '{categoryGroup.Key}' with {categoryViewModel.Feeds.Count} feeds.");
                 }
 
-                OnPropertyChanged(nameof(FeedGroups));
+                OnPropertyChanged(nameof(CategoryGroups));
                 OnPropertyChanged(nameof(CurrentFeedSettingsDisplay));
             }
             catch (Exception ex)
@@ -1378,6 +1407,7 @@ namespace MyNewsFeeder.ViewModels
                 System.Diagnostics.Debug.WriteLine($"❌ Error during cleanup: {ex.Message}");
             }
         }
+
         private void ShowAboutWindow()
         {
             try

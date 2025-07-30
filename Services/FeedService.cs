@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.ServiceModel.Syndication;
@@ -18,7 +17,13 @@ namespace MyNewsFeeder.Services
         {
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("MyNewsFeeder/1.0");
+            var version = System.Reflection.Assembly
+            .GetEntryAssembly()?
+            .GetName()?
+            .Version?
+            .ToString() ?? "1.0";
+            _httpClient.DefaultRequestHeaders
+                       .UserAgent.ParseAdd($"MyNewsFeeder/{version}");
         }
 
         public async Task<List<FeedItem>> FetchArticlesAsync(List<Feed> feeds, string keywordFilter, int maxItems)

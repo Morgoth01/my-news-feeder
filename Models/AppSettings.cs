@@ -11,7 +11,7 @@ namespace MyNewsFeeder.Models
         public int MaxFeeds { get; set; } = 10;
         public string KeywordFilter { get; set; } = string.Empty;
         public int FontSize { get; set; } = 12;
-        public int TreeWidth { get; set; } = 150;
+        public double TreeWidth { get; set; } = 250.0;
         public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
         public bool AdBlockerEnabled { get; set; } = true;
         public Dictionary<string, bool> TreeViewExpandedStates { get; set; } = new Dictionary<string, bool>();
@@ -30,6 +30,10 @@ namespace MyNewsFeeder.Models
         public bool EnableNotifications { get; set; } = false;
         public string Language { get; set; } = "en-US";
         public int AutoRefreshIntervalMinutes { get; set; } = 10;
+
+        // New category-related properties
+        public Dictionary<string, bool> CategoryExpandedStates { get; set; } = new Dictionary<string, bool>();
+        public List<string> Categories { get; set; } = new List<string> { "Default" };
 
         public static readonly int[] AvailableRefreshIntervals = { 5, 10, 15, 20, 30, 45, 60 };
 
@@ -65,6 +69,10 @@ namespace MyNewsFeeder.Models
             EnableNotifications = false;
             Language = "en-US";
 
+            // Reset category settings
+            CategoryExpandedStates = new Dictionary<string, bool>();
+            Categories = new List<string> { "Default" };
+
             System.Diagnostics.Debug.WriteLine("Settings reset to defaults");
         }
 
@@ -95,7 +103,11 @@ namespace MyNewsFeeder.Models
                 ShowThumbnails = this.ShowThumbnails,
                 ArticlePreviewHeight = this.ArticlePreviewHeight,
                 EnableNotifications = this.EnableNotifications,
-                Language = this.Language
+                Language = this.Language,
+                AutoRefreshIntervalMinutes = this.AutoRefreshIntervalMinutes,
+                // Clone category settings
+                CategoryExpandedStates = new Dictionary<string, bool>(this.CategoryExpandedStates),
+                Categories = new List<string>(this.Categories)
             };
         }
     }

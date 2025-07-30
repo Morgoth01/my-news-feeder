@@ -1,8 +1,10 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Threading.Tasks;
+using System.Windows.Interop;
 using MyNewsFeeder.Models;
+using MyNewsFeeder.Services;
 using MyNewsFeeder.ViewModels;
 using MaterialDesignThemes.Wpf;
 
@@ -10,111 +12,50 @@ namespace MyNewsFeeder.Views
 {
     public partial class MainWindow : Window
     {
+        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        [DllImport("dwmapi.dll", PreserveSig = true)]
+        private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
+
         private MainViewModel _viewModel;
 
         public MainWindow()
         {
             InitializeComponent();
-            Loaded += MainWindow_Loaded; // This method exists below
 
-            // ADDED: Listen for screen resolution changes
-            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+            _viewModel = new MainViewModel(new FeedService(), new SettingsService(), new BrowserService());
+            DataContext = _viewModel;
+
+            Loaded += MainWindow_Loaded;
         }
 
-        // ADDED: Missing MainWindow_Loaded method
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("🔧 MainWindow_Loaded started");
+            // dark title‐bar on Win10+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int useDark = 1;
+            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf(typeof(int)));
 
+            // initialize webviews
             _viewModel = DataContext as MainViewModel;
-
-            if (_viewModel != null)
-            {
-                System.Diagnostics.Debug.WriteLine("✅ ViewModel found");
-
-                var linkWebView = FindName("linkWebView") as Microsoft.Web.WebView2.Wpf.WebView2;
-                if (linkWebView != null)
-                {
-                    System.Diagnostics.Debug.WriteLine("✅ Found linkWebView control");
-
-                    try
-                    {
-                        await linkWebView.EnsureCoreWebView2Async();
-                        System.Diagnostics.Debug.WriteLine("✅ CoreWebView2 ensured");
-
-                        _viewModel.SetWebView(linkWebView);
-                        System.Diagnostics.Debug.WriteLine("✅ SetWebView called");
-
-                        _viewModel.ClearBrowserOnStartup();
-                        System.Diagnostics.Debug.WriteLine("✅ Initial navigation started");
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"❌ Error initializing WebView2: {ex.Message}");
-                    }
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("❌ linkWebView NOT FOUND in XAML!");
-                }
-
-                var articleWebView = FindName("articleWebView") as Microsoft.Web.WebView2.Wpf.WebView2;
-                if (articleWebView != null)
-                {
-                    try
-                    {
-                        await articleWebView.EnsureCoreWebView2Async();
-                        _viewModel.SetArticleWebView(articleWebView);
-                        System.Diagnostics.Debug.WriteLine("✅ Article WebView initialized");
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"❌ Error initializing Article WebView: {ex.Message}");
-                    }
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("❌ articleWebView NOT FOUND in XAML!");
-                }
-
-                System.Diagnostics.Debug.WriteLine("✅ MainWindow initialization completed");
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine("❌ ViewModel is NULL!");
-            }
+            await linkWebView.EnsureCoreWebView2Async();
+            await articleWebView.EnsureCoreWebView2Async();
+            _viewModel.SetWebView(linkWebView);
+            _viewModel.SetArticleWebView(articleWebView);
+            _viewModel.ClearBrowserOnStartup();
         }
 
         private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         {
-            if (e.NewValue is FeedItem feedItem && _viewModel != null)
-            {
-                System.Diagnostics.Debug.WriteLine($"🔗 Article selected: {feedItem.Title}");
-
-                try
-                {
-                    _viewModel.OnArticleSelected(feedItem);
-                    System.Diagnostics.Debug.WriteLine($"✅ Article selection processed: {feedItem.Link}");
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"❌ Error processing article selection: {ex.Message}");
-                }
-            }
-            else if (e.NewValue == null)
-            {
-                System.Diagnostics.Debug.WriteLine("🔗 Article selection cleared");
-            }
+            if (e.NewValue is FeedItem article && DataContext is MainViewModel vm)
+                vm.OnArticleSelected(article);
         }
 
         private void AboutButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                var aboutWindow = new AboutWindow
-                {
-                    Owner = this
-                };
+                var aboutWindow = new AboutWindow { Owner = this };
                 aboutWindow.ShowDialog();
             }
             catch (Exception ex)
@@ -129,72 +70,53 @@ namespace MyNewsFeeder.Views
             {
                 var popupBox = FindName("SettingsPopupBox") as PopupBox;
                 if (popupBox != null)
-                {
                     popupBox.IsPopupOpen = false;
-                    System.Diagnostics.Debug.WriteLine("✅ Settings popup closed");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("❌ SettingsPopupBox not found");
-                }
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"❌ Error closing settings popup: {ex.Message}");
-            }
+            catch { }
         }
 
-        // ADDED: Handle GridSplitter drag completion to save heights
         private void GridSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
             try
             {
-                if (_viewModel != null)
+                if (_viewModel != null &&
+                    ((FrameworkElement)sender).Parent is Grid mainGrid &&
+                    mainGrid.RowDefinitions.Count >= 3)
                 {
-                    // Get the main grid
-                    var mainGrid = ((FrameworkElement)sender).Parent as Grid;
-                    if (mainGrid != null && mainGrid.RowDefinitions.Count >= 3)
-                    {
-                        // Get actual heights after resize
-                        var articleHeight = mainGrid.RowDefinitions[0].ActualHeight;
-                        var browserHeight = mainGrid.RowDefinitions[2].ActualHeight;
-
-                        System.Diagnostics.Debug.WriteLine($"GridSplitter drag completed - Article: {articleHeight}, Browser: {browserHeight}");
-
-                        // Update ViewModel properties (which will save to settings and mark as custom)
-                        _viewModel.ArticleWindowHeight = articleHeight;
-                        _viewModel.BrowserWindowHeight = browserHeight;
-                    }
+                    _viewModel.ArticleWindowHeight = mainGrid.RowDefinitions[0].ActualHeight;
+                    _viewModel.BrowserWindowHeight = mainGrid.RowDefinitions[2].ActualHeight;
                 }
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error handling GridSplitter drag: {ex.Message}");
-            }
+            catch { }
         }
 
-        // ADDED: Handle screen resolution changes
         private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
         {
-            try
-            {
-                if (_viewModel != null)
-                {
-                    System.Diagnostics.Debug.WriteLine("Display settings changed, checking for dynamic resize");
-                    // ViewModel will handle dynamic resizing if user hasn't customized
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error handling display settings change: {ex.Message}");
-            }
+            // handled in ViewModel
         }
 
         protected override void OnClosed(EventArgs e)
         {
-            // ADDED: Cleanup event handler
             Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
             base.OnClosed(e);
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            if (DataContext is MainViewModel vm)
+            {
+                vm.SaveCategoryExpandedStates();
+                vm.SaveFeedExpandedStates();
+            }
+        }
+
+        private void TreeViewItem_ExpandedCollapsed(object sender, RoutedEventArgs e)
+        {
+            if (ReferenceEquals(sender, e.OriginalSource) && DataContext is MainViewModel vm)
+            {
+                vm.SaveCategoryExpandedStates();
+                vm.SaveFeedExpandedStates();
+            }
         }
     }
 }
