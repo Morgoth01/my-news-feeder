@@ -3,6 +3,12 @@
 My News Feeder is a lightweight RSS/Atom reader with integrated ad blocking.
 
 Dive into your favorite feeds without distractions!
+<br/>
+<br/>
+
+Find the latest release and notes here:
+**https://github.com/Morgoth01/my-news-feeder/releases**
+
 
 ## Guide
 ### Manage Feeds
@@ -11,6 +17,16 @@ Dive into your favorite feeds without distractions!
 2. Click Add Feed, paste the RSS/Atom URL and click Save.
 3. Enable or disable individual feeds as needed.
 
+### Add a new category
+1. Click Manage Feeds in the toolbar.
+2. Enter a name for the category and click Add.
+3. You can now assign the newly created category to your feeds.
+
+### Remove a category
+1. Click Manage Feeds in the toolbar.
+2. Select a category
+3. Click on the bin icon or the Remove Selected Category button
+4. Assigned feeds will be reassigned to the Default category
 
 ### Enable/Disable Ad Blocker
 Open Settings → toggle Enable AdBlocker → click Save Settings.
@@ -67,13 +83,13 @@ You can add custom domains or hosts in adblocker_hosts.txt.
 Enjoy streamlined, distraction-free news reading with My News Feeder!
 
 Dark Mode
-<img width="1153" alt="Ze037zlvLh" src="https://github.com/user-attachments/assets/31a7b860-3008-47cd-bd9d-4294582df5df" />
+<img width="2879" height="1823" alt="image" src="https://github.com/user-attachments/assets/2ff41c44-002f-43fa-bc2f-99656576a813" />
 
 Light Mode
-<img width="1153" alt="cinwR4FdWX" src="https://github.com/user-attachments/assets/525bd504-759e-4a05-bae0-036834e945e6" />
+<img width="2879" height="1823" alt="image" src="https://github.com/user-attachments/assets/a5c16255-4b5b-4d3a-8975-f2296f76b88a" />
 
 Integrated Browser
-<img width="1376" alt="3M77CjghVg" src="https://github.com/user-attachments/assets/f046ca95-a706-4041-b86c-14dc12c51b27" />
+<img width="2879" height="1823" alt="image" src="https://github.com/user-attachments/assets/978bad70-f842-4be9-a96d-4afb2ba98b11" />
 
 Settings
 
@@ -84,7 +100,8 @@ Filter feeds by Keyword
 
 Feed Manager
 
-<img width="591" alt="KdRCWnq5Zu" src="https://github.com/user-attachments/assets/7f1cdd78-1bda-4798-93b1-4d93cf557ccf" />
+<img width="2507" height="1388" alt="image" src="https://github.com/user-attachments/assets/7a3a13c6-a7b9-45f0-a7e3-a30d156867c0" />
+
 
 ## Application Libraries
 
