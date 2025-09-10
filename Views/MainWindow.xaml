@@ -350,42 +350,51 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- Show Content Button -->
-                            <Button Grid.Column="0"
-                                    Content="{Binding ShowContentButtonText}"
-                                    Command="{Binding ShowContentCommand}"
-                                    Margin="5"
-                                    Height="30">
-                                <Button.Style>
-                                    <Style TargetType="Button"
-                                           BasedOn="{StaticResource MaterialDesignRaisedButton}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
-                                                         Value="True">
-                                                <Setter Property="Background"
-                                                        Value="{DynamicResource SecondaryHueMidBrush}"/>
-                                                <Setter Property="ToolTip"
-                                                        Value="Always-On mode is active"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
-                                                         Value="False">
-                                                <Setter Property="Background"
-                                                        Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                                <Setter Property="ToolTip"
-                                                        Value="Click to show/hide content"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
+                            <!-- Container for Show Content and Copy Link buttons -->
+                            <Grid Margin="5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <!-- Show Content button column -->
+                                    <ColumnDefinition Width="Auto"/>
+                                    <!-- Copy Link button column -->
+                                </Grid.ColumnDefinitions>
 
-                            <!-- Article Content Label -->
-                            <TextBlock Grid.Column="1"
-                                       Text="Article Content"
-                                       FontWeight="Bold"
-                                       VerticalAlignment="Center"
-                                       Margin="10,5"
-                                       Foreground="{DynamicResource MaterialDesignBody}"/>
+                                <!-- Show Content Button -->
+                                <Button Grid.Column="0"
+                                        Content="{Binding ShowContentButtonText}"
+                                        Command="{Binding ShowContentCommand}"
+                                        Margin="0,0,8,0"
+                                        Height="30">
+                                    <Button.Style>
+                                        <Style TargetType="Button"
+                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
+                                                             Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource SecondaryHueMidBrush}"/>
+                                                    <Setter Property="ToolTip"
+                                                            Value="Always-On mode is active"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
+                                                             Value="False">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                    <Setter Property="ToolTip"
+                                                            Value="Click to show/hide content"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+
+                                <!-- Copy Link Button -->
+                                <Button Grid.Column="1"
+                                        Content="{Binding CopyLinkButtonText}"
+                                        Command="{Binding CopyLinkCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Height="30"/>
+                            </Grid>
 
                             <!-- Auto-adjust height button -->
                             <Button Grid.Column="2"

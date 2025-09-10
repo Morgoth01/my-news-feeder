@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Text.Json;
 using System.Windows;
 using MyNewsFeeder.Models;
 using MyNewsFeeder.Services;
@@ -36,6 +37,7 @@ namespace MyNewsFeeder.ViewModels
         private int _autoRefreshIntervalMinutes = 10;
         private System.Windows.Threading.DispatcherTimer _autoRefreshTimer;
         private System.Windows.Threading.DispatcherTimer _cacheCleanupTimer;
+        private string _copyLinkButtonText = "Copy Link";
 
         // Window height properties with persisten
         private double _articleWindowHeight = 350;
@@ -44,6 +46,7 @@ namespace MyNewsFeeder.ViewModels
         public int[] AvailableRefreshIntervals => AppSettings.AvailableRefreshIntervals;
 
         public ObservableCollection<CategoryGroupViewModel> CategoryGroups { get; set; }
+        public ICommand CopyLinkCommand { get; }
 
         public string SelectedArticleText
         {
@@ -167,6 +170,19 @@ namespace MyNewsFeeder.ViewModels
                     return "Always-On";
                 }
                 return IsBrowserVisible ? "Hide Content" : "Show Content";
+            }
+        }
+
+        public string CopyLinkButtonText
+        {
+            get => _copyLinkButtonText;
+            set
+            {
+                if (_copyLinkButtonText != value)
+                {
+                    _copyLinkButtonText = value;
+                    OnPropertyChanged(nameof(CopyLinkButtonText));
+                }
             }
         }
 
@@ -425,7 +441,6 @@ namespace MyNewsFeeder.ViewModels
 
             CategoryGroups = new ObservableCollection<CategoryGroupViewModel>();
             Keyword = _settings.KeywordFilter ?? string.Empty;
-
             _maxFeeds = _settings.MaxFeeds > 0 ? _settings.MaxFeeds : 10;
             IsShowContentAlwaysOn = _settings.IsShowContentAlwaysOn;
 
@@ -452,7 +467,6 @@ namespace MyNewsFeeder.ViewModels
             {
                 _articleWindowHeight = _settings.ArticleWindowHeight > 0 ? _settings.ArticleWindowHeight : 350;
                 _browserWindowHeight = _settings.BrowserWindowHeight > 0 ? _settings.BrowserWindowHeight : 350;
-
                 ApplyDynamicWindowSizing();
             }
             catch (Exception ex)
@@ -478,6 +492,10 @@ namespace MyNewsFeeder.ViewModels
             ResetWindowHeightsCommand = new RelayCommand(_ => ResetWindowHeights());
             ClearCacheCommand = new RelayCommand(async _ => await ClearBrowserCacheAsync());
             AboutCommand = new RelayCommand(_ => ShowAboutWindow());
+
+            // ** Initialize CopyLink command **
+            CopyLinkCommand = new RelayCommand(async _ => await CopyLinkAsync(),
+                                           _ => !string.IsNullOrEmpty(SelectedArticleLink));
 
             ApplyTheme();
             _ = RefreshFeedsAsync();
@@ -543,37 +561,26 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
+        private bool _hasOpenedExternalLink;
         private void OnArticleNewWindowRequested(object sender, Microsoft.Web.WebView2.Core.CoreWebView2NewWindowRequestedEventArgs e)
         {
-            try
-            {
-                var url = e.Uri;
-                e.Handled = true;
-                OpenInDefaultBrowser(url);
-                System.Diagnostics.Debug.WriteLine($"Article link opened in default browser: {url}");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error handling article new window: {ex.Message}");
-            }
+            if (_hasOpenedExternalLink) return;
+            _hasOpenedExternalLink = true;
+
+            e.Handled = true;
+            OpenInDefaultBrowser(e.Uri);
         }
 
         private void OnArticleWebMessageReceived(object sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
         {
-            try
-            {
-                var message = e.TryGetWebMessageAsString();
-                var messageData = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(message);
+            if (_hasOpenedExternalLink) return;
+            _hasOpenedExternalLink = true;
 
-                if (messageData.ContainsKey("action") && messageData["action"].ToString() == "openInDefaultBrowser")
-                {
-                    var url = messageData["url"].ToString();
-                    OpenInDefaultBrowser(url);
-                }
-            }
-            catch (Exception ex)
+            var message = e.TryGetWebMessageAsString();
+            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(message);
+            if (data.TryGetValue("action", out var action) && action == "openInDefaultBrowser")
             {
-                System.Diagnostics.Debug.WriteLine($"Error handling article web message: {ex.Message}");
+                OpenInDefaultBrowser(data["url"]);
             }
         }
 
@@ -599,7 +606,7 @@ namespace MyNewsFeeder.ViewModels
         {
             System.Diagnostics.Debug.WriteLine($"🔗 Article selected: {feedItem.Title}");
             System.Diagnostics.Debug.WriteLine($"🔧 Always-On enabled: {IsShowContentAlwaysOn}");
-
+            _hasOpenedExternalLink = false;
             var htmlContent = CreateArticleHtml(feedItem);
             SelectedArticleHtml = htmlContent;
             SelectedArticleText = $"{feedItem.Title}\n\n{feedItem.Description}";
@@ -1010,15 +1017,50 @@ namespace MyNewsFeeder.ViewModels
                 var items = await _feedService.FetchArticlesAsync(_feeds, Keyword, MaxFeeds);
                 System.Diagnostics.Debug.WriteLine($"Fetched {items.Count} articles total (limited to {MaxFeeds} per feed).");
 
+                // Group items by category
                 var categorizedItems = items.GroupBy(item =>
                 {
                     var feed = _feeds.FirstOrDefault(f => f.Name == item.FeedName);
                     return feed?.Category ?? "Default";
-                });
+                }).ToDictionary(g => g.Key, g => g);
 
                 CategoryGroups.Clear();
 
-                foreach (var categoryGroup in categorizedItems)
+                // Create CategoryGroups in the order defined in Settings.Categories
+                // This ensures the main window displays categories in user-defined order
+                foreach (var categoryName in _settings.Categories)
+                {
+                    // Only process categories that have actual feed items
+                    if (categorizedItems.TryGetValue(categoryName, out var categoryItems))
+                    {
+                        var categoryViewModel = new CategoryGroupViewModel
+                        {
+                            Name = categoryName,
+                            IsExpanded = categoryExpandedStates.TryGetValue(categoryName, out var expanded) ? expanded : true
+                        };
+
+                        var feedGroups = categoryItems.GroupBy(item => item.FeedName);
+
+                        foreach (var feedGroup in feedGroups)
+                        {
+                            var feedViewModel = new FeedGroupViewModel
+                            {
+                                Name = feedGroup.Key,
+                                Category = categoryName,
+                                Items = new ObservableCollection<FeedItem>(feedGroup.ToList()),
+                                IsExpanded = feedExpandedStates.TryGetValue(feedGroup.Key, out var feedExpanded) ? feedExpanded : true
+                            };
+
+                            categoryViewModel.Feeds.Add(feedViewModel);
+                        }
+
+                        CategoryGroups.Add(categoryViewModel);
+                        System.Diagnostics.Debug.WriteLine($"Added category '{categoryName}' with {categoryViewModel.Feeds.Count} feeds in user-defined order.");
+                    }
+                }
+
+                // Handle any categories that exist in feeds but not in settings (shouldn't normally happen)
+                foreach (var categoryGroup in categorizedItems.Where(kvp => !_settings.Categories.Contains(kvp.Key)))
                 {
                     var categoryViewModel = new CategoryGroupViewModel
                     {
@@ -1026,7 +1068,7 @@ namespace MyNewsFeeder.ViewModels
                         IsExpanded = categoryExpandedStates.TryGetValue(categoryGroup.Key, out var expanded) ? expanded : true
                     };
 
-                    var feedGroups = categoryGroup.GroupBy(item => item.FeedName);
+                    var feedGroups = categoryGroup.Value.GroupBy(item => item.FeedName);
 
                     foreach (var feedGroup in feedGroups)
                     {
@@ -1042,7 +1084,7 @@ namespace MyNewsFeeder.ViewModels
                     }
 
                     CategoryGroups.Add(categoryViewModel);
-                    System.Diagnostics.Debug.WriteLine($"Added category '{categoryGroup.Key}' with {categoryViewModel.Feeds.Count} feeds.");
+                    System.Diagnostics.Debug.WriteLine($"Added orphaned category '{categoryGroup.Key}' with {categoryViewModel.Feeds.Count} feeds.");
                 }
 
                 OnPropertyChanged(nameof(CategoryGroups));
@@ -1418,6 +1460,27 @@ namespace MyNewsFeeder.ViewModels
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error showing About window: {ex.Message}");
+            }
+        }
+        private async Task CopyLinkAsync()
+        {
+            try
+            {
+                // Copy link to clipboard
+                Clipboard.SetText(SelectedArticleLink);
+
+                // Set button text to indicate success
+                CopyLinkButtonText = "Copied!";
+
+                // Wait for 2 seconds before reverting text
+                await Task.Delay(2000);
+
+                // Revert button text back to original
+                CopyLinkButtonText = "Copy Link";
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to copy link: {ex.Message}");
             }
         }
     }

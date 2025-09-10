@@ -238,6 +238,45 @@ namespace MyNewsFeeder.ViewModels
                 "Category Removed", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
+        public void ReorderCategory(Category draggedCategory, Category targetCategory)
+        {
+            try
+            {
+                var draggedIndex = Categories.IndexOf(draggedCategory);
+                var targetIndex = Categories.IndexOf(targetCategory);
+
+                if (draggedIndex >= 0 && targetIndex >= 0 && draggedIndex != targetIndex)
+                {
+                    // Remove from old position
+                    Categories.RemoveAt(draggedIndex);
+
+                    // Insert at new position
+                    if (draggedIndex < targetIndex)
+                    {
+                        // Moving down, adjust target index
+                        Categories.Insert(targetIndex - 1, draggedCategory);
+                    }
+                    else
+                    {
+                        // Moving up
+                        Categories.Insert(targetIndex, draggedCategory);
+                    }
+
+                    // Update selection
+                    SelectedCategory = draggedCategory;
+
+                    // Save changes
+                    SaveCategories();
+
+                    System.Diagnostics.Debug.WriteLine($"Moved category '{draggedCategory.Name}' from position {draggedIndex} to {Categories.IndexOf(draggedCategory)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error reordering categories: {ex.Message}");
+            }
+        }
+
         private void ImportFeeds()
         {
             try

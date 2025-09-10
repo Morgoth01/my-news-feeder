@@ -70,25 +70,44 @@
                                                         Style="{StaticResource MaterialDesignRaisedButton}"/>
                                         </StackPanel>
 
-                                        <!-- Categories List -->
-                                        <ListBox Grid.Row="1"
+                                        <!-- Categories List with Drag & Drop -->
+                                        <ListBox x:Name="CategoryListBox"
+                                                 Grid.Row="1"
                                                  ItemsSource="{Binding Categories}"
                                                  SelectedItem="{Binding SelectedCategory}"
-                                                 Style="{StaticResource MaterialDesignListBox}">
+                                                 Style="{StaticResource MaterialDesignListBox}"
+                                                 AllowDrop="True"
+                                                 MouseMove="CategoryListBox_MouseMove"
+                                                 Drop="CategoryListBox_Drop"
+                                                 DragEnter="CategoryListBox_DragEnter"
+                                                 PreviewMouseLeftButtonDown="CategoryListBox_PreviewMouseLeftButtonDown">
                                                 <ListBox.ItemTemplate>
                                                         <DataTemplate>
                                                                 <Grid>
                                                                         <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="Auto"/>
                                                                                 <ColumnDefinition Width="*"/>
                                                                                 <ColumnDefinition Width="Auto"/>
                                                                         </Grid.ColumnDefinitions>
 
-                                                                        <TextBlock Grid.Column="0"
+                                                                        <!-- Drag Handle for Categories (only visible for non-Default categories) -->
+                                                                        <Border Grid.Column="0"
+                                                                                Background="Transparent"
+                                                                                Cursor="SizeAll"
+                                                                                Margin="0,0,8,0"
+                                                                                Visibility="{Binding Name, Converter={StaticResource CategoryVisibilityConverter}}">
+                                                                                <materialDesign:PackIcon Kind="DragVertical"
+                                                                                                         Width="14"
+                                                                                                         Height="14"
+                                                                                                         Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                                                        </Border>
+
+                                                                        <TextBlock Grid.Column="1"
                                                                                    Text="{Binding Name}"
                                                                                    VerticalAlignment="Center"/>
 
                                                                         <!-- Show delete button only for non-Default categories -->
-                                                                        <Button Grid.Column="1"
+                                                                        <Button Grid.Column="2"
                                                                                 Command="{Binding DataContext.RemoveCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                                 CommandParameter="{Binding}"
                                                                                 Style="{StaticResource MaterialDesignIconButton}"
@@ -232,7 +251,7 @@
                 </StackPanel>
                 <!-- Info Text -->
                 <TextBlock Grid.Row="3"
-                           Text="• Drag the ⋮⋮ to reorder feeds • Click Name or URL to edit • Use checkboxes to enable/disable feeds • Create new categories and assign feeds"
+                           Text="• Drag the ⋮⋮ to reorder feeds and categories • Click Name or URL to edit • Use checkboxes to enable/disable feeds • Create new categories and assign feeds"
                            FontSize="10"
                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                            Margin="0,8,0,0"

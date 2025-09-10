@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Interop;
 using MyNewsFeeder.Models;
 using MyNewsFeeder.ViewModels;
@@ -19,6 +20,8 @@ namespace MyNewsFeeder.Views
             IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
 
         private Feed _draggedFeed;
+        private Point _categoryStartPoint;
+        private bool _categoryIsDragging = false;
 
         public FeedManagerWindow()
         {
@@ -101,6 +104,79 @@ namespace MyNewsFeeder.Views
                 targetRow?.ClearValue(DataGridRow.BackgroundProperty);
             }
             e.Handled = true;
+        }
+
+        private void CategoryListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _categoryStartPoint = e.GetPosition(null);
+            _categoryIsDragging = false;
+        }
+
+        private void CategoryListBox_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton == MouseButtonState.Pressed && !_categoryIsDragging)
+            {
+                Point mousePos = e.GetPosition(null);
+                Vector diff = _categoryStartPoint - mousePos;
+
+                if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                    Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+                {
+                    var listBox = sender as ListBox;
+                    var selectedCategory = listBox?.SelectedItem as Category;
+
+                    if (selectedCategory != null && selectedCategory.Name != "Default")
+                    {
+                        _categoryIsDragging = true;
+                        DragDrop.DoDragDrop(listBox, selectedCategory, DragDropEffects.Move);
+                        _categoryIsDragging = false;
+                    }
+                }
+            }
+        }
+
+        private void CategoryListBox_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(typeof(Category)))
+            {
+                e.Effects = DragDropEffects.Move;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private void CategoryListBox_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(typeof(Category)))
+            {
+                var draggedCategory = e.Data.GetData(typeof(Category)) as Category;
+                var listBox = sender as ListBox;
+
+                var dropTarget = GetCategoryFromPoint(listBox, e.GetPosition(listBox));
+
+                if (draggedCategory != null && dropTarget != null &&
+                    draggedCategory != dropTarget && draggedCategory.Name != "Default")
+                {
+                    var viewModel = DataContext as FeedManagerViewModel;
+                    viewModel?.ReorderCategory(draggedCategory, dropTarget);
+                }
+            }
+        }
+
+        private Category GetCategoryFromPoint(ListBox listBox, Point point)
+        {
+            var element = listBox.InputHitTest(point) as UIElement;
+            while (element != null)
+            {
+                if (element is ListBoxItem item)
+                {
+                    return item.DataContext as Category;
+                }
+                element = VisualTreeHelper.GetParent(element) as UIElement;
+            }
+            return null;
         }
 
         private T FindParent<T>(DependencyObject child) where T : DependencyObject
