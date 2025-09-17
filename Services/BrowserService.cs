@@ -20,16 +20,43 @@ namespace MyNewsFeeder.Services
         private bool _darkModeEnabled = false;
         private bool _adBlockerEnabled = true;
 
+        private static readonly string[] AllowedSchemes =
+        {
+            Uri.UriSchemeHttp,
+            Uri.UriSchemeHttps
+        };
+
         public BrowserService()
         {
             _adBlocker = new AdBlockerService();
-            System.Diagnostics.Debug.WriteLine("✅ BrowserService created with AdBlocker");
+        }
+
+        private static bool TryGetAllowedUri(string url, out Uri uri)
+        {
+            uri = null;
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return false;
+            }
+
+            if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var candidate))
+            {
+                return false;
+            }
+
+            if (!AllowedSchemes.Contains(candidate.Scheme, StringComparer.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            uri = candidate;
+            return true;
         }
 
         public void SetWebView(WebView2 webView)
         {
             _linkWebView = webView;
-            System.Diagnostics.Debug.WriteLine("🔧 SetWebView called");
             _ = InitializeWebViewAsync();
         }
 
@@ -37,23 +64,19 @@ namespace MyNewsFeeder.Services
         {
             if (_linkWebView == null)
             {
-                System.Diagnostics.Debug.WriteLine("❌ WebView is null during initialization");
                 return;
             }
 
             try
             {
                 await _linkWebView.EnsureCoreWebView2Async();
-                System.Diagnostics.Debug.WriteLine("✅ CoreWebView2 ensured");
 
                 // Setup ad blocking for all requests
                 _linkWebView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
                 _linkWebView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
-                System.Diagnostics.Debug.WriteLine("✅ WebResourceRequested event handler registered");
 
                 // Handle new window requests to apply ad blocking
                 _linkWebView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
-                System.Diagnostics.Debug.WriteLine("✅ NewWindowRequested event handler registered");
 
                 // Navigation events for native dark mode only
                 _linkWebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
@@ -72,39 +95,12 @@ namespace MyNewsFeeder.Services
                 _ = Task.Run(async () => await ApplyPopupBlockingScript());
 
                 _isInitialized = true;
-                System.Diagnostics.Debug.WriteLine("✅ External link WebView2 with enhanced AdBlocker initialized.");
 
-                // Quick stats check without URL testing
-                await QuickAdBlockerStatsAsync();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Failed to initialize WebView2: {ex.Message}");
+                // Ignore initialization failures; WebView will remain unavailable.
             }
-        }
-
-        private Task QuickAdBlockerStatsAsync()
-        {
-            try
-            {
-                var stats = GetAdBlockerStats();
-                System.Diagnostics.Debug.WriteLine($"📊 AdBlocker Ready - Domains: {stats.domains}, Patterns: {stats.patterns}");
-
-                if (stats.domains == 0)
-                {
-                    System.Diagnostics.Debug.WriteLine("❌ CRITICAL: AdBlocker has no domains loaded!");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"✅ AdBlocker ready with {stats.domains} domains");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"❌ Error checking AdBlocker stats: {ex.Message}");
-            }
-
-            return Task.CompletedTask;
         }
 
         private void OnNewWindowRequested(object sender, CoreWebView2NewWindowRequestedEventArgs e)
@@ -112,13 +108,11 @@ namespace MyNewsFeeder.Services
             try
             {
                 var url = e.Uri;
-                System.Diagnostics.Debug.WriteLine($"🔗 New window requested: {url}");
 
                 // Check if the URL should be blocked
                 if (_adBlocker.ShouldBlockUrl(url))
                 {
                     e.Handled = true; // Completely suppress the popup
-                    System.Diagnostics.Debug.WriteLine($"🚫 Blocked new window: {url}");
                     return;
                 }
 
@@ -126,18 +120,16 @@ namespace MyNewsFeeder.Services
                 if (IsLikelyPopup(url))
                 {
                     e.Handled = true; // Block likely popups
-                    System.Diagnostics.Debug.WriteLine($"🚫 Blocked popup window: {url}");
                     return;
                 }
 
                 // For legitimate new windows, redirect to same WebView instead of opening new window
                 e.Handled = true;
                 _linkWebView.CoreWebView2.Navigate(url);
-                System.Diagnostics.Debug.WriteLine($"↪️ Redirected new window to same WebView: {url}");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error handling new window request: {ex.Message}");
+                // Swallow popup handling errors to avoid crashing the app.
             }
         }
 
@@ -163,12 +155,10 @@ namespace MyNewsFeeder.Services
             try
             {
                 var url = e.Request.Uri;
-                System.Diagnostics.Debug.WriteLine($"🔥 WebResourceRequested FIRED: {url}");
 
                 // Check if AdBlocker is enabled
                 if (!_adBlockerEnabled)
                 {
-                    System.Diagnostics.Debug.WriteLine($"⚪ AdBlocker disabled, allowing: {url}");
                     return;
                 }
 
@@ -181,17 +171,11 @@ namespace MyNewsFeeder.Services
                     // Create proper blocking response with 204 No Content
                     e.Response = _linkWebView.CoreWebView2.Environment.CreateWebResourceResponse(
                         null, 204, "No Content", "Content-Type: text/plain");
-
-                    System.Diagnostics.Debug.WriteLine($"🚫 BLOCKED: {url}");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"✅ ALLOWED: {url}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error in web resource blocking: {ex.Message}");
+                // Ignore ad-blocking failures and allow the request to continue.
             }
         }
 
@@ -200,9 +184,6 @@ namespace MyNewsFeeder.Services
         {
             if (string.IsNullOrEmpty(url)) return;
 
-            System.Diagnostics.Debug.WriteLine($"🌐 Navigate called: {url} (forceReload: {forceReload})");
-            System.Diagnostics.Debug.WriteLine($"WebView ready: {_linkWebView?.CoreWebView2 != null}");
-            System.Diagnostics.Debug.WriteLine($"Initialized: {_isInitialized}");
 
             if (_linkWebView?.CoreWebView2 != null && _isInitialized)
             {
@@ -211,10 +192,8 @@ namespace MyNewsFeeder.Services
                     if (forceReload)
                     {
                         // Reduced clear delay
-                        System.Diagnostics.Debug.WriteLine("🧹 Force clearing browser for Always-On content");
                         _linkWebView.CoreWebView2.Navigate("about:blank");
                         await Task.Delay(100);
-                        System.Diagnostics.Debug.WriteLine("✅ Browser cleared, proceeding with navigation");
                     }
 
                     // Simplified loading with reduced delay
@@ -226,17 +205,14 @@ namespace MyNewsFeeder.Services
 
                     // Navigate to the actual URL
                     _linkWebView.CoreWebView2.Navigate(url);
-                    System.Diagnostics.Debug.WriteLine($"✅ Navigating to: {url}");
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ WebView2 navigation failed: {ex.Message}");
                     OpenInDefaultBrowser(url);
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("❌ WebView2 not ready, opening in default browser.");
                 OpenInDefaultBrowser(url);
             }
         }
@@ -246,7 +222,6 @@ namespace MyNewsFeeder.Services
         {
             if (string.IsNullOrEmpty(url)) return;
 
-            System.Diagnostics.Debug.WriteLine($"🧹 NavigateWithClear called: {url}");
 
             if (_linkWebView?.CoreWebView2 != null && _isInitialized)
             {
@@ -254,24 +229,20 @@ namespace MyNewsFeeder.Services
                 {
                     // Step 1: Clear browser content
                     _linkWebView.CoreWebView2.Navigate("about:blank");
-                    System.Diagnostics.Debug.WriteLine("🧹 Browser cleared (about:blank)");
 
                     // Reduced clear wait time
                     await Task.Delay(200);
 
                     // Step 2: Navigate directly to actual URL
                     _linkWebView.CoreWebView2.Navigate(url);
-                    System.Diagnostics.Debug.WriteLine($"✅ Navigating with clear to: {url}");
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ NavigateWithClear failed: {ex.Message}");
                     OpenInDefaultBrowser(url);
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("❌ WebView2 not ready for NavigateWithClear");
                 OpenInDefaultBrowser(url);
             }
         }
@@ -281,7 +252,6 @@ namespace MyNewsFeeder.Services
         {
             if (string.IsNullOrEmpty(url)) return;
 
-            System.Diagnostics.Debug.WriteLine($"🚀 Fast navigate called: {url}");
 
             if (_linkWebView?.CoreWebView2 != null && _isInitialized)
             {
@@ -289,36 +259,53 @@ namespace MyNewsFeeder.Services
                 {
                     // Direct navigation without loading screen
                     _linkWebView.CoreWebView2.Navigate(url);
-                    System.Diagnostics.Debug.WriteLine($"✅ Fast navigating to: {url}");
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ Fast navigation failed: {ex.Message}");
                     OpenInDefaultBrowser(url);
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("❌ WebView2 not ready for fast navigation");
                 OpenInDefaultBrowser(url);
+            }
+        }
+
+        public bool TryOpenExternalLink(string url)
+        {
+            if (!TryGetAllowedUri(url, out var allowedUri))
+            {
+                return false;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = allowedUri.AbsoluteUri,
+                    UseShellExecute = true
+                });
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
             }
         }
 
         private void OpenInDefaultBrowser(string url)
         {
-            try
+            if (!TryOpenExternalLink(url))
             {
-                Process.Start(new ProcessStartInfo
+                if (TryGetAllowedUri(url, out var allowedUri))
                 {
-                    FileName = url,
-                    UseShellExecute = true
-                });
-                System.Diagnostics.Debug.WriteLine($"✅ Opened in default browser: {url}");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"❌ Failed to open URL in default browser: {ex.Message}");
-                System.Windows.MessageBox.Show($"Could not open URL: {url}\nError: {ex.Message}", "Error");
+                    System.Windows.MessageBox.Show(
+                        $"Could not open URL: {allowedUri}",
+                        "Error",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Error);
+                }
             }
         }
 
@@ -329,11 +316,10 @@ namespace MyNewsFeeder.Services
                 try
                 {
                     _linkWebView.CoreWebView2.Navigate("about:blank");
-                    System.Diagnostics.Debug.WriteLine("✅ Navigated to blank page");
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ Error navigating to blank: {ex.Message}");
+                    // Ignore failures while navigating to a blank page.
                 }
             }
         }
@@ -345,12 +331,11 @@ namespace MyNewsFeeder.Services
                 if (_linkWebView?.CoreWebView2 != null && _linkWebView.CoreWebView2.CanGoBack)
                 {
                     _linkWebView.CoreWebView2.GoBack();
-                    System.Diagnostics.Debug.WriteLine("✅ Browser navigated back.");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error going back: {ex.Message}");
+                // Ignore navigation history errors.
             }
         }
 
@@ -361,12 +346,11 @@ namespace MyNewsFeeder.Services
                 if (_linkWebView?.CoreWebView2 != null && _linkWebView.CoreWebView2.CanGoForward)
                 {
                     _linkWebView.CoreWebView2.GoForward();
-                    System.Diagnostics.Debug.WriteLine("✅ Browser navigated forward.");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error going forward: {ex.Message}");
+                // Ignore navigation history errors.
             }
         }
 
@@ -377,12 +361,11 @@ namespace MyNewsFeeder.Services
                 if (_linkWebView?.CoreWebView2 != null)
                 {
                     _linkWebView.CoreWebView2.Reload();
-                    System.Diagnostics.Debug.WriteLine("✅ Browser reloaded.");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error reloading: {ex.Message}");
+                // Ignore reload failures.
             }
         }
 
@@ -390,13 +373,11 @@ namespace MyNewsFeeder.Services
         {
             _darkModeEnabled = enabled;
             ApplyNativeDarkModeToWebView();
-            System.Diagnostics.Debug.WriteLine($"🌙 Native dark mode set to: {enabled}");
         }
 
         public void SetAdBlockerEnabled(bool enabled)
         {
             _adBlockerEnabled = enabled;
-            System.Diagnostics.Debug.WriteLine($"🔧 AdBlocker enabled set to: {enabled}");
         }
 
         // Native Dark Mode Only - No CSS Filters
@@ -405,7 +386,6 @@ namespace MyNewsFeeder.Services
             // Thread safety check
             if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
             {
-                System.Diagnostics.Debug.WriteLine("⚠️ ApplyNativeDarkModeToWebView called from background thread, dispatching to UI thread");
                 System.Windows.Application.Current.Dispatcher.Invoke(() => ApplyNativeDarkModeToWebView());
                 return;
             }
@@ -536,7 +516,6 @@ namespace MyNewsFeeder.Services
 })();
 ";
                         _linkWebView.CoreWebView2.ExecuteScriptAsync(nativeDarkModeScript);
-                        System.Diagnostics.Debug.WriteLine("✅ Native dark mode applied to WebView");
                     }
                     else
                     {
@@ -571,12 +550,11 @@ namespace MyNewsFeeder.Services
 })();
 ";
                         _linkWebView.CoreWebView2.ExecuteScriptAsync(removeNativeDarkModeScript);
-                        System.Diagnostics.Debug.WriteLine("✅ Native dark mode removed from WebView");
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ Error setting native dark mode: {ex.Message}");
+                    // Ignore failures while applying native dark mode script.
                 }
             }
         }
@@ -601,9 +579,9 @@ namespace MyNewsFeeder.Services
             return _adBlocker.GetDetailedStats();
         }
 
-        public async Task UpdateAdBlockerListsAsync()
+        public Task<AdBlockerUpdateResult> UpdateAdBlockerListsAsync()
         {
-            await _adBlocker.UpdateFilterListsManuallyAsync();
+            return _adBlocker.UpdateFilterListsManuallyAsync();
         }
 
         public async void ClearCache()
@@ -611,11 +589,10 @@ namespace MyNewsFeeder.Services
             try
             {
                 await ClearSelectiveCacheAsync();
-                System.Diagnostics.Debug.WriteLine("✅ Browser cache cleared.");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error clearing cache: {ex.Message}");
+                // Ignore cache clear failures.
             }
         }
 
@@ -626,12 +603,11 @@ namespace MyNewsFeeder.Services
                 if (_linkWebView?.CoreWebView2?.Profile != null)
                 {
                     await _linkWebView.CoreWebView2.Profile.ClearBrowsingDataAsync();
-                    System.Diagnostics.Debug.WriteLine("✅ All WebView2 cache cleared");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error clearing cache: {ex.Message}");
+                // Ignore cache clear failures.
             }
         }
 
@@ -650,12 +626,11 @@ namespace MyNewsFeeder.Services
                                    CoreWebView2BrowsingDataKinds.AllDomStorage;
 
                     await _linkWebView.CoreWebView2.Profile.ClearBrowsingDataAsync(dataKinds);
-                    System.Diagnostics.Debug.WriteLine("✅ Selective WebView2 cache cleared");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error clearing selective cache: {ex.Message}");
+                // Ignore cache clear failures.
             }
         }
 
@@ -673,12 +648,11 @@ namespace MyNewsFeeder.Services
                                    CoreWebView2BrowsingDataKinds.CacheStorage;
 
                     await _linkWebView.CoreWebView2.Profile.ClearBrowsingDataAsync(dataKinds, startTime, endTime);
-                    System.Diagnostics.Debug.WriteLine($"✅ Cache older than {hoursOld} hours cleared");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error clearing old cache: {ex.Message}");
+                // Ignore cache clear failures.
             }
         }
         
@@ -724,11 +698,10 @@ namespace MyNewsFeeder.Services
 })();
 ";
                     await _linkWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(popupBlockingScript);
-                    System.Diagnostics.Debug.WriteLine("✅ Popup blocking script added.");
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ Error adding popup blocking script: {ex.Message}");
+                    // Ignore popup script injection failures.
                 }
             }
         }
@@ -784,13 +757,12 @@ namespace MyNewsFeeder.Services
                     System.Windows.Application.Current.Dispatcher.Invoke(() =>
                     {
                         ApplyNativeDarkModeToWebView();
-                        System.Diagnostics.Debug.WriteLine("🌙 Native dark mode applied immediately after navigation");
                     });
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error in OnNavigationCompleted: {ex.Message}");
+                // Ignore navigation callbacks that fail during shutdown.
             }
         }
 
@@ -812,12 +784,11 @@ namespace MyNewsFeeder.Services
                             ApplyNativeDarkModeToWebView();
                         });
                     }
-                    System.Diagnostics.Debug.WriteLine("🌙 Native dark mode applied on DOM content loaded");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error in OnDOMContentLoaded: {ex.Message}");
+                // Ignore navigation callbacks that fail during shutdown.
             }
         }
     }

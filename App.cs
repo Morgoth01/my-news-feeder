@@ -30,18 +30,15 @@ namespace MyNewsFeeder
         {
             try
             {
-                var mainWindow = Current.MainWindow as MainWindow;
-                var viewModel = mainWindow?.DataContext as MainViewModel;
-
-                if (viewModel != null)
+                if (Current.MainWindow is MainWindow mainWindow &&
+                    mainWindow.DataContext is MainViewModel viewModel)
                 {
                     viewModel.Cleanup();
-                    System.Diagnostics.Debug.WriteLine("🧹 App cleanup completed");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error during app exit: {ex.Message}");
+                // Ignore cleanup failures during shutdown.
             }
 
             base.OnExit(e);

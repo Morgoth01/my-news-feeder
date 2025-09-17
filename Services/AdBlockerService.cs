@@ -46,8 +46,6 @@ namespace MyNewsFeeder.Services
         // CRITICAL: Synchronous loading of essential domains for immediate blocking
         private void LoadBasicDomainsSync()
         {
-            System.Diagnostics.Debug.WriteLine("🔧 Loading basic ad domains synchronously...");
-
             // Essential ad domains for immediate blocking
             var criticalDomains = new[]
             {
@@ -105,16 +103,14 @@ namespace MyNewsFeeder.Services
                 {
                     _blockedPatterns.Add(new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled));
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error compiling pattern {pattern}: {ex.Message}");
+                    // Ignore invalid regex patterns during initialization.
                 }
             }
 
             // Mark as initialized immediately for basic blocking
             _isInitialized = true;
-
-            System.Diagnostics.Debug.WriteLine($"✅ Basic AdBlocker initialized with {_blockedDomains.Count} domains and {_blockedPatterns.Count} patterns");
         }
 
         private async Task InitializeAsync()
@@ -123,11 +119,9 @@ namespace MyNewsFeeder.Services
             {
                 await LoadLocalBlockListsAsync();
                 await UpdateFilterListsAsync();
-                System.Diagnostics.Debug.WriteLine($"✅ Enhanced AdBlocker initialized with {_blockedDomains.Count} domains and {_blockedPatterns.Count} patterns.");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Failed to initialize enhanced AdBlocker: {ex.Message}");
                 // AdBlocker still works with basic domains loaded synchronously
             }
         }
@@ -169,9 +163,9 @@ namespace MyNewsFeeder.Services
                 {
                     _blockedPatterns.Add(new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled));
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Invalid regex pattern: {pattern}, Error: {ex.Message}");
+                    // Ignore invalid regex patterns found in the bundled list.
                 }
             }
 
@@ -206,9 +200,9 @@ namespace MyNewsFeeder.Services
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error loading custom blocklist: {ex.Message}");
+                // Ignore blocklist load failures; fallback lists still apply.
             }
         }
 
@@ -263,22 +257,22 @@ namespace MyNewsFeeder.Services
             try
             {
                 await File.WriteAllTextAsync(fileName, strictHosts);
-                System.Diagnostics.Debug.WriteLine($"✅ Created comprehensive strict blocklist file: {fileName}");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Failed to create strict blocklist: {ex.Message}");
+                // Ignore errors while creating the default blocklist file.
             }
         }
 
         // Download and parse popular filter lists
-        private async Task UpdateFilterListsAsync()
+        private async Task<AdBlockerUpdateResult> UpdateFilterListsAsync()
         {
             var cacheDir = "FilterLists";
             Directory.CreateDirectory(cacheDir);
-            var successCount = 0;
-            var errorCount = 0;
-            var errors = new List<string>();
+
+            var downloaded = 0;
+            var cached = 0;
+            var failed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var filterList in _filterLists)
             {
@@ -286,44 +280,34 @@ namespace MyNewsFeeder.Services
                 {
                     var cacheFile = Path.Combine(cacheDir, $"{filterList.Key}.txt");
                     var shouldUpdate = !File.Exists(cacheFile) ||
-                                     File.GetLastWriteTime(cacheFile) < DateTime.Now.AddDays(-1);
+                                       File.GetLastWriteTime(cacheFile) < DateTime.Now.AddDays(-1);
 
                     if (shouldUpdate)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Updating filter list: {filterList.Key}");
-                        // Retry logic for failed downloads
                         var success = await DownloadWithRetry(filterList.Value, cacheFile, filterList.Key);
                         if (success)
                         {
-                            successCount++;
+                            downloaded++;
                             await ParseFilterListAsync(cacheFile);
                         }
                         else
                         {
-                            errorCount++;
-                            errors.Add(filterList.Key);
+                            failed.Add(filterList.Key);
                         }
                     }
                     else
                     {
-                        // Parse existing cached file
+                        cached++;
                         await ParseFilterListAsync(cacheFile);
-                        System.Diagnostics.Debug.WriteLine($"Using cached filter list: {filterList.Key}");
                     }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    errorCount++;
-                    errors.Add(filterList.Key);
-                    System.Diagnostics.Debug.WriteLine($"Error updating {filterList.Key}: {ex.Message}");
+                    failed.Add(filterList.Key);
                 }
             }
 
-            System.Diagnostics.Debug.WriteLine($"Filter list update completed. Success: {successCount}, Errors: {errorCount}");
-            if (errors.Count > 0)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed lists: {string.Join(", ", errors)}");
-            }
+            return new AdBlockerUpdateResult(downloaded, cached, failed.Count == 0 ? Array.Empty<string>() : new List<string>(failed));
         }
 
         // New method with retry logic
@@ -338,29 +322,15 @@ namespace MyNewsFeeder.Services
                     {
                         var content = await response.Content.ReadAsStringAsync();
                         await File.WriteAllTextAsync(cacheFile, content);
-                        System.Diagnostics.Debug.WriteLine($"✅ Successfully downloaded {listName} (attempt {attempt})");
                         return true;
                     }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine($"❌ HTTP {response.StatusCode} for {listName} (attempt {attempt})");
-                        if (attempt == maxRetries)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"❌ Failed to download {listName} after {maxRetries} attempts: {response.StatusCode}");
-                        }
-                    }
                 }
-                catch (HttpRequestException ex)
+                catch (HttpRequestException)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ Network error downloading {listName} (attempt {attempt}): {ex.Message}");
-                    if (attempt == maxRetries)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"❌ Failed to download {listName} after {maxRetries} attempts due to network errors");
-                    }
+                    // Retry on transient network errors.
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ Unexpected error downloading {listName} (attempt {attempt}): {ex.Message}");
                     break; // Don't retry for unexpected errors
                 }
 
@@ -422,9 +392,9 @@ namespace MyNewsFeeder.Services
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error parsing filter list {filePath}: {ex.Message}");
+                // Ignore parse failures for individual list files.
             }
         }
 
@@ -446,7 +416,7 @@ namespace MyNewsFeeder.Services
                    domain.Length > 3;
         }
 
-        // ENHANCED: Comprehensive URL blocking with detailed logging
+        // ENHANCED: Comprehensive URL blocking without diagnostics
         public bool ShouldBlockUrl(string url)
         {
             if (!_isInitialized || string.IsNullOrEmpty(url))
@@ -457,10 +427,6 @@ namespace MyNewsFeeder.Services
                 var uri = new Uri(url);
                 var host = uri.Host.ToLowerInvariant();
                 var fullUrl = url.ToLowerInvariant();
-
-                System.Diagnostics.Debug.WriteLine($"🔍 Checking URL: {url}");
-                System.Diagnostics.Debug.WriteLine($"🔍 Host: {host}");
-                System.Diagnostics.Debug.WriteLine($"🔍 Total domains: {_blockedDomains.Count}");
 
                 // ENHANCED: Specific ad domain checks (including Taboola/Outbrain)
                 var specificAdDomains = new[]
@@ -482,7 +448,6 @@ namespace MyNewsFeeder.Services
                 {
                     if (host == domain || host.EndsWith("." + domain))
                     {
-                        System.Diagnostics.Debug.WriteLine($"🚫 BLOCKED (Specific Ad Domain): {url}");
                         return true;
                     }
                 }
@@ -508,7 +473,6 @@ namespace MyNewsFeeder.Services
                 {
                     if (fullUrl.Contains(pattern))
                     {
-                        System.Diagnostics.Debug.WriteLine($"🚫 BLOCKED (Pattern '{pattern}'): {url}");
                         return true;
                     }
                 }
@@ -516,7 +480,6 @@ namespace MyNewsFeeder.Services
                 // Check exact domain match from filter lists
                 if (_blockedDomains.Contains(host))
                 {
-                    System.Diagnostics.Debug.WriteLine($"🚫 BLOCKED (Domain): {host}");
                     return true;
                 }
 
@@ -525,7 +488,6 @@ namespace MyNewsFeeder.Services
                 {
                     if (host.EndsWith("." + blockedDomain))
                     {
-                        System.Diagnostics.Debug.WriteLine($"🚫 BLOCKED (Subdomain): {host} -> {blockedDomain}");
                         return true;
                     }
                 }
@@ -535,26 +497,22 @@ namespace MyNewsFeeder.Services
                 {
                     if (pattern.IsMatch(fullUrl))
                     {
-                        System.Diagnostics.Debug.WriteLine($"🚫 BLOCKED (Filter Pattern): {url}");
                         return true;
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"✅ ALLOWED: {url}");
                 return false;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error checking URL {url}: {ex.Message}");
                 return false;
             }
         }
 
         // Manual filter list update
-        public async Task UpdateFilterListsManuallyAsync()
+        public async Task<AdBlockerUpdateResult> UpdateFilterListsManuallyAsync()
         {
-            await UpdateFilterListsAsync();
-            System.Diagnostics.Debug.WriteLine("✅ Filter lists updated manually.");
+            return await UpdateFilterListsAsync();
         }
 
         // Get statistics with detailed information
@@ -595,7 +553,6 @@ namespace MyNewsFeeder.Services
             if (!string.IsNullOrEmpty(domain))
             {
                 _blockedDomains.Add(domain.ToLowerInvariant());
-                System.Diagnostics.Debug.WriteLine($"✅ Added custom blocked domain: {domain}");
             }
         }
 
@@ -604,7 +561,6 @@ namespace MyNewsFeeder.Services
             if (!string.IsNullOrEmpty(domain))
             {
                 _blockedDomains.Remove(domain.ToLowerInvariant());
-                System.Diagnostics.Debug.WriteLine($"✅ Removed blocked domain: {domain}");
             }
         }
 
@@ -618,4 +574,6 @@ namespace MyNewsFeeder.Services
             _httpClient?.Dispose();
         }
     }
+
+    public sealed record AdBlockerUpdateResult(int DownloadedLists, int CachedLists, IReadOnlyList<string> FailedLists);
 }

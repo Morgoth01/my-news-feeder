@@ -58,9 +58,9 @@ namespace MyNewsFeeder.Views
                 var aboutWindow = new AboutWindow { Owner = this };
                 aboutWindow.ShowDialog();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error opening About window: {ex.Message}");
+                // Ignore failures when opening the About window.
             }
         }
 

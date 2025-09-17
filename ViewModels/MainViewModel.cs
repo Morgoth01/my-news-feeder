@@ -5,7 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using System.Text.Json;
+using System.Net;
 using System.Windows;
 using MyNewsFeeder.Models;
 using MyNewsFeeder.Services;
@@ -97,7 +97,6 @@ namespace MyNewsFeeder.ViewModels
                 _isBrowserVisible = value;
                 OnPropertyChanged(nameof(IsBrowserVisible));
                 OnPropertyChanged(nameof(ShowContentButtonText));
-                System.Diagnostics.Debug.WriteLine($"🔧 IsBrowserVisible changed to: {value}");
             }
         }
 
@@ -136,7 +135,6 @@ namespace MyNewsFeeder.ViewModels
                     _settings.ArticleWindowHeight = newValue;
                     _settingsService.SaveSettings(_settings);
 
-                    System.Diagnostics.Debug.WriteLine($"Article window height changed to: {_articleWindowHeight} (marked as custom)");
                 }
             }
         }
@@ -156,7 +154,6 @@ namespace MyNewsFeeder.ViewModels
                     _settings.BrowserWindowHeight = newValue;
                     _settingsService.SaveSettings(_settings);
 
-                    System.Diagnostics.Debug.WriteLine($"Browser window height changed to: {_browserWindowHeight} (marked as custom)");
                 }
             }
         }
@@ -197,7 +194,7 @@ namespace MyNewsFeeder.ViewModels
 
                 ApplyTheme();
                 _browserService.SetDarkMode(value);
-                System.Diagnostics.Debug.WriteLine($"🌙 Native dark mode setting changed to: {value}");
+                ApplyArticleWebViewTheme();
 
                 if (!string.IsNullOrEmpty(SelectedArticleHtml))
                 {
@@ -221,18 +218,16 @@ namespace MyNewsFeeder.ViewModels
                 if (_settings.DarkMode)
                 {
                     theme.SetBaseTheme(BaseTheme.Dark);
-                    System.Diagnostics.Debug.WriteLine("Applied Dark Theme to UI");
                 }
                 else
                 {
                     theme.SetBaseTheme(BaseTheme.Light);
-                    System.Diagnostics.Debug.WriteLine("Applied Light Theme to UI");
                 }
                 paletteHelper.SetTheme(theme);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error applying theme: {ex.Message}");
+                // Ignore palette update failures to keep the UI responsive.
             }
         }
 
@@ -254,7 +249,6 @@ namespace MyNewsFeeder.ViewModels
                     StopAutoRefreshTimer();
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Auto-refresh {(value ? "enabled" : "disabled")} with {AutoRefreshIntervalMinutes} minute interval");
             }
         }
 
@@ -268,7 +262,6 @@ namespace MyNewsFeeder.ViewModels
                 _settingsService.SaveSettings(_settings);
 
                 _browserService.SetAdBlockerEnabled(value);
-                System.Diagnostics.Debug.WriteLine($"🔧 AdBlocker enabled set to: {value}");
             }
         }
 
@@ -301,7 +294,6 @@ namespace MyNewsFeeder.ViewModels
                     _settings.MaxFeeds = _maxFeeds;
                     _settingsService.SaveSettings(_settings);
 
-                    System.Diagnostics.Debug.WriteLine($"MaxFeeds changed and saved: {_maxFeeds}");
                 }
             }
         }
@@ -325,7 +317,6 @@ namespace MyNewsFeeder.ViewModels
                     UpdateArticleWebView();
                 }
 
-                System.Diagnostics.Debug.WriteLine($"Show Content Always-On: {value}");
             }
         }
 
@@ -348,7 +339,6 @@ namespace MyNewsFeeder.ViewModels
                         RestartAutoRefreshTimer();
                     }
 
-                    System.Diagnostics.Debug.WriteLine($"Auto-refresh interval changed to: {value} minutes");
                 }
             }
         }
@@ -415,27 +405,20 @@ namespace MyNewsFeeder.ViewModels
                 _settings = _settingsService.LoadSettings();
                 if (_settings == null)
                 {
-                    System.Diagnostics.Debug.WriteLine("❌ Settings is null, creating default settings");
                     _settings = new AppSettings();
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading settings: {ex.Message}");
                 _settings = new AppSettings();
             }
             TreeWidth = _settings.TreeWidth;
             try
             {
-                _feeds = _settingsService.LoadFeeds();
-                if (_feeds == null)
-                {
-                    _feeds = new List<Feed>();
-                }
+                _feeds = FeedService.NormalizeAndFilterFeeds(_settingsService.LoadFeeds());
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading feeds: {ex.Message}");
                 _feeds = new List<Feed>();
             }
 
@@ -456,9 +439,8 @@ namespace MyNewsFeeder.ViewModels
                     _settings.AutoRefreshIntervalMinutes = 10;
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading auto-refresh interval: {ex.Message}");
                 _autoRefreshIntervalMinutes = 10;
                 _settings.AutoRefreshIntervalMinutes = 10;
             }
@@ -469,20 +451,18 @@ namespace MyNewsFeeder.ViewModels
                 _browserWindowHeight = _settings.BrowserWindowHeight > 0 ? _settings.BrowserWindowHeight : 350;
                 ApplyDynamicWindowSizing();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error loading window heights: {ex.Message}");
                 _articleWindowHeight = 350;
                 _browserWindowHeight = 350;
             }
 
-            System.Diagnostics.Debug.WriteLine($"Loaded settings - MaxFeeds: {_maxFeeds}, AutoRefresh: {_settings.AutoRefresh}, Interval: {_autoRefreshIntervalMinutes} minutes");
 
             // Initialize commands
             RefreshCommand = new RelayCommand(async _ => await RefreshFeedsAsync());
             ManageFeedsCommand = new RelayCommand(_ => OpenFeedManager());
             ShowContentCommand = new RelayCommand(_ => ToggleBrowserContent());
-            AdBlockerSettingsCommand = new RelayCommand(_ => ShowAdBlockerSettings());
+            AdBlockerSettingsCommand = new RelayCommand(async _ => await ShowAdBlockerSettingsAsync());
             BrowserBackCommand = new RelayCommand(_ => _browserService.GoBack());
             BrowserForwardCommand = new RelayCommand(_ => _browserService.GoForward());
             BrowserReloadCommand = new RelayCommand(_ => _browserService.Reload());
@@ -509,20 +489,17 @@ namespace MyNewsFeeder.ViewModels
                     StartAutoRefreshTimer();
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error starting auto-refresh timer: {ex.Message}");
             }
 
             StartCacheCleanupTimer();
 
-            System.Diagnostics.Debug.WriteLine($"✅ MainViewModel initialization completed");
         }
 
         public void SetWebView(Microsoft.Web.WebView2.Wpf.WebView2 webView)
         {
             _linkWebView = webView;
-            System.Diagnostics.Debug.WriteLine("🔧 MainViewModel.SetWebView called");
 
             _browserService.SetWebView(webView);
 
@@ -532,7 +509,6 @@ namespace MyNewsFeeder.ViewModels
                 {
                     if (e.IsSuccess)
                     {
-                        System.Diagnostics.Debug.WriteLine("✅ Link WebView2 initialized in MainViewModel");
                         _browserService.SetAdBlockerEnabled(_settings.AdBlockerEnabled);
                     }
                 };
@@ -545,8 +521,11 @@ namespace MyNewsFeeder.ViewModels
 
             if (_articleWebView?.CoreWebView2 != null)
             {
-                _articleWebView.CoreWebView2.WebMessageReceived += OnArticleWebMessageReceived;
+                _articleWebView.CoreWebView2.Settings.IsScriptEnabled = false;
+                _articleWebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
+                _articleWebView.CoreWebView2.NavigationStarting += OnArticleNavigationStarting;
                 _articleWebView.CoreWebView2.NewWindowRequested += OnArticleNewWindowRequested;
+                ApplyArticleWebViewTheme();
             }
             else
             {
@@ -554,8 +533,11 @@ namespace MyNewsFeeder.ViewModels
                 {
                     if (e.IsSuccess)
                     {
-                        _articleWebView.CoreWebView2.WebMessageReceived += OnArticleWebMessageReceived;
+                        _articleWebView.CoreWebView2.Settings.IsScriptEnabled = false;
+                        _articleWebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
+                        _articleWebView.CoreWebView2.NavigationStarting += OnArticleNavigationStarting;
                         _articleWebView.CoreWebView2.NewWindowRequested += OnArticleNewWindowRequested;
+                        ApplyArticleWebViewTheme();
                     }
                 };
             }
@@ -571,46 +553,75 @@ namespace MyNewsFeeder.ViewModels
             OpenInDefaultBrowser(e.Uri);
         }
 
-        private void OnArticleWebMessageReceived(object sender, Microsoft.Web.WebView2.Core.CoreWebView2WebMessageReceivedEventArgs e)
+        private void OnArticleNavigationStarting(object sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationStartingEventArgs e)
         {
-            if (_hasOpenedExternalLink) return;
+            var targetUri = e.Uri;
+            if (string.IsNullOrEmpty(targetUri))
+            {
+                return;
+            }
+
+            if (string.Equals(targetUri, "about:blank", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (Uri.TryCreate(targetUri, UriKind.Absolute, out var navigationUri) &&
+                string.Equals(navigationUri.Scheme, "data", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            e.Cancel = true;
+
+            if (_hasOpenedExternalLink)
+            {
+                return;
+            }
+
             _hasOpenedExternalLink = true;
 
-            var message = e.TryGetWebMessageAsString();
-            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(message);
-            if (data.TryGetValue("action", out var action) && action == "openInDefaultBrowser")
+            var normalizedUrl = NormalizeExternalLink(targetUri);
+            if (string.IsNullOrEmpty(normalizedUrl))
             {
-                OpenInDefaultBrowser(data["url"]);
+                return;
+            }
+
+            if (!_browserService.TryOpenExternalLink(normalizedUrl))
+            {
+                System.Windows.MessageBox.Show(
+                    $"Could not open URL: {normalizedUrl}",
+                    "Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
             }
         }
 
         private void OpenInDefaultBrowser(string url)
         {
-            try
+            var normalizedUrl = NormalizeExternalLink(url);
+            if (string.IsNullOrEmpty(normalizedUrl))
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = url,
-                    UseShellExecute = true
-                });
-                System.Diagnostics.Debug.WriteLine($"Opened in default browser: {url}");
+                return;
             }
-            catch (Exception ex)
+
+            if (!_browserService.TryOpenExternalLink(normalizedUrl))
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to open URL in default browser: {ex.Message}");
-                System.Windows.MessageBox.Show($"Could not open URL: {url}\nError: {ex.Message}", "Error");
+                System.Windows.MessageBox.Show(
+                    $"Could not open URL: {normalizedUrl}",
+                    "Error",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
             }
         }
 
         public void OnArticleSelected(FeedItem feedItem)
         {
-            System.Diagnostics.Debug.WriteLine($"🔗 Article selected: {feedItem.Title}");
-            System.Diagnostics.Debug.WriteLine($"🔧 Always-On enabled: {IsShowContentAlwaysOn}");
             _hasOpenedExternalLink = false;
             var htmlContent = CreateArticleHtml(feedItem);
             SelectedArticleHtml = htmlContent;
-            SelectedArticleText = $"{feedItem.Title}\n\n{feedItem.Description}";
-            SelectedArticleLink = feedItem.Link;
+            SelectedArticleText = BuildArticlePlainText(feedItem.Title, feedItem.Description);
+            SelectedArticleLink = NormalizeExternalLink(feedItem.Link);
 
             if (IsShowContentAlwaysOn)
             {
@@ -618,24 +629,22 @@ namespace MyNewsFeeder.ViewModels
 
                 try
                 {
-                    _browserService.NavigateWithClear(SelectedArticleLink);
-                    System.Diagnostics.Debug.WriteLine($"✅ Auto-navigating with clear to: {SelectedArticleLink}");
+                    if (!string.IsNullOrEmpty(SelectedArticleLink))
+                    {
+                        _browserService.NavigateWithClear(SelectedArticleLink);
+                    }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"❌ Error in NavigateWithClear: {ex.Message}");
+                    // Ignore navigation failures; the browser fallback handles external links.
                 }
             }
             else
             {
                 ClearBrowserContent();
                 IsBrowserVisible = false;
-                System.Diagnostics.Debug.WriteLine("🔧 Browser hidden (Always-On disabled)");
             }
 
-            System.Diagnostics.Debug.WriteLine($"Selected article: {feedItem.Title}");
-            System.Diagnostics.Debug.WriteLine($"Article link: {feedItem.Link}");
-            System.Diagnostics.Debug.WriteLine($"Browser visible: {IsBrowserVisible}");
         }
 
         private void ClearBrowserContent()
@@ -644,11 +653,10 @@ namespace MyNewsFeeder.ViewModels
             {
                 _browserService.NavigateToBlank();
                 IsBrowserVisible = false;
-                System.Diagnostics.Debug.WriteLine("Browser content cleared.");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error clearing browser content: {ex.Message}");
+                // Ignore failures when clearing the embedded browser content.
             }
         }
 
@@ -662,6 +670,10 @@ namespace MyNewsFeeder.ViewModels
             var borderColor = _settings.DarkMode ? "#90caf9" : "#673ab7";
             var linkColor = _settings.DarkMode ? "#81c784" : "#673ab7";
 
+            var sanitizedDescription = SanitizeHtml(feedItem.Description);
+            var normalizedLink = NormalizeExternalLink(feedItem.Link);
+            var readMoreContent = BuildReadMoreContent(normalizedLink);
+
             var htmlTemplate = $@"
 <!DOCTYPE html>
 <html>
@@ -669,6 +681,7 @@ namespace MyNewsFeeder.ViewModels
     <meta charset='utf-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
     <meta name='color-scheme' content='{(_settings.DarkMode ? "dark light" : "light dark")}'>
+    <meta http-equiv='Content-Security-Policy' content=""default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; child-src 'none'; frame-ancestors 'none'"">
     <style>
         :root {{
             color-scheme: {(_settings.DarkMode ? "dark" : "light")};
@@ -746,27 +759,6 @@ namespace MyNewsFeeder.ViewModels
             color: {headerColor};
         }}
     </style>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {{
-            document.addEventListener('click', function(e) {{
-                if (e.target.tagName === 'A' && e.target.href) {{
-                    e.preventDefault();
-                    try {{
-                        if (window.chrome && window.chrome.webview) {{
-                            window.chrome.webview.postMessage(JSON.stringify({{
-                                action: 'openInDefaultBrowser',
-                                url: e.target.href
-                            }}));
-                        }} else {{
-                            window.open(e.target.href, '_blank');
-                        }}
-                    }} catch (error) {{
-                        window.open(e.target.href, '_blank');
-                    }}
-                }}
-            }});
-        }});
-    </script>
 </head>
 <body>
     <div class='article-header'>
@@ -777,11 +769,10 @@ namespace MyNewsFeeder.ViewModels
         </div>
     </div>
     <div class='article-content'>
-        {feedItem.Description}
+        {sanitizedDescription}
     </div>
     <div class='read-more'>
-        <strong>Full Article (Use 'Show Content' for integrated browser):</strong> 
-        <a href='{feedItem.Link}' class='external-link'>{feedItem.Link}</a>
+        {readMoreContent}
     </div>
 </body>
 </html>";
@@ -804,11 +795,9 @@ namespace MyNewsFeeder.ViewModels
                             await AdjustArticleHeightAsync();
                         }
                     };
-                    System.Diagnostics.Debug.WriteLine("Article HTML content updated in WebView.");
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error updating article WebView: {ex.Message}");
                 }
             }
         }
@@ -832,15 +821,13 @@ namespace MyNewsFeeder.ViewModels
                                 Application.Current.Dispatcher.Invoke(() =>
                                 {
                                     ArticleWebViewHeight = adjustedHeight;
-                                    System.Diagnostics.Debug.WriteLine($"Article height adjusted to: {adjustedHeight}px (content: {contentHeight}px)");
                                 });
                             }
                         }
                     });
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Error adjusting article height: {ex.Message}");
                 }
             }
 
@@ -877,11 +864,9 @@ namespace MyNewsFeeder.ViewModels
                     try
                     {
                         _browserService.Navigate(SelectedArticleLink);
-                        System.Diagnostics.Debug.WriteLine($"Showing external content in integrated browser: {SelectedArticleLink}");
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Error navigating: {ex.Message}");
                     }
                 }
                 else
@@ -897,16 +882,14 @@ namespace MyNewsFeeder.ViewModels
                 {
                     IsBrowserVisible = false;
                     _browserService.NavigateToBlank();
-                    System.Diagnostics.Debug.WriteLine("Hiding integrated browser content.");
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("Browser stays visible due to Always-On setting.");
                 }
             }
         }
 
-        private void ShowAdBlockerSettings()
+        private async Task ShowAdBlockerSettingsAsync()
         {
             try
             {
@@ -944,12 +927,52 @@ namespace MyNewsFeeder.ViewModels
                 var result = System.Windows.MessageBox.Show(
                     message + "\n\nUpdate filter lists now?",
                     "Enhanced AdBlocker Settings",
-                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxButton.YesNoCancel,
                     System.Windows.MessageBoxImage.Information);
 
                 if (result == System.Windows.MessageBoxResult.Yes)
                 {
-                    _ = _browserService.UpdateAdBlockerListsAsync();
+                    try
+                    {
+                        Mouse.OverrideCursor = Cursors.Wait;
+                        var updateResult = await _browserService.UpdateAdBlockerListsAsync();
+
+                        var updateMessage = $"AdBlocker filter lists refreshed.\n\n" +
+                            $"Downloaded lists: {updateResult.DownloadedLists}\n" +
+                            $"Loaded from cache: {updateResult.CachedLists}";
+
+                        if (updateResult.FailedLists.Count > 0)
+                        {
+                            var failedSummary = string.Join("\n - ", updateResult.FailedLists);
+                            updateMessage += "\n\nThe following lists failed to update:\n - " + failedSummary;
+                        }
+                        else if (updateResult.DownloadedLists > 0)
+                        {
+                            updateMessage += "\n\nAll filter lists updated successfully.";
+                        }
+                        else
+                        {
+                            updateMessage += "\n\nNo new updates were available; cached lists remain current.";
+                        }
+
+                        System.Windows.MessageBox.Show(
+                            updateMessage,
+                            "AdBlocker Update",
+                            System.Windows.MessageBoxButton.OK,
+                            updateResult.FailedLists.Count > 0 ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Windows.MessageBox.Show(
+                            $"Error updating filter lists: {ex.Message}",
+                            "AdBlocker Update",
+                            System.Windows.MessageBoxButton.OK,
+                            System.Windows.MessageBoxImage.Error);
+                    }
+                    finally
+                    {
+                        Mouse.OverrideCursor = null;
+                    }
                 }
             }
             catch (Exception ex)
@@ -967,7 +990,6 @@ namespace MyNewsFeeder.ViewModels
         public void ClearBrowserOnStartup()
         {
             _browserService.NavigateToBlank();
-            System.Diagnostics.Debug.WriteLine("Browser cleared on startup.");
         }
 
         public Dictionary<string, bool> SaveCategoryExpandedStates()
@@ -979,7 +1001,6 @@ namespace MyNewsFeeder.ViewModels
             }
             _settings.CategoryExpandedStates = expandedStates;
             _settingsService.SaveSettings(_settings);
-            System.Diagnostics.Debug.WriteLine($"Saved category expanded states for {expandedStates.Count} categories.");
             return expandedStates;
         }
 
@@ -995,7 +1016,6 @@ namespace MyNewsFeeder.ViewModels
             }
             _settings.TreeViewExpandedStates = expandedStates;
             _settingsService.SaveSettings(_settings);
-            System.Diagnostics.Debug.WriteLine($"Saved feed expanded states for {expandedStates.Count} feeds.");
             return expandedStates;
         }
 
@@ -1003,10 +1023,8 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"Refreshing feeds with category support. Found {_feeds.Count} feeds, using MaxFeeds: {MaxFeeds}.");
                 if (_feeds.Count == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine("No feeds configured. Please add feeds first.");
                     CategoryGroups.Clear();
                     return;
                 }
@@ -1015,7 +1033,6 @@ namespace MyNewsFeeder.ViewModels
                 var feedExpandedStates = _settings.TreeViewExpandedStates ?? new Dictionary<string, bool>();
 
                 var items = await _feedService.FetchArticlesAsync(_feeds, Keyword, MaxFeeds);
-                System.Diagnostics.Debug.WriteLine($"Fetched {items.Count} articles total (limited to {MaxFeeds} per feed).");
 
                 // Group items by category
                 var categorizedItems = items.GroupBy(item =>
@@ -1055,7 +1072,6 @@ namespace MyNewsFeeder.ViewModels
                         }
 
                         CategoryGroups.Add(categoryViewModel);
-                        System.Diagnostics.Debug.WriteLine($"Added category '{categoryName}' with {categoryViewModel.Feeds.Count} feeds in user-defined order.");
                     }
                 }
 
@@ -1084,7 +1100,6 @@ namespace MyNewsFeeder.ViewModels
                     }
 
                     CategoryGroups.Add(categoryViewModel);
-                    System.Diagnostics.Debug.WriteLine($"Added orphaned category '{categoryGroup.Key}' with {categoryViewModel.Feeds.Count} feeds.");
                 }
 
                 OnPropertyChanged(nameof(CategoryGroups));
@@ -1092,7 +1107,6 @@ namespace MyNewsFeeder.ViewModels
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error refreshing feeds: {ex.Message}");
                 System.Windows.MessageBox.Show($"Error loading feeds: {ex.Message}", "Error",
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             }
@@ -1109,10 +1123,8 @@ namespace MyNewsFeeder.ViewModels
                 OnPropertyChanged(nameof(CurrentFeedSettingsDisplay));
                 OnPropertyChanged(nameof(MaxFeeds));
 
-                System.Diagnostics.Debug.WriteLine($"🔄 Forcing feed refresh with MaxFeeds: {_maxFeeds}");
                 _ = RefreshFeedsAsync();
 
-                System.Diagnostics.Debug.WriteLine($"Feed settings saved. MaxFeeds: {_maxFeeds}, Always-On: {_isShowContentAlwaysOn}");
 
                 System.Windows.MessageBox.Show(
                     $"Feed settings saved successfully!\n\n" +
@@ -1126,7 +1138,6 @@ namespace MyNewsFeeder.ViewModels
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error saving feed settings: {ex.Message}");
                 System.Windows.MessageBox.Show(
                     $"Error saving feed settings: {ex.Message}",
                     "Error",
@@ -1161,7 +1172,6 @@ namespace MyNewsFeeder.ViewModels
                     OnPropertyChanged(nameof(CurrentFeedSettingsDisplay));
                     _ = RefreshFeedsAsync();
 
-                    System.Diagnostics.Debug.WriteLine("Feed settings reset to defaults");
 
                     System.Windows.MessageBox.Show(
                         "Feed settings have been reset to default values.",
@@ -1172,7 +1182,6 @@ namespace MyNewsFeeder.ViewModels
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error resetting feed settings: {ex.Message}");
                 System.Windows.MessageBox.Show(
                     $"Error resetting feed settings: {ex.Message}",
                     "Error",
@@ -1203,7 +1212,6 @@ namespace MyNewsFeeder.ViewModels
 
                     ApplyDynamicWindowSizing();
 
-                    System.Diagnostics.Debug.WriteLine("Window heights reset to dynamic screen-based equal sizing");
 
                     System.Windows.MessageBox.Show(
                         $"Window heights have been reset to dynamic equal sizing.\n\n" +
@@ -1218,7 +1226,6 @@ namespace MyNewsFeeder.ViewModels
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Error resetting window heights: {ex.Message}");
                 System.Windows.MessageBox.Show(
                     $"Error resetting window heights: {ex.Message}",
                     "Error",
@@ -1234,7 +1241,6 @@ namespace MyNewsFeeder.ViewModels
                 var workingArea = System.Windows.SystemParameters.WorkArea;
                 var availableHeight = workingArea.Height;
 
-                System.Diagnostics.Debug.WriteLine($"Screen work area height: {availableHeight}px");
 
                 var usableHeight = availableHeight - 150;
                 var halfHeight = usableHeight / 2;
@@ -1242,13 +1248,11 @@ namespace MyNewsFeeder.ViewModels
                 var articleHeight = Math.Max(200, Math.Min(halfHeight, 600));
                 var browserHeight = articleHeight;
 
-                System.Diagnostics.Debug.WriteLine($"Calculated equal window heights - Article: {articleHeight}px, Browser: {browserHeight}px");
 
                 return (Math.Floor(articleHeight), Math.Floor(browserHeight));
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error calculating window sizes: {ex.Message}");
                 return (350, 350);
             }
         }
@@ -1270,11 +1274,9 @@ namespace MyNewsFeeder.ViewModels
                 OnPropertyChanged(nameof(ArticleWindowHeight));
                 OnPropertyChanged(nameof(BrowserWindowHeight));
 
-                System.Diagnostics.Debug.WriteLine($"Applied dynamic equal window sizing - Article: {articleHeight}px, Browser: {browserHeight}px");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("User has custom heights, skipping dynamic sizing");
             }
         }
 
@@ -1289,11 +1291,10 @@ namespace MyNewsFeeder.ViewModels
                 _autoRefreshTimer.Tick += AutoRefreshTimer_Tick;
                 _autoRefreshTimer.Start();
 
-                System.Diagnostics.Debug.WriteLine($"✅ Auto-refresh timer started: {AutoRefreshIntervalMinutes} minutes");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error starting auto-refresh timer: {ex.Message}");
+                // Ignore errors when opening the About dialog.
             }
         }
 
@@ -1306,12 +1307,11 @@ namespace MyNewsFeeder.ViewModels
                     _autoRefreshTimer.Stop();
                     _autoRefreshTimer.Tick -= AutoRefreshTimer_Tick;
                     _autoRefreshTimer = null;
-                    System.Diagnostics.Debug.WriteLine("🛑 Auto-refresh timer stopped");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error stopping auto-refresh timer: {ex.Message}");
+                // Ignore clipboard errors and keep the previous button state.
             }
         }
 
@@ -1320,7 +1320,6 @@ namespace MyNewsFeeder.ViewModels
             if (AutoRefresh)
             {
                 StartAutoRefreshTimer();
-                System.Diagnostics.Debug.WriteLine($"🔄 Auto-refresh timer restarted with new interval: {AutoRefreshIntervalMinutes} minutes");
             }
         }
 
@@ -1328,12 +1327,10 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"🔄 Auto-refresh triggered (every {AutoRefreshIntervalMinutes} minutes)");
                 await RefreshFeedsAsync();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error during auto-refresh: {ex.Message}");
             }
         }
 
@@ -1346,11 +1343,9 @@ namespace MyNewsFeeder.ViewModels
                 _cacheCleanupTimer.Tick += async (s, e) => await AutoCacheCleanup();
                 _cacheCleanupTimer.Start();
 
-                System.Diagnostics.Debug.WriteLine("✅ Cache cleanup timer started (every 2 hours)");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error starting cache cleanup timer: {ex.Message}");
             }
         }
 
@@ -1358,12 +1353,11 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("🧹 Auto cache cleanup started");
                 await _browserService.ClearOldCacheAsync(6);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error in auto cache cleanup: {ex.Message}");
+                // Ignore background cache cleanup failures.
             }
         }
 
@@ -1382,7 +1376,6 @@ namespace MyNewsFeeder.ViewModels
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error clearing cache: {ex.Message}");
                 System.Windows.MessageBox.Show(
                     $"Error clearing cache: {ex.Message}",
                     "Error",
@@ -1400,34 +1393,42 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("=== ADBLOCKER DIAGNOSTIC ===");
-
-                System.Diagnostics.Debug.WriteLine($"AdBlocker Enabled Setting: {AdBlockerEnabled}");
-
                 var stats = _browserService.GetAdBlockerStats();
-                System.Diagnostics.Debug.WriteLine($"Blocked Domains Count: {stats.domains}");
-                System.Diagnostics.Debug.WriteLine($"Blocked Patterns Count: {stats.patterns}");
 
                 var detailedStats = _browserService.GetDetailedAdBlockerStats();
-                System.Diagnostics.Debug.WriteLine($"Last Update: {detailedStats.lastUpdate}");
-                System.Diagnostics.Debug.WriteLine($"Available Lists: {detailedStats.availableLists.Count}");
-                System.Diagnostics.Debug.WriteLine($"Failed Lists: {detailedStats.failedLists.Count}");
 
-                if (stats.domains == 0)
+                var message = $"Blocked domains: {stats.domains}\nBlocked patterns: {stats.patterns}";
+
+                if (detailedStats.lastUpdate != DateTime.MinValue)
                 {
-                    System.Diagnostics.Debug.WriteLine("❌ CRITICAL: No domains loaded in AdBlocker!");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"✅ AdBlocker has {stats.domains} domains loaded");
+                    message += $"\nLast list update: {detailedStats.lastUpdate:G}";
                 }
 
-                System.Diagnostics.Debug.WriteLine("=== DIAGNOSTIC COMPLETE ===");
+                if (detailedStats.availableLists.Count > 0)
+                {
+                    message += "\n\nAvailable lists:\n - " + string.Join("\n - ", detailedStats.availableLists);
+                }
+
+                if (detailedStats.failedLists.Count > 0)
+                {
+                    message += "\n\nFailed lists:\n - " + string.Join("\n - ", detailedStats.failedLists);
+                }
+
+                System.Windows.MessageBox.Show(
+                    message,
+                    "AdBlocker Diagnostics",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error diagnosing AdBlocker: {ex.Message}");
+                System.Windows.MessageBox.Show(
+                    "Unable to gather AdBlocker diagnostics.",
+                    "AdBlocker Diagnostics",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
             }
+
         }
 
         public void Cleanup()
@@ -1442,11 +1443,10 @@ namespace MyNewsFeeder.ViewModels
                     _cacheCleanupTimer = null;
                 }
 
-                System.Diagnostics.Debug.WriteLine("✅ MainViewModel cleanup completed");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error during cleanup: {ex.Message}");
+                // Ignore cleanup failures during shutdown.
             }
         }
 
@@ -1457,9 +1457,9 @@ namespace MyNewsFeeder.ViewModels
                 var aboutWindow = new AboutWindow();
                 aboutWindow.ShowDialog();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error showing About window: {ex.Message}");
+                // Ignore errors when opening the About dialog.
             }
         }
         private async Task CopyLinkAsync()
@@ -1478,10 +1478,271 @@ namespace MyNewsFeeder.ViewModels
                 // Revert button text back to original
                 CopyLinkButtonText = "Copy Link";
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to copy link: {ex.Message}");
+                // Ignore clipboard errors and keep the previous button state.
             }
+        }
+
+        private string BuildArticlePlainText(string title, string description)
+        {
+            var normalizedText = NormalizeHtmlToText(description);
+            var collapsed = CollapseWhitespace(normalizedText);
+
+            if (string.IsNullOrWhiteSpace(collapsed))
+            {
+                return title ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return collapsed;
+            }
+
+            return $"{title}\n\n{collapsed}";
+        }
+
+        private string SanitizeHtml(string html)
+        {
+            var normalizedText = NormalizeHtmlToText(html);
+            var collapsed = CollapseWhitespace(normalizedText);
+            return ConvertPlainTextToHtml(collapsed);
+        }
+
+        private static string NormalizeHtmlToText(string html)
+        {
+            if (string.IsNullOrEmpty(html))
+            {
+                return string.Empty;
+            }
+
+            var textBuilder = new System.Text.StringBuilder();
+            var input = html;
+            int index = 0;
+
+            while (index < input.Length)
+            {
+                var current = input[index];
+                if (current == '<')
+                {
+                    var closeIndex = input.IndexOf('>', index);
+                    if (closeIndex == -1)
+                    {
+                        break;
+                    }
+
+                    var tagContent = input.Substring(index + 1, closeIndex - index - 1).Trim();
+                    var lowerTag = tagContent.ToLowerInvariant();
+
+                    if (lowerTag.StartsWith("!--"))
+                    {
+                        var commentEnd = input.IndexOf("-->", closeIndex + 1, StringComparison.Ordinal);
+                        if (commentEnd == -1)
+                        {
+                            break;
+                        }
+
+                        index = commentEnd + 3;
+                        continue;
+                    }
+
+                    if (lowerTag.StartsWith("script"))
+                    {
+                        var scriptEnd = input.IndexOf("</script", closeIndex + 1, StringComparison.OrdinalIgnoreCase);
+                        if (scriptEnd == -1)
+                        {
+                            break;
+                        }
+
+                        var scriptClose = input.IndexOf('>', scriptEnd);
+                        if (scriptClose == -1)
+                        {
+                            break;
+                        }
+
+                        index = scriptClose + 1;
+                        continue;
+                    }
+
+                    if (lowerTag.StartsWith("style"))
+                    {
+                        var styleEnd = input.IndexOf("</style", closeIndex + 1, StringComparison.OrdinalIgnoreCase);
+                        if (styleEnd == -1)
+                        {
+                            break;
+                        }
+
+                        var styleClose = input.IndexOf('>', styleEnd);
+                        if (styleClose == -1)
+                        {
+                            break;
+                        }
+
+                        index = styleClose + 1;
+                        continue;
+                    }
+
+                    if (lowerTag.StartsWith("br"))
+                    {
+                        textBuilder.Append('\n');
+                    }
+                    else if (lowerTag.StartsWith("li"))
+                    {
+                        textBuilder.Append("\n• ");
+                    }
+                    else if (lowerTag.StartsWith("/li"))
+                    {
+                        textBuilder.Append('\n');
+                    }
+                    else if (lowerTag.StartsWith("/p") || lowerTag.StartsWith("/div"))
+                    {
+                        textBuilder.Append("\n\n");
+                    }
+                    else if (lowerTag.StartsWith("p") || lowerTag.StartsWith("div"))
+                    {
+                        textBuilder.Append("\n\n");
+                    }
+
+                    index = closeIndex + 1;
+                    continue;
+                }
+
+                if (current == '\r' || current == '\n')
+                {
+                    textBuilder.Append('\n');
+                    index++;
+                    continue;
+                }
+
+                textBuilder.Append(current);
+                index++;
+            }
+
+            var decoded = WebUtility.HtmlDecode(textBuilder.ToString());
+            return decoded ?? string.Empty;
+        }
+
+        private static string CollapseWhitespace(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = value.Replace("\r\n", "\n").Replace('\r', '\n');
+            var lines = normalized.Split('\n');
+            var builder = new System.Text.StringBuilder();
+            bool previousWasEmpty = true;
+
+            foreach (var rawLine in lines)
+            {
+                var line = rawLine.TrimEnd();
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    if (!previousWasEmpty)
+                    {
+                        builder.AppendLine();
+                        builder.AppendLine();
+                    }
+                    previousWasEmpty = true;
+                }
+                else
+                {
+                    if (builder.Length > 0 && previousWasEmpty)
+                    {
+                        builder.AppendLine();
+                    }
+
+                    if (line.StartsWith("• "))
+                    {
+                        builder.Append(line.Trim());
+                    }
+                    else
+                    {
+                        builder.Append(line);
+                    }
+                    builder.AppendLine();
+                    previousWasEmpty = false;
+                }
+            }
+
+            var result = builder.ToString().Trim();
+            return result;
+        }
+
+        private static string ConvertPlainTextToHtml(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "<p></p>";
+            }
+
+            var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+            var paragraphs = normalized.Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+            var builder = new System.Text.StringBuilder();
+
+            foreach (var paragraph in paragraphs)
+            {
+                var trimmed = paragraph.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+
+                builder.Append("<p>");
+                var encoded = System.Web.HttpUtility.HtmlEncode(trimmed);
+                encoded = encoded.Replace("\n", "<br/>");
+                builder.Append(encoded);
+                builder.Append("</p>");
+            }
+
+            if (builder.Length == 0)
+            {
+                builder.Append("<p></p>");
+            }
+
+            return builder.ToString();
+        }
+
+        private void ApplyArticleWebViewTheme()
+        {
+            if (_articleWebView?.CoreWebView2 == null)
+            {
+                return;
+            }
+
+            var color = _settings.DarkMode
+                ? System.Drawing.Color.FromArgb(255, 18, 18, 18)
+                : System.Drawing.Color.FromArgb(255, 245, 245, 245);
+
+            _articleWebView.DefaultBackgroundColor = color;
+        }
+
+        private string NormalizeExternalLink(string link)
+        {
+            if (string.IsNullOrWhiteSpace(link))
+            {
+                return string.Empty;
+            }
+
+            if (Uri.TryCreate(link.Trim(), UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+            {
+                return uri.AbsoluteUri;
+            }
+
+            return string.Empty;
+        }
+
+        private string BuildReadMoreContent(string normalizedLink)
+        {
+            if (string.IsNullOrEmpty(normalizedLink))
+            {
+                return "<strong>Full Article:</strong> <span class='external-link unavailable'>Link not available</span>";
+            }
+
+            var encodedLink = System.Web.HttpUtility.HtmlEncode(normalizedLink);
+            return $"<strong>Full Article (Use 'Show Content' for integrated browser):</strong> <a href=\"{encodedLink}\" class='external-link'>{encodedLink}</a>";
         }
     }
 }

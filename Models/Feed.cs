@@ -38,7 +38,6 @@ namespace MyNewsFeeder.Models
             {
                 _isEnabled = value;
                 OnPropertyChanged(nameof(IsEnabled));
-                System.Diagnostics.Debug.WriteLine($"Feed '{Name}' IsEnabled changed to: {value}");
             }
         }
 

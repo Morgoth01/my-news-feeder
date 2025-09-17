@@ -76,7 +76,7 @@ namespace MyNewsFeeder.ViewModels
             _settings = _settingsService.LoadSettings();
 
             // Initialize collections
-            var feedList = _settingsService.LoadFeeds();
+            var feedList = FeedService.NormalizeAndFilterFeeds(_settingsService.LoadFeeds());
             Feeds = new ObservableCollection<Feed>(feedList);
 
             // Initialize categories
@@ -146,7 +146,6 @@ namespace MyNewsFeeder.ViewModels
             {
                 // Auto-save when IsEnabled or Category changes
                 SaveFeeds();
-                System.Diagnostics.Debug.WriteLine($"Feed {e.PropertyName} changed, auto-saving...");
             }
         }
 
@@ -267,13 +266,11 @@ namespace MyNewsFeeder.ViewModels
 
                     // Save changes
                     SaveCategories();
-
-                    System.Diagnostics.Debug.WriteLine($"Moved category '{draggedCategory.Name}' from position {draggedIndex} to {Categories.IndexOf(draggedCategory)}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error reordering categories: {ex.Message}");
+                // Ignore reorder failures; UI remains unchanged.
             }
         }
 
@@ -435,8 +432,9 @@ namespace MyNewsFeeder.ViewModels
                     Category = outline.Attribute("category")?.Value ?? "Default"
                 };
 
-                if (!string.IsNullOrEmpty(feed.Url))
+                if (FeedService.TryNormalizeFeedUrl(feed.Url, out var normalizedUrl))
                 {
+                    feed.Url = normalizedUrl;
                     feeds.Add(feed);
                 }
             }
@@ -449,7 +447,23 @@ namespace MyNewsFeeder.ViewModels
         {
             var json = File.ReadAllText(filePath);
             var feeds = JsonSerializer.Deserialize<List<Feed>>(json);
-            return feeds ?? new List<Feed>();
+            if (feeds == null)
+            {
+                return new List<Feed>();
+            }
+
+            var validFeeds = new List<Feed>();
+
+            foreach (var feed in feeds)
+            {
+                if (FeedService.TryNormalizeFeedUrl(feed.Url, out var normalizedUrl))
+                {
+                    feed.Url = normalizedUrl;
+                    validFeeds.Add(feed);
+                }
+            }
+
+            return validFeeds;
         }
 
         // OPML Export with category support
@@ -509,9 +523,34 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
-                var feedList = new List<Feed>(Feeds);
-                _settingsService.SaveFeeds(feedList);
-                System.Diagnostics.Debug.WriteLine($"Saved {feedList.Count} feeds to storage.");
+                var normalizedFeeds = FeedService.NormalizeAndFilterFeeds(Feeds);
+
+                if (normalizedFeeds.Count != Feeds.Count)
+                {
+                    Feeds.Clear();
+                    foreach (var feed in normalizedFeeds)
+                    {
+                        feed.PropertyChanged -= Feed_PropertyChanged;
+                        feed.PropertyChanged += Feed_PropertyChanged;
+                        Feeds.Add(feed);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < Feeds.Count; i++)
+                    {
+                        var normalizedFeed = normalizedFeeds[i];
+                        var existingFeed = Feeds[i];
+                        if (!string.Equals(existingFeed.Url, normalizedFeed.Url, StringComparison.OrdinalIgnoreCase))
+                        {
+                            existingFeed.PropertyChanged -= Feed_PropertyChanged;
+                            existingFeed.Url = normalizedFeed.Url;
+                            existingFeed.PropertyChanged += Feed_PropertyChanged;
+                        }
+                    }
+                }
+
+                _settingsService.SaveFeeds(normalizedFeeds);
             }
             catch (Exception ex)
             {
@@ -553,13 +592,11 @@ namespace MyNewsFeeder.ViewModels
 
                     // Save changes
                     SaveFeeds();
-
-                    System.Diagnostics.Debug.WriteLine($"Moved feed '{draggedFeed.Name}' from position {draggedIndex} to {Feeds.IndexOf(draggedFeed)}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                System.Diagnostics.Debug.WriteLine($"Error reordering feeds: {ex.Message}");
+                // Ignore reorder failures; UI remains unchanged.
             }
         }
     }

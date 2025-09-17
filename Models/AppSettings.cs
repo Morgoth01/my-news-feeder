@@ -73,7 +73,6 @@ namespace MyNewsFeeder.Models
             CategoryExpandedStates = new Dictionary<string, bool>();
             Categories = new List<string> { "Default" };
 
-            System.Diagnostics.Debug.WriteLine("Settings reset to defaults");
         }
 
         public AppSettings Clone()
