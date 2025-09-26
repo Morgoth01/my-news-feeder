@@ -39,9 +39,11 @@ namespace MyNewsFeeder.Services
                        .UserAgent.ParseAdd($"MyNewsFeeder/{version}");
         }
 
-        public async Task<List<FeedItem>> FetchArticlesAsync(List<Feed> feeds, string keywordFilter, int maxItems)
+        public async Task<List<FeedItem>> FetchArticlesAsync(List<Feed> feeds, string keywordFilter, int maxItems, IReadOnlyCollection<string> advertisementKeywords = null)
         {
             var articles = new List<FeedItem>();
+            var normalizedAdvertisementKeywords = NormalizeAdvertisementKeywords(advertisementKeywords);
+            var hasAdvertisementKeywords = normalizedAdvertisementKeywords.Count > 0;
 
             foreach (var feed in feeds.Where(f => f.IsEnabled))
             {
@@ -76,14 +78,21 @@ namespace MyNewsFeeder.Services
 
                     foreach (var item in items)
                     {
-                        articles.Add(new FeedItem
+                        var feedItem = new FeedItem
                         {
                             FeedName = feed.Name,
                             Title = item.Title.Text,
                             Description = item.Summary?.Text ?? string.Empty,
                             Link = item.Links.FirstOrDefault()?.Uri.ToString() ?? string.Empty,
                             PublicationDate = item.PublishDate.DateTime
-                        });
+                        };
+
+                        if (hasAdvertisementKeywords)
+                        {
+                            feedItem.IsAdvertisement = IsAdvertisement(feedItem, item, normalizedAdvertisementKeywords);
+                        }
+
+                        articles.Add(feedItem);
                     }
                 }
                 catch (Exception ex)
@@ -101,6 +110,114 @@ namespace MyNewsFeeder.Services
             }
 
             return articles;
+        }
+        private static IReadOnlyList<string> NormalizeAdvertisementKeywords(IReadOnlyCollection<string> keywords)
+        {
+            if (keywords == null || keywords.Count == 0)
+            {
+                return Array.Empty<string>();
+            }
+
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var keyword in keywords)
+            {
+                if (string.IsNullOrWhiteSpace(keyword))
+                {
+                    continue;
+                }
+
+                var trimmed = keyword.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+
+                if (seen.Add(trimmed))
+                {
+                    result.Add(trimmed);
+                }
+            }
+
+            return result;
+        }
+
+        private static bool IsAdvertisement(FeedItem feedItem, SyndicationItem syndicationItem, IReadOnlyList<string> keywords)
+        {
+            if (keywords == null || keywords.Count == 0)
+            {
+                return false;
+            }
+
+            var searchTargets = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(feedItem?.Title))
+            {
+                searchTargets.Add(feedItem.Title);
+            }
+
+            if (!string.IsNullOrWhiteSpace(feedItem?.Description))
+            {
+                searchTargets.Add(feedItem.Description);
+                var decoded = WebUtility.HtmlDecode(feedItem.Description);
+                if (!string.IsNullOrWhiteSpace(decoded))
+                {
+                    searchTargets.Add(decoded);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(feedItem?.Link))
+            {
+                searchTargets.Add(feedItem.Link);
+            }
+
+            if (!string.IsNullOrWhiteSpace(feedItem?.FeedName))
+            {
+                searchTargets.Add(feedItem.FeedName);
+            }
+
+            if (syndicationItem != null)
+            {
+                foreach (var category in syndicationItem.Categories ?? Enumerable.Empty<SyndicationCategory>())
+                {
+                    if (!string.IsNullOrWhiteSpace(category?.Name))
+                    {
+                        searchTargets.Add(category.Name);
+                    }
+                }
+
+                if (syndicationItem.Content is TextSyndicationContent textContent && !string.IsNullOrWhiteSpace(textContent.Text))
+                {
+                    searchTargets.Add(textContent.Text);
+                    var decodedContent = WebUtility.HtmlDecode(textContent.Text);
+                    if (!string.IsNullOrWhiteSpace(decodedContent))
+                    {
+                        searchTargets.Add(decodedContent);
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(feedItem?.Link) && Uri.TryCreate(feedItem.Link, UriKind.Absolute, out var uri))
+            {
+                if (!string.IsNullOrWhiteSpace(uri.Host))
+                {
+                    searchTargets.Add(uri.Host);
+                }
+            }
+
+            foreach (var target in searchTargets)
+            {
+                foreach (var keyword in keywords)
+                {
+                    if (target.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         public void Dispose()

@@ -48,64 +48,143 @@ namespace MyNewsFeeder.Views
                 {
                     _draggedFeed = feed;
                     DragDrop.DoDragDrop(border, feed, DragDropEffects.Move);
+                    _draggedFeed = null;
                 }
             }
         }
 
         private void DragHandle_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(typeof(Feed)))
-            {
-                e.Effects = DragDropEffects.Move;
-                if (sender is Border border)
-                {
-                    var row = FindParent<DataGridRow>(border);
-                    row?.SetValue(DataGridRow.BackgroundProperty, System.Windows.Media.Brushes.LightBlue);
-                }
-            }
-            else
+            if (sender is not Border border)
             {
                 e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
             }
+
+            if (!e.Data.GetDataPresent(typeof(Feed)))
+            {
+                e.Effects = DragDropEffects.None;
+                UpdateRowHighlight(border, null);
+                e.Handled = true;
+                return;
+            }
+
+            var draggedFeed = e.Data.GetData(typeof(Feed)) as Feed ?? _draggedFeed;
+            var targetFeed = GetFeedFromBorder(border);
+
+            var canDrop = CanDropOnTarget(draggedFeed, targetFeed);
+            e.Effects = canDrop ? DragDropEffects.Move : DragDropEffects.None;
+            UpdateRowHighlight(border, canDrop);
             e.Handled = true;
         }
 
         private void DragHandle_DragEnter(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(typeof(Feed)) && sender is Border border)
-            {
-                var row = FindParent<DataGridRow>(border);
-                row?.SetValue(DataGridRow.BackgroundProperty, System.Windows.Media.Brushes.LightGreen);
-            }
+            DragHandle_DragOver(sender, e);
         }
 
         private void DragHandle_DragLeave(object sender, DragEventArgs e)
         {
             if (sender is Border border)
             {
-                var row = FindParent<DataGridRow>(border);
-                row?.ClearValue(DataGridRow.BackgroundProperty);
+                UpdateRowHighlight(border, null);
             }
         }
 
         private void DragHandle_Drop(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(typeof(Feed)) && sender is Border border)
+            if (sender is Border border)
             {
-                var draggedFeed = e.Data.GetData(typeof(Feed)) as Feed;
-                var targetRow = FindParent<DataGridRow>(border);
-
-                if (targetRow?.DataContext is Feed targetFeed &&
-                    draggedFeed != null && draggedFeed != targetFeed &&
-                    DataContext is FeedManagerViewModel vm)
-                {
-                    vm.ReorderFeed(draggedFeed, targetFeed);
-                }
-                targetRow?.ClearValue(DataGridRow.BackgroundProperty);
+                UpdateRowHighlight(border, null);
             }
+
+            if (!e.Data.GetDataPresent(typeof(Feed)))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            var draggedFeed = e.Data.GetData(typeof(Feed)) as Feed ?? _draggedFeed;
+            var targetFeed = sender is Border dropBorder ? GetFeedFromBorder(dropBorder) : null;
+
+            if (draggedFeed == null || targetFeed == null)
+            {
+                e.Handled = true;
+                _draggedFeed = null;
+                return;
+            }
+
+            if (!CanDropOnTarget(draggedFeed, targetFeed))
+            {
+                e.Handled = true;
+                _draggedFeed = null;
+                return;
+            }
+
+            if (draggedFeed != targetFeed && DataContext is FeedManagerViewModel vm)
+            {
+                vm.ReorderFeed(draggedFeed, targetFeed);
+            }
+
+            _draggedFeed = null;
             e.Handled = true;
         }
 
+        private Feed GetFeedFromBorder(Border border)
+        {
+            if (border == null)
+            {
+                return null;
+            }
+
+            return border.DataContext as Feed ?? FindParent<DataGridRow>(border)?.DataContext as Feed;
+        }
+
+        private bool CanDropOnTarget(Feed draggedFeed, Feed targetFeed)
+        {
+            if (draggedFeed == null || targetFeed == null)
+            {
+                return false;
+            }
+
+            if (DataContext is FeedManagerViewModel vm && vm.GroupFeedsByCategory)
+            {
+                return string.Equals(NormalizeCategory(draggedFeed.Category),
+                                     NormalizeCategory(targetFeed.Category),
+                                     StringComparison.OrdinalIgnoreCase);
+            }
+
+            return true;
+        }
+
+        private void UpdateRowHighlight(Border border, bool? canDrop)
+        {
+            if (border == null)
+            {
+                return;
+            }
+
+            var row = FindParent<DataGridRow>(border);
+            if (row == null)
+            {
+                return;
+            }
+
+            if (!canDrop.HasValue)
+            {
+                row.ClearValue(DataGridRow.BackgroundProperty);
+                return;
+            }
+
+            row.SetValue(DataGridRow.BackgroundProperty,
+                canDrop.Value ? Brushes.LightBlue : Brushes.LightCoral);
+        }
+
+        private static string NormalizeCategory(string category)
+        {
+            return string.IsNullOrWhiteSpace(category) ? "Default" : category;
+        }
         private void CategoryListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             _categoryStartPoint = e.GetPosition(null);
@@ -181,6 +260,11 @@ namespace MyNewsFeeder.Views
 
         private T FindParent<T>(DependencyObject child) where T : DependencyObject
         {
+            if (child == null)
+            {
+                return null;
+            }
+
             var parent = System.Windows.Media.VisualTreeHelper.GetParent(child);
             return parent is T t ? t : FindParent<T>(parent);
         }

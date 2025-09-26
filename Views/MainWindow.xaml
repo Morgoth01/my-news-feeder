@@ -94,8 +94,12 @@
                        VerticalAlignment="Center"
                        Margin="5,0"/>
             <TextBox Width="150"
-                     Text="{Binding Keyword}"
-                     Margin="5,0"/>
+                     Text="{Binding Keyword, UpdateSourceTrigger=PropertyChanged}"
+                     Margin="5,0">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Enter" Command="{Binding RefreshCommand}" />
+                </TextBox.InputBindings>
+            </TextBox>
             <Button Content="Refresh"
                     Command="{Binding RefreshCommand}"
                     Style="{StaticResource MaterialDesignRaisedButton}"/>
@@ -154,6 +158,26 @@
                               IsChecked="{Binding AdBlockerEnabled}"
                               Foreground="{DynamicResource MaterialDesignBody}"
                               Margin="4"/>
+                    <CheckBox Content="Hide advertisement articles"
+                              IsChecked="{Binding AdvertisementFilterEnabled}"
+                              Foreground="{DynamicResource MaterialDesignBody}"
+                              Margin="4"
+                              ToolTip="Filter feed items that look like ads based on configurable keywords."/>
+                    <TextBlock Text="Filter keywords (one per line)"
+                               Margin="24,0,4,2"
+                               Foreground="{DynamicResource MaterialDesignBodyLight}"
+                               Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                               FontSize="10"/>
+                    <TextBox Text="{Binding AdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
+                             AcceptsReturn="True"
+                             Height="96"
+                             Margin="24,0,4,4"
+                             VerticalScrollBarVisibility="Auto"
+                             Foreground="{DynamicResource MaterialDesignBody}"
+                             Background="{DynamicResource MaterialDesignPaper}"
+                             Style="{StaticResource MaterialDesignTextBox}"
+                             Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                             TextWrapping="Wrap"/>
 
                     <!-- Always-On Content -->
                     <CheckBox Content="Show Content Always-On"

@@ -5,6 +5,16 @@ namespace MyNewsFeeder.Models
 {
     public class AppSettings
     {
+        public static readonly string[] DefaultAdvertisementKeywords = new[]
+        {
+            "advertisement",
+            "anzeige",
+            "sponsored",
+            "werbung",
+            "promotion",
+            "download",
+            "advertorial"
+        };
         public bool DarkMode { get; set; } = false;
         public bool AutoRefresh { get; set; } = false;
         public int MaxItems { get; set; } = 10;
@@ -14,6 +24,9 @@ namespace MyNewsFeeder.Models
         public double TreeWidth { get; set; } = 250.0;
         public TimeSpan RefreshInterval { get; set; } = TimeSpan.FromMinutes(1);
         public bool AdBlockerEnabled { get; set; } = true;
+        public bool AdvertisementFilterEnabled { get; set; } = false;
+        public List<string> AdvertisementKeywords { get; set; } = new List<string>(DefaultAdvertisementKeywords);
+        public bool GroupFeedsByCategory { get; set; } = false;
         public Dictionary<string, bool> TreeViewExpandedStates { get; set; } = new Dictionary<string, bool>();
         public bool IsShowContentAlwaysOn { get; set; } = false;
         public double ArticleWindowHeight { get; set; } = 350;
@@ -59,6 +72,9 @@ namespace MyNewsFeeder.Models
             TreeWidth = 150;
             RefreshInterval = TimeSpan.FromMinutes(1);
             AdBlockerEnabled = true;
+            AdvertisementFilterEnabled = false;
+            AdvertisementKeywords = new List<string>(DefaultAdvertisementKeywords);
+            GroupFeedsByCategory = false;
             TreeViewExpandedStates = new Dictionary<string, bool>();
             IsShowContentAlwaysOn = false;
             ArticleWindowHeight = 350;
@@ -88,6 +104,9 @@ namespace MyNewsFeeder.Models
                 TreeWidth = this.TreeWidth,
                 RefreshInterval = this.RefreshInterval,
                 AdBlockerEnabled = this.AdBlockerEnabled,
+                AdvertisementFilterEnabled = this.AdvertisementFilterEnabled,
+                AdvertisementKeywords = new List<string>(this.AdvertisementKeywords ?? new List<string>()),
+                GroupFeedsByCategory = this.GroupFeedsByCategory,
                 TreeViewExpandedStates = new Dictionary<string, bool>(this.TreeViewExpandedStates),
                 IsShowContentAlwaysOn = this.IsShowContentAlwaysOn,
                 ArticleWindowHeight = this.ArticleWindowHeight,

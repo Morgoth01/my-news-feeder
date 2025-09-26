@@ -162,6 +162,10 @@
                                                         Command="{Binding ExportCommand}"
                                                         Margin="10,0,0,0"
                                                         Style="{StaticResource MaterialDesignRaisedButton}"/>
+                                                <CheckBox Content="Group feeds by category"
+                                                          IsChecked="{Binding GroupFeedsByCategory}"
+                                                          Margin="20,0,0,0"
+                                                          VerticalAlignment="Center"/>
                                         </StackPanel>
 
                                         <!-- Feeds DataGrid -->

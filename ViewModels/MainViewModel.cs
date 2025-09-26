@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Net;
 using System.Windows;
+using HtmlAgilityPack;
 using MyNewsFeeder.Models;
 using MyNewsFeeder.Services;
 using MyNewsFeeder.Views;
@@ -38,6 +39,29 @@ namespace MyNewsFeeder.ViewModels
         private System.Windows.Threading.DispatcherTimer _autoRefreshTimer;
         private System.Windows.Threading.DispatcherTimer _cacheCleanupTimer;
         private string _copyLinkButtonText = "Copy Link";
+        private bool _isInitializing;
+        private static readonly HashSet<string> AllowedHtmlTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "p", "br", "strong", "em", "b", "i", "ul", "ol", "li", "blockquote", "a", "img", "span", "div", "code", "pre"
+        };
+
+        private static readonly HashSet<string> SelfClosingHtmlTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "br", "img", "hr"
+        };
+
+        private static readonly Dictionary<string, HashSet<string>> AllowedTagAttributes = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["a"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "href", "title", "rel" },
+            ["img"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "src", "alt", "title", "width", "height" },
+            ["span"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "class" },
+            ["div"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "class" }
+        };
+
+        private static readonly string[] BlockedElementNames =
+        {
+            "script", "style", "iframe", "object", "embed", "form", "input", "button"
+        };
 
         // Window height properties with persisten
         private double _articleWindowHeight = 350;
@@ -264,6 +288,47 @@ namespace MyNewsFeeder.ViewModels
                 _browserService.SetAdBlockerEnabled(value);
             }
         }
+        public bool AdvertisementFilterEnabled
+        {
+            get => _settings.AdvertisementFilterEnabled;
+            set
+            {
+                if (_settings.AdvertisementFilterEnabled == value)
+                {
+                    return;
+                }
+
+                _settings.AdvertisementFilterEnabled = value;
+                OnPropertyChanged(nameof(AdvertisementFilterEnabled));
+                _settingsService.SaveSettings(_settings);
+
+                if (!_isInitializing)
+                {
+                    _ = RefreshFeedsAsync();
+                }
+            }
+        }
+
+        public string AdvertisementKeywordsText
+        {
+            get
+            {
+                var keywords = _settings.AdvertisementKeywords ?? new List<string>();
+                return string.Join(Environment.NewLine, keywords);
+            }
+            set
+            {
+                var parsedKeywords = ParseAdvertisementKeywords(value);
+                _settings.AdvertisementKeywords = parsedKeywords;
+                OnPropertyChanged(nameof(AdvertisementKeywordsText));
+                _settingsService.SaveSettings(_settings);
+
+                if (!_isInitializing && AdvertisementFilterEnabled)
+                {
+                    _ = RefreshFeedsAsync();
+                }
+            }
+        }
 
         public double TreeWidth
         {
@@ -396,6 +461,7 @@ namespace MyNewsFeeder.ViewModels
             SettingsService settingsService,
             BrowserService browserService)
         {
+            _isInitializing = true;
             _feedService = feedService;
             _settingsService = settingsService;
             _browserService = browserService;
@@ -412,6 +478,12 @@ namespace MyNewsFeeder.ViewModels
             {
                 _settings = new AppSettings();
             }
+
+            if (_settings.AdvertisementKeywords == null || _settings.AdvertisementKeywords.Count == 0)
+            {
+                _settings.AdvertisementKeywords = new List<string>(AppSettings.DefaultAdvertisementKeywords);
+            }
+
             TreeWidth = _settings.TreeWidth;
             try
             {
@@ -478,6 +550,7 @@ namespace MyNewsFeeder.ViewModels
                                            _ => !string.IsNullOrEmpty(SelectedArticleLink));
 
             ApplyTheme();
+            _isInitializing = false;
             _ = RefreshFeedsAsync();
 
             _browserService.SetAdBlockerEnabled(_settings.AdBlockerEnabled);
@@ -846,6 +919,13 @@ namespace MyNewsFeeder.ViewModels
 
             // Reload settings to pick up new Categories and expanded states
             _settings = _settingsService.LoadSettings();
+            if (_settings.AdvertisementKeywords == null || _settings.AdvertisementKeywords.Count == 0)
+            {
+                _settings.AdvertisementKeywords = new List<string>(AppSettings.DefaultAdvertisementKeywords);
+            }
+
+            OnPropertyChanged(nameof(AdvertisementFilterEnabled));
+            OnPropertyChanged(nameof(AdvertisementKeywordsText));
 
             // Reload feeds and refresh the tree
             _feeds = _settingsService.LoadFeeds();
@@ -1019,6 +1099,66 @@ namespace MyNewsFeeder.ViewModels
             return expandedStates;
         }
 
+        private static List<string> ParseAdvertisementKeywords(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return new List<string>();
+            }
+
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var segments = value.Split(new[] { '\r', '\n', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var segment in segments)
+            {
+                var trimmed = segment.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+
+                if (seen.Add(trimmed))
+                {
+                    result.Add(trimmed);
+                }
+            }
+
+            return result;
+        }
+
+        private List<string> GetAdvertisementKeywordsForFiltering()
+        {
+            var keywords = _settings.AdvertisementKeywords;
+            if (keywords == null || keywords.Count == 0)
+            {
+                return new List<string>();
+            }
+
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var keyword in keywords)
+            {
+                if (string.IsNullOrWhiteSpace(keyword))
+                {
+                    continue;
+                }
+
+                var trimmed = keyword.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+
+                if (seen.Add(trimmed))
+                {
+                    result.Add(trimmed);
+                }
+            }
+
+            return result;
+        }
         private async Task RefreshFeedsAsync()
         {
             try
@@ -1032,7 +1172,17 @@ namespace MyNewsFeeder.ViewModels
                 var categoryExpandedStates = _settings.CategoryExpandedStates ?? new Dictionary<string, bool>();
                 var feedExpandedStates = _settings.TreeViewExpandedStates ?? new Dictionary<string, bool>();
 
-                var items = await _feedService.FetchArticlesAsync(_feeds, Keyword, MaxFeeds);
+                var advertisementKeywords = _settings.AdvertisementFilterEnabled ? GetAdvertisementKeywordsForFiltering() : new List<string>();
+                var items = await _feedService.FetchArticlesAsync(
+                    _feeds,
+                    Keyword,
+                    MaxFeeds,
+                    advertisementKeywords.Count > 0 ? advertisementKeywords : null);
+
+                if (_settings.AdvertisementFilterEnabled && advertisementKeywords.Count > 0)
+                {
+                    items = items.Where(item => !item.IsAdvertisement).ToList();
+                }
 
                 // Group items by category
                 var categorizedItems = items.GroupBy(item =>
@@ -1504,11 +1654,275 @@ namespace MyNewsFeeder.ViewModels
 
         private string SanitizeHtml(string html)
         {
-            var normalizedText = NormalizeHtmlToText(html);
-            var collapsed = CollapseWhitespace(normalizedText);
-            return ConvertPlainTextToHtml(collapsed);
+            if (string.IsNullOrWhiteSpace(html))
+            {
+                return "<p></p>";
+            }
+
+            try
+            {
+                var document = new HtmlDocument();
+                document.OptionFixNestedTags = true;
+                document.LoadHtml(html);
+
+                CleanHtmlNode(document.DocumentNode);
+
+                var cleaned = document.DocumentNode.InnerHtml?.Trim();
+                if (string.IsNullOrWhiteSpace(cleaned))
+                {
+                    var fallbackText = NormalizeHtmlToText(html);
+                    var collapsedFallback = CollapseWhitespace(fallbackText);
+                    return ConvertPlainTextToHtml(collapsedFallback);
+                }
+
+                return cleaned;
+            }
+            catch
+            {
+                var fallbackText = NormalizeHtmlToText(html);
+                var collapsedFallback = CollapseWhitespace(fallbackText);
+                return ConvertPlainTextToHtml(collapsedFallback);
+            }
         }
 
+        private static void CleanHtmlNode(HtmlNode node)
+        {
+            if (node == null)
+            {
+                return;
+            }
+
+            if (node.NodeType == HtmlNodeType.Element)
+            {
+                var tagName = node.Name?.ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(tagName))
+                {
+                    RemoveNodePreservingChildren(node);
+                    return;
+                }
+
+                if (BlockedElementNames.Contains(tagName))
+                {
+                    node.Remove();
+                    return;
+                }
+
+                if (!AllowedHtmlTags.Contains(tagName))
+                {
+                    RemoveNodePreservingChildren(node);
+                    return;
+                }
+
+                SanitizeAttributes(node, tagName);
+                if (string.Equals(tagName, "a", StringComparison.OrdinalIgnoreCase))
+                {
+                    var hasImageChild = node.ChildNodes.Any(child =>
+                        child.NodeType == HtmlNodeType.Element &&
+                        string.Equals(child.Name, "img", StringComparison.OrdinalIgnoreCase));
+                    if (hasImageChild)
+                    {
+                        var onlyImagesOrWhitespace = node.ChildNodes.All(child =>
+                            (child.NodeType == HtmlNodeType.Element && string.Equals(child.Name, "img", StringComparison.OrdinalIgnoreCase)) ||
+                            (child.NodeType == HtmlNodeType.Text && string.IsNullOrWhiteSpace(child.InnerText)));
+                        if (onlyImagesOrWhitespace)
+                        {
+                            var parentNode = node.ParentNode;
+                            if (parentNode != null)
+                            {
+                                foreach (var child in node.ChildNodes.ToArray())
+                                {
+                                    CleanHtmlNode(child);
+                                    parentNode.InsertBefore(child, node);
+                                }
+                                node.Remove();
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach (var child in node.ChildNodes.ToArray())
+            {
+                CleanHtmlNode(child);
+            }
+        }
+
+        private static void RemoveNodePreservingChildren(HtmlNode node)
+        {
+            if (node?.ParentNode == null)
+            {
+                node?.Remove();
+                return;
+            }
+
+            var parent = node.ParentNode;
+            var reference = node;
+            foreach (var child in node.ChildNodes.ToArray())
+            {
+                parent.InsertBefore(child, reference);
+            }
+
+            parent.RemoveChild(node);
+        }
+
+        private static void SanitizeAttributes(HtmlNode node, string tagName)
+        {
+            var allowedAttributes = AllowedTagAttributes.TryGetValue(tagName, out var attrs)
+                ? attrs
+                : null;
+
+            foreach (var attribute in node.Attributes.ToArray())
+            {
+                var attributeName = attribute.Name;
+                if (string.IsNullOrWhiteSpace(attributeName))
+                {
+                    attribute.Remove();
+                    continue;
+                }
+
+                if (attributeName.StartsWith("on", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(attributeName, "style", StringComparison.OrdinalIgnoreCase))
+                {
+                    attribute.Remove();
+                    continue;
+                }
+
+                if (allowedAttributes != null && !allowedAttributes.Contains(attributeName))
+                {
+                    attribute.Remove();
+                    continue;
+                }
+
+                if (string.Equals(tagName, "a", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(attributeName, "href", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsSafeLink(attribute.Value))
+                    {
+                        attribute.Remove();
+                        continue;
+                    }
+                }
+
+                if (string.Equals(tagName, "img", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(attributeName, "src", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsSafeImageSource(attribute.Value))
+                    {
+                        attribute.Remove();
+                        continue;
+                    }
+                }
+
+                if (string.Equals(attributeName, "class", StringComparison.OrdinalIgnoreCase) && attribute.Value.Length > 128)
+                {
+                    attribute.Remove();
+                }
+            }
+
+            if (string.Equals(tagName, "a", StringComparison.OrdinalIgnoreCase))
+            {
+                if (node.Attributes["href"] == null)
+                {
+                    RemoveNodePreservingChildren(node);
+                    return;
+                }
+
+                if (node.Attributes["rel"] == null)
+                {
+                    node.Attributes.Add("rel", "noopener noreferrer");
+                }
+            }
+
+            if (string.Equals(tagName, "img", StringComparison.OrdinalIgnoreCase))
+            {
+                if (node.Attributes["src"] == null)
+                {
+                    node.Remove();
+                    return;
+                }
+
+                if (node.Attributes["loading"] == null)
+                {
+                    node.Attributes.Add("loading", "lazy");
+                }
+            }
+
+            if (allowedAttributes == null)
+            {
+                foreach (var attribute in node.Attributes.ToArray())
+                {
+                    attribute.Remove();
+                }
+            }
+        }
+
+        private static bool IsSafeLink(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var trimmed = value.Trim();
+            if (trimmed.StartsWith("javascript", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (trimmed.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (trimmed.StartsWith("//"))
+            {
+                return true;
+            }
+
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absoluteUri))
+            {
+                return absoluteUri.Scheme == Uri.UriSchemeHttp || absoluteUri.Scheme == Uri.UriSchemeHttps;
+            }
+
+            if (Uri.TryCreate(trimmed, UriKind.Relative, out _))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsSafeImageSource(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var trimmed = value.Trim();
+            if (trimmed.StartsWith("data:image", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (trimmed.StartsWith("//"))
+            {
+                return true;
+            }
+
+            if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absoluteUri))
+            {
+                return absoluteUri.Scheme == Uri.UriSchemeHttp || absoluteUri.Scheme == Uri.UriSchemeHttps;
+            }
+
+            if (Uri.TryCreate(trimmed, UriKind.Relative, out _))
+            {
+                return true;
+            }
+
+            return false;
+        }
         private static string NormalizeHtmlToText(string html)
         {
             if (string.IsNullOrEmpty(html))

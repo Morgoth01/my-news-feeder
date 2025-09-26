@@ -9,5 +9,6 @@ namespace MyNewsFeeder.Models
         public string Description { get; set; }
         public string Link { get; set; }
         public DateTime PublicationDate { get; set; }
+        public bool IsAdvertisement { get; set; }
     }
 }

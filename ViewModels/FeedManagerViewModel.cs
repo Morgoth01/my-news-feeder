@@ -23,6 +23,7 @@ namespace MyNewsFeeder.ViewModels
         private Category _selectedCategory;
         private string _newCategoryName;
         private AppSettings _settings;
+        private bool _groupFeedsByCategory;
 
         public ObservableCollection<Feed> Feeds { get; set; }
         public ObservableCollection<Category> Categories { get; set; }
@@ -61,6 +62,26 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
+        public bool GroupFeedsByCategory
+        {
+            get => _groupFeedsByCategory;
+            set
+            {
+                if (_groupFeedsByCategory == value)
+                {
+                    return;
+                }
+
+                _groupFeedsByCategory = value;
+                OnPropertyChanged(nameof(GroupFeedsByCategory));
+
+                _settings.GroupFeedsByCategory = value;
+                TrySaveSettings();
+                ApplyFeedOrdering();
+                SaveFeeds();
+            }
+        }
+
         // Commands
         public ICommand AddFeedCommand { get; }
         public ICommand RemoveFeedCommand { get; }
@@ -78,12 +99,19 @@ namespace MyNewsFeeder.ViewModels
             // Initialize collections
             var feedList = FeedService.NormalizeAndFilterFeeds(_settingsService.LoadFeeds());
             Feeds = new ObservableCollection<Feed>(feedList);
-
+            _groupFeedsByCategory = _settings.GroupFeedsByCategory;
             // Initialize categories
             Categories = new ObservableCollection<Category>();
             CategoryNames = new ObservableCollection<string>();
 
             LoadCategories();
+            if (_groupFeedsByCategory)
+            {
+                ApplyFeedOrdering();
+            }
+
+
+            OnPropertyChanged(nameof(GroupFeedsByCategory));
 
             // Subscribe to PropertyChanged events for auto-save
             foreach (var feed in Feeds)
@@ -139,11 +167,75 @@ namespace MyNewsFeeder.ViewModels
 
             _settingsService.SaveSettings(_settings);
         }
+        private void ApplyFeedOrdering()
+        {
+            if (!_groupFeedsByCategory || Feeds == null || Feeds.Count <= 1)
+            {
+                return;
+            }
+
+            var previousSelection = SelectedFeed;
+
+            var sortedFeeds = Feeds
+                .Select((feed, originalIndex) => new { feed, originalIndex })
+                .OrderBy(x => GetCategoryOrder(x.feed.Category))
+                .ThenBy(x => x.originalIndex)
+                .Select(x => x.feed)
+                .ToList();
+
+            for (int targetIndex = 0; targetIndex < sortedFeeds.Count; targetIndex++)
+            {
+                var desired = sortedFeeds[targetIndex];
+                if (!ReferenceEquals(Feeds[targetIndex], desired))
+                {
+                    var currentIndex = Feeds.IndexOf(desired);
+                    if (currentIndex >= 0)
+                    {
+                        Feeds.Move(currentIndex, targetIndex);
+                    }
+                }
+            }
+
+            if (previousSelection != null && Feeds.Contains(previousSelection))
+            {
+                SelectedFeed = previousSelection;
+            }
+        }
+
+        private int GetCategoryOrder(string category)
+        {
+            var normalized = NormalizeCategoryName(category);
+            var categories = _settings.Categories ?? new List<string>();
+            var index = categories.FindIndex(c => string.Equals(c, normalized, StringComparison.OrdinalIgnoreCase));
+            return index >= 0 ? index : int.MaxValue;
+        }
+
+        private static string NormalizeCategoryName(string category)
+        {
+            return string.IsNullOrWhiteSpace(category) ? "Default" : category;
+        }
+
+        private void TrySaveSettings()
+        {
+            try
+            {
+                _settingsService.SaveSettings(_settings);
+            }
+            catch (Exception)
+            {
+                // Ignore persistence errors to keep UI responsive.
+            }
+        }
 
         private void Feed_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(Feed.IsEnabled) || e.PropertyName == nameof(Feed.Category))
             {
+                if (_groupFeedsByCategory && e.PropertyName == nameof(Feed.Category))
+                {
+                    ApplyFeedOrdering();
+                }
+
                 // Auto-save when IsEnabled or Category changes
                 SaveFeeds();
             }
@@ -179,6 +271,11 @@ namespace MyNewsFeeder.ViewModels
             newFeed.PropertyChanged += Feed_PropertyChanged;
 
             Feeds.Add(newFeed);
+            if (_groupFeedsByCategory)
+            {
+                ApplyFeedOrdering();
+            }
+
             SelectedFeed = newFeed;
             SaveFeeds();
         }
@@ -266,6 +363,12 @@ namespace MyNewsFeeder.ViewModels
 
                     // Save changes
                     SaveCategories();
+
+                    if (_groupFeedsByCategory)
+                    {
+                        ApplyFeedOrdering();
+                        SaveFeeds();
+                    }
                 }
             }
             catch (Exception)
@@ -344,6 +447,10 @@ namespace MyNewsFeeder.ViewModels
                             }
                         }
 
+                        if (_groupFeedsByCategory)
+                        {
+                            ApplyFeedOrdering();
+                        }
                         SaveFeeds();
 
                         var message = $"Import completed!\n\nAdded: {addedCount} feeds\nSkipped duplicates: {duplicateCount} feeds";
@@ -567,30 +674,40 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
+                if (draggedFeed == null || targetFeed == null)
+                {
+                    return;
+                }
+
+                if (_groupFeedsByCategory &&
+                    !string.Equals(NormalizeCategoryName(draggedFeed.Category),
+                                   NormalizeCategoryName(targetFeed.Category),
+                                   StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
                 var draggedIndex = Feeds.IndexOf(draggedFeed);
                 var targetIndex = Feeds.IndexOf(targetFeed);
 
                 if (draggedIndex >= 0 && targetIndex >= 0 && draggedIndex != targetIndex)
                 {
-                    // Remove from old position
                     Feeds.RemoveAt(draggedIndex);
 
-                    // Insert at new position
-                    if (draggedIndex < targetIndex)
+                    var insertionIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+                    if (insertionIndex < 0)
                     {
-                        // Moving down, adjust target index
-                        Feeds.Insert(targetIndex - 1, draggedFeed);
+                        insertionIndex = 0;
                     }
-                    else
+                    if (insertionIndex > Feeds.Count)
                     {
-                        // Moving up
-                        Feeds.Insert(targetIndex, draggedFeed);
+                        insertionIndex = Feeds.Count;
                     }
 
-                    // Update selection
+                    Feeds.Insert(insertionIndex, draggedFeed);
+
                     SelectedFeed = draggedFeed;
 
-                    // Save changes
                     SaveFeeds();
                 }
             }
