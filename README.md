@@ -132,10 +132,8 @@ Feed Manager
 | Filter List                  | License                        | Description                                            |
 |------------------------------|--------------------------------|--------------------------------------------------------|
 | AdGuardBase.txt              | GPLv3                          | Core ad-blocking rules for banners and pop-ups         |
-| ClearURLs.txt                | GPLv3                          | Strips tracking parameters from URLs                   |
 | EasyList.txt                 | GPLv3 / CC BY-SA 3.0           | Removes most ads on international websites             |
 | EasyPrivacy.txt              | GPLv3 / CC BY-SA 3.0           | Blocks tracking scripts and web bugs                   |
 | FanboysAnnoyances.txt        | CC BY 3.0                      | Hides overlays, cookie notices, and social widgets     |
-| NoCoinList.txt               | MIT                            | Prevents in-browser cryptocurrency mining              |
 | la–StevenBlackHosts.txt      | CC BY 3.0                      | DNS-level hosts file blocking ads, malware, trackers   |
 | uBlockOriginFilters.txt      | GPLv3                          | Additional rules from the uBlock Origin community      |
