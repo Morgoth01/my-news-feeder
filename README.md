@@ -1,8 +1,11 @@
-# My News Feeder
+<h1 align="center">My News Feeder</h1>
 
-My News Feeder is a lightweight RSS/Atom reader with integrated ad blocking.
+<div align="center"><img width="256" height="256" alt="mynewsfeeder" src="https://github.com/user-attachments/assets/8a0d0642-4696-47bb-9a1a-643ee5fc4ac0" /></div>
 
-Dive into your favorite feeds without distractions!
+
+<div align="center">My News Feeder is a lightweight RSS/Atom reader with integrated ad blocking.
+
+Dive into your favorite feeds without distractions!</div>
 <br/>
 <br/>
 
@@ -15,6 +18,14 @@ Find the latest release and notes here:
 
 
 ## Guide
+
+### How to run the app
+1. Download the latest release
+2. Extract the ZIP and run MyNewsFeeder.exe
+
+### Restore settings and feeds
+Copy `settings.json` and `feeds.json` from the old release into the same folder as the new version (next to MyNewsFeeder.exe)
+
 ### Manage Feeds
 
 1. Click Manage Feeds in the toolbar.
@@ -26,6 +37,9 @@ Find the latest release and notes here:
 2. Enter a name for the category and click Add.
 3. You can now assign the newly created category to your feeds.
 
+### Group feeds by category
+Enable ”Group feeds by category” to reorder your feeds from the same category to appear together while respecting drag-and-drop ordering.
+
 ### Remove a category
 1. Click Manage Feeds in the toolbar.
 2. Select a category
@@ -36,6 +50,9 @@ Find the latest release and notes here:
 Open Settings → toggle Enable AdBlocker → click Save Settings.
 
 The ad blocker uses multiple filter lists (see below).
+
+### Advertisement filtering
+Open Settings → toggle “Hide advertisement articles” → click Save Settings. Add or edit keywords in the “Advertisement keywords” box (one per line).
 
 ### Set Auto-Refresh Interval
 1. In Settings, check Auto Refresh.
@@ -50,7 +67,7 @@ You can set the max articles per feed to control how many posts show up. This le
 * Show Content Always-On keeps the browser visible and reloads pages on each article selection.
 
 ### Filter feeds by Keyword
-Enter a keyword and click refresh to filter your feeds
+Enter a keyword and click enter or the refresh button to filter your feeds
 
 ## Features
 * Add and manage unlimited RSS/Atom feeds
@@ -76,13 +93,6 @@ By default, the ad blocker loads these popular filter lists:
 * uBlock Origin Filters – Extra rules from the uBlock Origin community.
 
 You can add custom domains or hosts in adblocker_hosts.txt.
-
-## How It Works
-* Startup: Loads your settings and feeds and initializes the integrated browser.
-* Fetch Articles: Click Refresh or wait for auto-refresh; articles appear grouped by feed.
-* Read: Select an article to view it in the integrated WebView2 browser with ads removed.
-* Customize: Change settings anytime: dark mode, refresh interval and ad blocker.
-* Maintain: Clear cache
 
 Enjoy streamlined, distraction-free news reading with My News Feeder!
 
@@ -122,10 +132,8 @@ Feed Manager
 | Filter List                  | License                        | Description                                            |
 |------------------------------|--------------------------------|--------------------------------------------------------|
 | AdGuardBase.txt              | GPLv3                          | Core ad-blocking rules for banners and pop-ups         |
-| ClearURLs.txt                | GPLv3                          | Strips tracking parameters from URLs                   |
 | EasyList.txt                 | GPLv3 / CC BY-SA 3.0           | Removes most ads on international websites             |
 | EasyPrivacy.txt              | GPLv3 / CC BY-SA 3.0           | Blocks tracking scripts and web bugs                   |
 | FanboysAnnoyances.txt        | CC BY 3.0                      | Hides overlays, cookie notices, and social widgets     |
-| NoCoinList.txt               | MIT                            | Prevents in-browser cryptocurrency mining              |
 | la–StevenBlackHosts.txt      | CC BY 3.0                      | DNS-level hosts file blocking ads, malware, trackers   |
 | uBlockOriginFilters.txt      | GPLv3                          | Additional rules from the uBlock Origin community      |
