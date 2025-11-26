@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Collections.Specialized;
+using System.Linq;
 
 namespace MyNewsFeeder.ViewModels
 {
@@ -9,6 +11,9 @@ namespace MyNewsFeeder.ViewModels
         
         private bool _isExpanded = true;
         private string _name;
+        private string _iconKind = "FolderMultipleOutline";
+        private ObservableCollection<FeedGroupViewModel> _feeds;
+        private int _unreadCount;
         
         public string Name
         {
@@ -20,7 +25,48 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
-        public ObservableCollection<FeedGroupViewModel> Feeds { get; set; }
+        public string IconKind
+        {
+            get => _iconKind;
+            set
+            {
+                _iconKind = value;
+                OnPropertyChanged(nameof(IconKind));
+            }
+        }
+
+        public ObservableCollection<FeedGroupViewModel> Feeds
+        {
+            get => _feeds;
+            set
+            {
+                if (_feeds == value) return;
+
+                if (_feeds != null)
+                {
+                    _feeds.CollectionChanged -= FeedsOnCollectionChanged;
+                    foreach (var feed in _feeds)
+                    {
+                        UnsubscribeFromFeed(feed);
+                    }
+                }
+
+                _feeds = value;
+
+                if (_feeds != null)
+                {
+                    _feeds.CollectionChanged += FeedsOnCollectionChanged;
+                    foreach (var feed in _feeds)
+                    {
+                        SubscribeToFeed(feed);
+                    }
+                }
+
+                OnPropertyChanged(nameof(Feeds));
+                OnPropertyChanged(nameof(ArticleCount));
+                UpdateUnreadCount();
+            }
+        }
         
         public bool IsExpanded
         {
@@ -31,6 +77,10 @@ namespace MyNewsFeeder.ViewModels
                 OnPropertyChanged(nameof(IsExpanded));
             }
         }
+
+        public int ArticleCount => Feeds?.Sum(feed => feed.Items?.Count ?? 0) ?? 0;
+        public int UnreadCount => _unreadCount;
+        public bool HasUnread => UnreadCount > 0;
         
         public CategoryGroupViewModel()
         {
@@ -40,6 +90,76 @@ namespace MyNewsFeeder.ViewModels
         protected void OnPropertyChanged(string propertyName)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
+        private void FeedsOnCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.OldItems != null)
+            {
+                foreach (FeedGroupViewModel feed in e.OldItems)
+                {
+                    UnsubscribeFromFeed(feed);
+                }
+            }
+
+            if (e.NewItems != null)
+            {
+                foreach (FeedGroupViewModel feed in e.NewItems)
+                {
+                    SubscribeToFeed(feed);
+                }
+            }
+
+            OnPropertyChanged(nameof(ArticleCount));
+            UpdateUnreadCount();
+        }
+
+        private void SubscribeToFeed(FeedGroupViewModel feed)
+        {
+            if (feed?.Items != null)
+            {
+                feed.Items.CollectionChanged += FeedItemsOnCollectionChanged;
+            }
+            feed.PropertyChanged += FeedOnPropertyChanged;
+            UpdateUnreadCount();
+        }
+
+        private void UnsubscribeFromFeed(FeedGroupViewModel feed)
+        {
+            if (feed?.Items != null)
+            {
+                feed.Items.CollectionChanged -= FeedItemsOnCollectionChanged;
+            }
+            feed.PropertyChanged -= FeedOnPropertyChanged;
+            UpdateUnreadCount();
+        }
+
+        private void FeedItemsOnCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            OnPropertyChanged(nameof(ArticleCount));
+            UpdateUnreadCount();
+        }
+
+        private void FeedOnPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(FeedGroupViewModel.UnreadCount) ||
+                e.PropertyName == nameof(FeedGroupViewModel.HasUnread) ||
+                e.PropertyName == nameof(FeedGroupViewModel.ItemCount))
+            {
+                UpdateUnreadCount();
+                OnPropertyChanged(nameof(ArticleCount));
+            }
+        }
+
+        private void UpdateUnreadCount()
+        {
+            var newUnread = Feeds?.Sum(feed => feed.UnreadCount) ?? 0;
+            if (newUnread != _unreadCount)
+            {
+                _unreadCount = newUnread;
+                OnPropertyChanged(nameof(UnreadCount));
+                OnPropertyChanged(nameof(HasUnread));
+            }
         }
     }
 }

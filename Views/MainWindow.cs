@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Threading;
 using MyNewsFeeder.Models;
 using MyNewsFeeder.Services;
 using MyNewsFeeder.ViewModels;
@@ -25,6 +27,9 @@ namespace MyNewsFeeder.Views
 
             _viewModel = new MainViewModel(new FeedService(), new SettingsService(), new BrowserService());
             DataContext = _viewModel;
+            _viewModel.SelectionRestoreRequested += ViewModel_SelectionRestoreRequested;
+            _viewModel.RequestTreeScrollOffset = GetTreeScrollOffset;
+            _viewModel.ScrollOffsetRestoreRequested += ViewModel_ScrollOffsetRestoreRequested;
 
             Loaded += MainWindow_Loaded;
         }
@@ -47,8 +52,18 @@ namespace MyNewsFeeder.Views
 
         private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
         {
-            if (e.NewValue is FeedItem article && DataContext is MainViewModel vm)
-                vm.OnArticleSelected(article);
+            if (DataContext is MainViewModel vm)
+            {
+                if (vm.SuppressSelectionDuringRefresh)
+                {
+                    return;
+                }
+
+                if (e.NewValue is FeedItem article)
+                {
+                    vm.OnArticleSelected(article);
+                }
+            }
         }
 
         private void AboutButton_Click(object sender, RoutedEventArgs e)
@@ -117,6 +132,111 @@ namespace MyNewsFeeder.Views
                 vm.SaveCategoryExpandedStates();
                 vm.SaveFeedExpandedStates();
             }
+        }
+
+        private void ViewModel_SelectionRestoreRequested(string linkToRestore)
+        {
+            if (string.IsNullOrWhiteSpace(linkToRestore) || FeedTreeView == null)
+            {
+                return;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    FeedTreeView.UpdateLayout();
+
+                    foreach (var categoryObj in FeedTreeView.Items)
+                    {
+                        if (categoryObj is CategoryGroupViewModel category)
+                        {
+                            var catContainer = FeedTreeView.ItemContainerGenerator.ContainerFromItem(category) as TreeViewItem;
+                            catContainer?.UpdateLayout();
+                            catContainer?.SetCurrentValue(TreeViewItem.IsExpandedProperty, true);
+
+                            if (category.Feeds == null) continue;
+                            foreach (var feed in category.Feeds)
+                            {
+                                var feedContainer = catContainer?.ItemContainerGenerator.ContainerFromItem(feed) as TreeViewItem;
+                                feedContainer?.UpdateLayout();
+                                feedContainer?.SetCurrentValue(TreeViewItem.IsExpandedProperty, feed.IsExpanded);
+
+                                if (feed.Items == null) continue;
+                                foreach (var article in feed.Items)
+                                {
+                                    if (string.IsNullOrWhiteSpace(article.Link) ||
+                                        !string.Equals(article.Link.Trim(), linkToRestore.Trim(), StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        continue;
+                                    }
+
+                                    var articleContainer = feedContainer?.ItemContainerGenerator.ContainerFromItem(article) as TreeViewItem;
+                                    if (articleContainer != null)
+                                    {
+                                        articleContainer.IsSelected = true;
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore selection restore failures; user selection remains unchanged.
+                }
+            }), DispatcherPriority.Background);
+        }
+
+        private double GetTreeScrollOffset()
+        {
+            var sv = FindScrollViewer(FeedTreeView);
+            return sv?.VerticalOffset ?? 0;
+        }
+
+        private void ViewModel_ScrollOffsetRestoreRequested(double offset)
+        {
+            if (FeedTreeView == null)
+            {
+                return;
+            }
+
+            void ApplyOffset()
+            {
+                try
+                {
+                    FeedTreeView.UpdateLayout();
+                    var sv = FindScrollViewer(FeedTreeView);
+                    if (sv != null)
+                    {
+                        sv.ScrollToVerticalOffset(offset);
+                    }
+                }
+                catch
+                {
+                    // Ignore scrolling failures.
+                }
+            }
+
+            // Apply once after current layout work, then once more after render to fight virtualization resets.
+            Dispatcher.BeginInvoke(new Action(ApplyOffset), DispatcherPriority.ContextIdle);
+            Dispatcher.BeginInvoke(new Action(ApplyOffset), DispatcherPriority.ApplicationIdle);
+        }
+
+        private static ScrollViewer FindScrollViewer(DependencyObject root)
+        {
+            if (root == null) return null;
+            if (root is ScrollViewer viewer) return viewer;
+
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                var result = FindScrollViewer(child);
+                if (result != null) return result;
+            }
+
+            return null;
         }
     }
 }

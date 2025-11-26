@@ -6,6 +6,7 @@
         xmlns:vm="clr-namespace:MyNewsFeeder.ViewModels"
         xmlns:sel="clr-namespace:MyNewsFeeder.Views"
         xmlns:conv="clr-namespace:MyNewsFeeder.Converters"
+        xmlns:models="clr-namespace:MyNewsFeeder.Models"
         Title="My News Feeder"
         Height="700"
         Width="1200"
@@ -301,7 +302,8 @@
             </Grid.ColumnDefinitions>
 
             <!-- Feed Tree -->
-            <TreeView Grid.Column="0"
+            <TreeView x:Name="FeedTreeView"
+                      Grid.Column="0"
                       ItemsSource="{Binding CategoryGroups}"
                       ItemContainerStyleSelector="{StaticResource TvItemStyleSelector}"
                       SelectedItemChanged="TreeView_SelectedItemChanged"
@@ -312,20 +314,145 @@
                       Background="{DynamicResource MaterialDesignPaper}">
                 <TreeView.ItemTemplate>
                     <HierarchicalDataTemplate ItemsSource="{Binding Feeds}">
-                        <TextBlock Text="{Binding Name}"
-                                   FontWeight="Bold"
-                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="0,2">
+                            <StackPanel.ToolTip>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding ArticleCount, StringFormat=Gesamt: {0}}"/>
+                                    <TextBlock Text="{Binding UnreadCount, StringFormat=Ungelesen: {0}}"/>
+                                </StackPanel>
+                            </StackPanel.ToolTip>
+                            <Ellipse Width="8"
+                                     Height="8"
+                                     Fill="{DynamicResource UnreadDotBrush}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,6,0"
+                                    Effect="{DynamicResource GlowPurpleEffect}">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasUnread}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <materialDesign:PackIcon Kind="{Binding IconKind}"
+                                                     Width="18"
+                                                     Height="18"
+                                                     VerticalAlignment="Center"
+                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                     Margin="0,0,6,0"/>
+                            <TextBlock Text="{Binding Name}"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource MaterialDesignBody}"
+                                       Margin="0,0,4,0"/>
+                        </StackPanel>
                         <HierarchicalDataTemplate.ItemTemplate>
-                            <HierarchicalDataTemplate ItemsSource="{Binding Items}">
-                                <TextBlock Text="{Binding Name}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource MaterialDesignBody}"/>
+                            <HierarchicalDataTemplate ItemsSource="{Binding PagedItems}">
+                                <StackPanel Orientation="Horizontal"
+                                            VerticalAlignment="Center"
+                                            Margin="0,2">
+                                    <StackPanel.ToolTip>
+                                        <TextBlock Text="{Binding ItemCount, StringFormat=Articles: {0}}"/>
+                                    </StackPanel.ToolTip>
+                                    <Ellipse Width="7"
+                                             Height="7"
+                                             Fill="{DynamicResource UnreadDotBrush}"
+                                             VerticalAlignment="Center"
+                                             Margin="0,0,6,0"
+                                             Effect="{DynamicResource GlowPurpleEffect}">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasUnread}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <materialDesign:PackIcon Kind="{Binding IconKind}"
+                                                             Width="16"
+                                                             Height="16"
+                                                             VerticalAlignment="Center"
+                                                             Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                             Margin="0,0,6,0"/>
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource MaterialDesignBody}"/>
+                                </StackPanel>
                                 <HierarchicalDataTemplate.ItemTemplate>
                                     <DataTemplate>
-                                        <TextBlock Text="{Binding Title}"
-                                                   TextWrapping="Wrap"
-                                                   MaxWidth="200"
-                                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                                        <ContentControl Content="{Binding}">
+                                            <ContentControl.Resources>
+                                                <DataTemplate DataType="{x:Type models:FeedItem}">
+                                                    <StackPanel Orientation="Horizontal"
+                                                                Margin="0,2">
+                                                        <Ellipse Width="9"
+                                                                 Height="9"
+                                                                 Fill="{DynamicResource UnreadDotBrush}"
+                                                                 VerticalAlignment="Center"
+                                                                 Margin="0,0,6,0"
+                                                                 SnapsToDevicePixels="True">
+                                                            <Ellipse.Effect>
+                                                                <StaticResource ResourceKey="GlowPurpleEffect"/>
+                                                            </Ellipse.Effect>
+                                                            <Ellipse.Style>
+                                                                <Style TargetType="Ellipse">
+                                                                    <Setter Property="Opacity" Value="0"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                                                            <Setter Property="Opacity" Value="1"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Ellipse.Style>
+                                                        </Ellipse>
+                                                        <materialDesign:PackIcon Kind="FileDocumentOutline"
+                                                                                 Width="14"
+                                                                                 Height="14"
+                                                                                 VerticalAlignment="Center"
+                                                                                 Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                                                 Margin="0,0,6,0"/>
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       TextWrapping="Wrap"
+                                                                       MaxWidth="220"
+                                                                       Foreground="{DynamicResource MaterialDesignBody}">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding PublicationDate, StringFormat={}{0:dd.MM. HH:mm}}"
+                                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                                       FontSize="11"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </DataTemplate>
+
+                                                <DataTemplate DataType="{x:Type vm:LoadMoreItem}">
+                                                    <Button Content="Load more"
+                                                            Command="{Binding LoadMoreCommand}"
+                                                            HorizontalAlignment="Left"
+                                                            Margin="0,4,0,0"
+                                                            Padding="12,4"
+                                                            Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                            Style="{StaticResource MaterialDesignOutlinedButton}"/>
+                                                </DataTemplate>
+                                            </ContentControl.Resources>
+                                        </ContentControl>
                                     </DataTemplate>
                                 </HierarchicalDataTemplate.ItemTemplate>
                             </HierarchicalDataTemplate>
@@ -390,20 +517,20 @@
                                         Margin="0,0,8,0"
                                         Height="30">
                                     <Button.Style>
-                                        <Style TargetType="Button"
-                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
-                                                             Value="True">
-                                                    <Setter Property="Background"
-                                                            Value="{DynamicResource SecondaryHueMidBrush}"/>
-                                                    <Setter Property="ToolTip"
-                                                            Value="Always-On mode is active"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
-                                                             Value="False">
-                                                    <Setter Property="Background"
-                                                            Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                <Style TargetType="Button"
+                                                       BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
+                                                                     Value="True">
+                                                            <Setter Property="Background"
+                                                                    Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                            <Setter Property="ToolTip"
+                                                                    Value="Always-On mode is active"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
+                                                                     Value="False">
+                                                            <Setter Property="Background"
+                                                                    Value="{DynamicResource PrimaryHueMidBrush}"/>
                                                     <Setter Property="ToolTip"
                                                             Value="Click to show/hide content"/>
                                                 </DataTrigger>
@@ -445,9 +572,24 @@
                               Background="{DynamicResource MaterialDesignDivider}"
                               ResizeBehavior="PreviousAndNext"
                               ResizeDirection="Rows"
-                              Visibility="{Binding IsBrowserVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
                               Cursor="SizeNS"
                               DragCompleted="GridSplitter_DragCompleted"/>
+
+                <!-- Placeholder bar keeps splitter usable when browser is hidden -->
+                <Border Grid.Row="2"
+                        Background="Transparent"
+                        MinHeight="12">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsBrowserVisible}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                </Border>
 
                 <!-- : Dynamic Browser Window that extends to bottom -->
                 <Border Grid.Row="2"

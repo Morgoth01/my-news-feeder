@@ -16,6 +16,21 @@
                         <conv:StringEqualsConverter x:Key="StringEqualsConverter"/>
                         <conv:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
+                        <!-- Accent fallbacks to avoid missing resource warnings -->
+                        <!-- Fallback primary to match default DeepPurple theme (aligns button colors) -->
+                        <SolidColorBrush x:Key="PrimaryHueMidBrush" Color="#673AB7"/>
+                        <SolidColorBrush x:Key="PrimaryHueMidForegroundBrush" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="SecondaryHueMidBrush" Color="#B0D442"/>
+                        <SolidColorBrush x:Key="SecondaryHueMidForegroundBrush" Color="#000000"/>
+                        <SolidColorBrush x:Key="UnreadDotBrush" Color="#9C7CFF"/>
+
+                        <!-- Small glow for unread dots -->
+                        <DropShadowEffect x:Key="GlowPurpleEffect"
+                                          Color="#CC9B6BFF"
+                                          BlurRadius="14"
+                                          ShadowDepth="0"
+                                          Opacity="1"/>
+
                         <!-- Enhanced Dark Mode Colors -->
                         <SolidColorBrush x:Key="DarkModeBackground"
                                          Color="#1E1E1E"/>

@@ -21,7 +21,7 @@
                         <TextBlock Text="My News Feeder"
                                    FontSize="24"
                                    FontWeight="Bold"
-                                   Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                   Foreground="{DynamicResource MaterialDesignBody}"
                                    Margin="0,0,0,8"/>
                         <TextBlock x:Name="VersionText"
                                    FontSize="14"
@@ -46,7 +46,7 @@
                         <TextBlock>
                             <Hyperlink NavigateUri="https://github.com/Morgoth01/My-News-Feeder"
                                        RequestNavigate="Hyperlink_RequestNavigate"
-                                       Foreground="{DynamicResource PrimaryHueMidBrush}">
+                                       Foreground="{DynamicResource SecondaryHueMidBrush}">
                                 https://github.com/Morgoth01/My-News-Feeder
                             </Hyperlink>
                         </TextBlock>

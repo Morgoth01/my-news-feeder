@@ -18,6 +18,9 @@ namespace MyNewsFeeder.ViewModels
     public class MainViewModel : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
+        public event Action<string> SelectionRestoreRequested;
+        public Func<double> RequestTreeScrollOffset;
+        public event Action<double> ScrollOffsetRestoreRequested;
 
         private readonly FeedService _feedService;
         private readonly SettingsService _settingsService;
@@ -36,6 +39,9 @@ namespace MyNewsFeeder.ViewModels
         private bool _isShowContentAlwaysOn = false;
         private int _maxFeeds = 10;
         private int _autoRefreshIntervalMinutes = 10;
+        private HashSet<string> _readArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private bool _suppressSelectionDuringRefresh;
+        private double _lastTreeScrollOffset;
         private System.Windows.Threading.DispatcherTimer _autoRefreshTimer;
         private System.Windows.Threading.DispatcherTimer _cacheCleanupTimer;
         private string _copyLinkButtonText = "Copy Link";
@@ -204,6 +210,22 @@ namespace MyNewsFeeder.ViewModels
                     _copyLinkButtonText = value;
                     OnPropertyChanged(nameof(CopyLinkButtonText));
                 }
+            }
+        }
+
+        // Used by the view to ignore selection changes while a refresh rebuilds the tree.
+        public bool SuppressSelectionDuringRefresh => _suppressSelectionDuringRefresh;
+
+        private void PersistReadState()
+        {
+            try
+            {
+                _settings.ReadArticleLinks = new HashSet<string>(_readArticleLinks, StringComparer.OrdinalIgnoreCase);
+                _settingsService.SaveSettings(_settings);
+            }
+            catch (Exception)
+            {
+                // Ignore persistence failures; read state will be rebuilt next successful save.
             }
         }
 
@@ -473,6 +495,7 @@ namespace MyNewsFeeder.ViewModels
                 {
                     _settings = new AppSettings();
                 }
+                _readArticleLinks = new HashSet<string>(_settings.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
             }
             catch (Exception)
             {
@@ -695,6 +718,17 @@ namespace MyNewsFeeder.ViewModels
             SelectedArticleHtml = htmlContent;
             SelectedArticleText = BuildArticlePlainText(feedItem.Title, feedItem.Description);
             SelectedArticleLink = NormalizeExternalLink(feedItem.Link);
+
+            if (feedItem != null && !feedItem.IsRead)
+            {
+                feedItem.IsRead = true;
+                var key = feedItem.Link?.Trim();
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    _readArticleLinks.Add(key);
+                    PersistReadState();
+                }
+            }
 
             if (IsShowContentAlwaysOn)
             {
@@ -919,6 +953,7 @@ namespace MyNewsFeeder.ViewModels
 
             // Reload settings to pick up new Categories and expanded states
             _settings = _settingsService.LoadSettings();
+            _readArticleLinks = new HashSet<string>(_settings.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
             if (_settings.AdvertisementKeywords == null || _settings.AdvertisementKeywords.Count == 0)
             {
                 _settings.AdvertisementKeywords = new List<string>(AppSettings.DefaultAdvertisementKeywords);
@@ -1161,8 +1196,12 @@ namespace MyNewsFeeder.ViewModels
         }
         private async Task RefreshFeedsAsync()
         {
+            string linkToRestore = null;
             try
             {
+                // Capture current scroll offset (view will provide it)
+                _lastTreeScrollOffset = RequestTreeScrollOffset?.Invoke() ?? 0;
+
                 if (_feeds.Count == 0)
                 {
                     CategoryGroups.Clear();
@@ -1171,6 +1210,9 @@ namespace MyNewsFeeder.ViewModels
 
                 var categoryExpandedStates = _settings.CategoryExpandedStates ?? new Dictionary<string, bool>();
                 var feedExpandedStates = _settings.TreeViewExpandedStates ?? new Dictionary<string, bool>();
+
+                // Preserve read state across refreshes (keyed by article link)
+                var previousReadStates = _readArticleLinks;
 
                 var advertisementKeywords = _settings.AdvertisementFilterEnabled ? GetAdvertisementKeywordsForFiltering() : new List<string>();
                 var items = await _feedService.FetchArticlesAsync(
@@ -1184,6 +1226,20 @@ namespace MyNewsFeeder.ViewModels
                     items = items.Where(item => !item.IsAdvertisement).ToList();
                 }
 
+                // Reapply read states to freshly loaded items
+                if (previousReadStates.Count > 0)
+                {
+                    foreach (var item in items)
+                    {
+                        var key = item.Link?.Trim();
+                        if (!string.IsNullOrWhiteSpace(key) &&
+                            previousReadStates.Contains(key))
+                        {
+                            item.IsRead = true;
+                        }
+                    }
+                }
+
                 // Group items by category
                 var categorizedItems = items.GroupBy(item =>
                 {
@@ -1191,74 +1247,133 @@ namespace MyNewsFeeder.ViewModels
                     return feed?.Category ?? "Default";
                 }).ToDictionary(g => g.Key, g => g);
 
-                CategoryGroups.Clear();
+                var desiredCategoryOrder = new List<string>();
+                desiredCategoryOrder.AddRange(_settings.Categories.Where(c => categorizedItems.ContainsKey(c)));
+                desiredCategoryOrder.AddRange(categorizedItems.Keys.Where(k => !_settings.Categories.Contains(k)));
 
-                // Create CategoryGroups in the order defined in Settings.Categories
-                // This ensures the main window displays categories in user-defined order
-                foreach (var categoryName in _settings.Categories)
+                var previousSelectedLink = SelectedArticleLink?.Trim();
+                _suppressSelectionDuringRefresh = true;
+
+                // Update categories in-place
+                foreach (var categoryName in desiredCategoryOrder)
                 {
-                    // Only process categories that have actual feed items
-                    if (categorizedItems.TryGetValue(categoryName, out var categoryItems))
+                    if (!categorizedItems.TryGetValue(categoryName, out var categoryItems))
                     {
-                        var categoryViewModel = new CategoryGroupViewModel
+                        continue;
+                    }
+
+                    var categoryVm = CategoryGroups.FirstOrDefault(c => string.Equals(c.Name, categoryName, StringComparison.OrdinalIgnoreCase));
+                    if (categoryVm == null)
+                    {
+                        categoryVm = new CategoryGroupViewModel
                         {
                             Name = categoryName,
                             IsExpanded = categoryExpandedStates.TryGetValue(categoryName, out var expanded) ? expanded : true
                         };
+                        CategoryGroups.Add(categoryVm);
+                    }
 
-                        var feedGroups = categoryItems.GroupBy(item => item.FeedName);
+                    var feedGroups = categoryItems.GroupBy(item => item.FeedName).ToList();
+                    var desiredFeeds = feedGroups.Select(fg => fg.Key).ToList();
 
-                        foreach (var feedGroup in feedGroups)
+                    // Remove feeds that no longer exist
+                    foreach (var feedVm in categoryVm.Feeds.ToList())
+                    {
+                        if (!desiredFeeds.Any(df => string.Equals(df, feedVm.Name, StringComparison.OrdinalIgnoreCase)))
                         {
-                            var feedViewModel = new FeedGroupViewModel
-                            {
-                                Name = feedGroup.Key,
-                                Category = categoryName,
-                                Items = new ObservableCollection<FeedItem>(feedGroup.ToList()),
-                                IsExpanded = feedExpandedStates.TryGetValue(feedGroup.Key, out var feedExpanded) ? feedExpanded : true
-                            };
+                            categoryVm.Feeds.Remove(feedVm);
+                        }
+                    }
 
-                            categoryViewModel.Feeds.Add(feedViewModel);
+                    // Ensure feeds exist and in order
+                    for (int feedIndex = 0; feedIndex < desiredFeeds.Count; feedIndex++)
+                    {
+                        var feedName = desiredFeeds[feedIndex];
+                        var feedGroup = feedGroups.First(fg => string.Equals(fg.Key, feedName, StringComparison.OrdinalIgnoreCase));
+                        var feedVm = categoryVm.Feeds.FirstOrDefault(f => string.Equals(f.Name, feedName, StringComparison.OrdinalIgnoreCase));
+
+                        if (feedVm == null)
+                        {
+                            feedVm = new FeedGroupViewModel
+                            {
+                                Name = feedName,
+                                Category = categoryName,
+                                IsExpanded = feedExpandedStates.TryGetValue(feedName, out var feedExpanded) ? feedExpanded : true
+                            };
+                            categoryVm.Feeds.Insert(feedIndex, feedVm);
+                        }
+                        else
+                        {
+                            if (categoryVm.Feeds.IndexOf(feedVm) != feedIndex)
+                            {
+                                categoryVm.Feeds.Move(categoryVm.Feeds.IndexOf(feedVm), feedIndex);
+                            }
                         }
 
-                        CategoryGroups.Add(categoryViewModel);
+                        UpdateItemsInPlace(feedVm.Items, feedGroup.ToList(), previousReadStates);
                     }
                 }
 
-                // Handle any categories that exist in feeds but not in settings (shouldn't normally happen)
-                foreach (var categoryGroup in categorizedItems.Where(kvp => !_settings.Categories.Contains(kvp.Key)))
+                // Remove categories that no longer have items
+                foreach (var cat in CategoryGroups.ToList())
                 {
-                    var categoryViewModel = new CategoryGroupViewModel
+                    if (!desiredCategoryOrder.Any(dc => string.Equals(dc, cat.Name, StringComparison.OrdinalIgnoreCase)))
                     {
-                        Name = categoryGroup.Key,
-                        IsExpanded = categoryExpandedStates.TryGetValue(categoryGroup.Key, out var expanded) ? expanded : true
-                    };
-
-                    var feedGroups = categoryGroup.Value.GroupBy(item => item.FeedName);
-
-                    foreach (var feedGroup in feedGroups)
-                    {
-                        var feedViewModel = new FeedGroupViewModel
-                        {
-                            Name = feedGroup.Key,
-                            Category = categoryGroup.Key,
-                            Items = new ObservableCollection<FeedItem>(feedGroup.ToList()),
-                            IsExpanded = feedExpandedStates.TryGetValue(feedGroup.Key, out var feedExpanded) ? feedExpanded : true
-                        };
-
-                        categoryViewModel.Feeds.Add(feedViewModel);
+                        CategoryGroups.Remove(cat);
                     }
+                }
 
-                    CategoryGroups.Add(categoryViewModel);
+                // Reorder categories to desired order
+                for (int i = 0; i < desiredCategoryOrder.Count; i++)
+                {
+                    var name = desiredCategoryOrder[i];
+                    var cat = CategoryGroups.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+                    if (cat != null && CategoryGroups.IndexOf(cat) != i)
+                    {
+                        CategoryGroups.Move(CategoryGroups.IndexOf(cat), i);
+                    }
                 }
 
                 OnPropertyChanged(nameof(CategoryGroups));
                 OnPropertyChanged(nameof(CurrentFeedSettingsDisplay));
+
+                // Attempt to restore selection to the previously opened article
+                if (!string.IsNullOrWhiteSpace(previousSelectedLink))
+                {
+                    var match = CategoryGroups
+                        .SelectMany(cg => cg.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                        .SelectMany(fg => fg.Items ?? Enumerable.Empty<FeedItem>())
+                        .FirstOrDefault(item =>
+                            !string.IsNullOrWhiteSpace(item.Link) &&
+                            string.Equals(item.Link.Trim(), previousSelectedLink.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                    if (match != null)
+                    {
+                        SelectedArticleLink = NormalizeExternalLink(match.Link);
+                        linkToRestore = match.Link?.Trim();
+                        // Keep showing the previous content without triggering a selection change.
+                    }
+                    else
+                    {
+                        // If we cannot find the previous selection, at least restore scroll.
+                        ScrollOffsetRestoreRequested?.Invoke(_lastTreeScrollOffset);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show($"Error loading feeds: {ex.Message}", "Error",
                     System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            }
+            finally
+            {
+                _suppressSelectionDuringRefresh = false;
+                if (!string.IsNullOrWhiteSpace(linkToRestore))
+                {
+                    SelectionRestoreRequested?.Invoke(linkToRestore);
+                }
+                // Always attempt to restore previous scroll position
+                ScrollOffsetRestoreRequested?.Invoke(_lastTreeScrollOffset);
             }
         }
 
@@ -1293,6 +1408,65 @@ namespace MyNewsFeeder.ViewModels
                     "Error",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private static void UpdateItemsInPlace(ObservableCollection<FeedItem> existingItems, List<FeedItem> newItems, HashSet<string> readStates)
+        {
+            if (existingItems == null)
+            {
+                return;
+            }
+
+            // Map existing by link (trimmed)
+            var existingMap = existingItems
+                .Where(i => !string.IsNullOrWhiteSpace(i.Link))
+                .ToDictionary(i => i.Link.Trim(), i => i, StringComparer.OrdinalIgnoreCase);
+
+            // Remove items that no longer exist
+            var newKeys = new HashSet<string>(newItems.Where(i => !string.IsNullOrWhiteSpace(i.Link)).Select(i => i.Link.Trim()), StringComparer.OrdinalIgnoreCase);
+            foreach (var old in existingItems.ToList())
+            {
+                var key = old.Link?.Trim();
+                if (!string.IsNullOrWhiteSpace(key) && !newKeys.Contains(key))
+                {
+                    existingItems.Remove(old);
+                }
+            }
+
+            for (int idx = 0; idx < newItems.Count; idx++)
+            {
+                var incoming = newItems[idx];
+                var key = incoming.Link?.Trim();
+                FeedItem target = null;
+
+                if (!string.IsNullOrWhiteSpace(key) && existingMap.TryGetValue(key, out var found))
+                {
+                    target = found;
+                    // update properties that may change
+                    target.Title = incoming.Title;
+                    target.Description = incoming.Description;
+                    target.PublicationDate = incoming.PublicationDate;
+                    target.IsAdvertisement = incoming.IsAdvertisement;
+                    target.FeedName = incoming.FeedName;
+                }
+                else
+                {
+                    // apply read state if known
+                    if (!string.IsNullOrWhiteSpace(key) && readStates.Contains(key))
+                    {
+                        incoming.IsRead = true;
+                    }
+                    target = incoming;
+                    existingItems.Insert(Math.Min(idx, existingItems.Count), target);
+                }
+
+                // ensure correct ordering
+                var currentIndex = existingItems.IndexOf(target);
+                if (currentIndex != idx)
+                {
+                    existingItems.Move(currentIndex, idx);
+                }
             }
         }
 

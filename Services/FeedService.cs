@@ -69,14 +69,18 @@ namespace MyNewsFeeder.Services
                     using var xmlReader = XmlReader.Create(stream);
                     var syndicationFeed = SyndicationFeed.Load(xmlReader);
 
-                    var items = syndicationFeed.Items
-                        .Take(maxItems)
+                    // Pull extra items when ad filtering is enabled to still fill the requested count.
+                    var maxFetch = hasAdvertisementKeywords ? maxItems * 4 : maxItems;
+                    var candidates = syndicationFeed.Items
                         .Where(item =>
                             string.IsNullOrEmpty(keywordFilter) ||
                             item.Title.Text.Contains(keywordFilter, StringComparison.OrdinalIgnoreCase) ||
-                            (item.Summary?.Text?.Contains(keywordFilter, StringComparison.OrdinalIgnoreCase) ?? false));
+                            (item.Summary?.Text?.Contains(keywordFilter, StringComparison.OrdinalIgnoreCase) ?? false))
+                        .Take(maxFetch);
 
-                    foreach (var item in items)
+                    int addedNonAds = 0;
+
+                    foreach (var item in candidates)
                     {
                         var feedItem = new FeedItem
                         {
@@ -90,9 +94,21 @@ namespace MyNewsFeeder.Services
                         if (hasAdvertisementKeywords)
                         {
                             feedItem.IsAdvertisement = IsAdvertisement(feedItem, item, normalizedAdvertisementKeywords);
+                            if (feedItem.IsAdvertisement)
+                            {
+                                continue; // skip ads when filtering
+                            }
                         }
 
                         articles.Add(feedItem);
+                        if (hasAdvertisementKeywords)
+                        {
+                            addedNonAds++;
+                            if (addedNonAds >= maxItems)
+                            {
+                                break;
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)

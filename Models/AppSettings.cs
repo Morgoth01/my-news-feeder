@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MyNewsFeeder.Models
 {
@@ -48,6 +49,9 @@ namespace MyNewsFeeder.Models
         public Dictionary<string, bool> CategoryExpandedStates { get; set; } = new Dictionary<string, bool>();
         public List<string> Categories { get; set; } = new List<string> { "Default" };
 
+        // Persistent read-state across sessions (link-based)
+        public HashSet<string> ReadArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         public static readonly int[] AvailableRefreshIntervals = { 5, 10, 15, 20, 30, 45, 60 };
 
         public bool IsValid()
@@ -88,6 +92,7 @@ namespace MyNewsFeeder.Models
             // Reset category settings
             CategoryExpandedStates = new Dictionary<string, bool>();
             Categories = new List<string> { "Default" };
+            ReadArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         }
 
@@ -125,7 +130,8 @@ namespace MyNewsFeeder.Models
                 AutoRefreshIntervalMinutes = this.AutoRefreshIntervalMinutes,
                 // Clone category settings
                 CategoryExpandedStates = new Dictionary<string, bool>(this.CategoryExpandedStates),
-                Categories = new List<string>(this.Categories)
+                Categories = new List<string>(this.Categories),
+                ReadArticleLinks = new HashSet<string>(this.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase)
             };
         }
     }
