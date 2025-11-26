@@ -84,11 +84,9 @@ Enter a keyword and click enter or the refresh button to filter your feeds
 By default, the ad blocker loads these popular filter lists:
 
 * AdGuard Base – Core ad-blocking rules for banners and pop-ups.
-* ClearURLs – Strips tracking parameters from URLs.
 * EasyList – Removes most ads on international sites.
 * EasyPrivacy – Blocks tracking scripts and web bugs.
 * Fanboy’s Annoyances – Hides overlays, cookie notices, and social widgets.
-* NoCoin List – Prevents in-browser cryptocurrency mining.
 * la–StevenBlackHosts – DNS-level hosts file blocking ads, malware, and trackers.
 * uBlock Origin Filters – Extra rules from the uBlock Origin community.
 
