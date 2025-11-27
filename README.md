@@ -9,7 +9,7 @@ Dive into your favorite feeds without distractions!</div>
 <br/>
 <br/>
 
-**.NET 9.0 Desktop Runtime (v9.0.9)** is required to run this application.  
+**.NET 9.0 Desktop Runtime (v9.0.9 or later)** is required to run this application.  
 [Download .NET 9.0 Desktop Runtime for Windows x64](https://dotnet.microsoft.com/en-us/download/dotnet/9.0)
 <br/>
 
