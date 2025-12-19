@@ -72,6 +72,7 @@ Enter a keyword and click enter or the refresh button to filter your feeds
 ## Features
 * Add and manage unlimited RSS/Atom feeds
 * Import/Export feeds
+* Context menu on articles: pin, read later, mark unread, copy link.
 * Built-in ad blocker with filter lists
 * Filter feeds
 * User-configurable auto-refresh interval
@@ -111,6 +112,9 @@ Enjoy streamlined, distraction-free news reading with My News Feeder!
 
 #### Filter feeds by keyword
 <img width="1609" height="1417" alt="image" src="https://github.com/user-attachments/assets/49899e2d-1ba3-488c-9c9d-e9bf2c81b14d" />
+
+#### Article context menu
+<img width="1635" height="1572" alt="image" src="https://github.com/user-attachments/assets/81e8a19c-217f-4614-9c1a-08dd1cc493eb" />
 
 #### Feed Manager
 <img width="2510" height="1549" alt="image" src="https://github.com/user-attachments/assets/a1877609-e9bf-4dd6-8133-b3710df45193" />
