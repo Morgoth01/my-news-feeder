@@ -6,6 +6,8 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using MyNewsFeeder.Models;
+using System.Linq;
+using System.Windows.Input;
 using MyNewsFeeder.Services;
 using MyNewsFeeder.ViewModels;
 using MaterialDesignThemes.Wpf;
@@ -27,11 +29,47 @@ namespace MyNewsFeeder.Views
 
             _viewModel = new MainViewModel(new FeedService(), new SettingsService(), new BrowserService());
             DataContext = _viewModel;
+            try
+            {
+                if (FindName("RefreshSummarySnackbar") is Snackbar snackbar)
+                {
+                    snackbar.MessageQueue = _viewModel.SnackbarMessageQueue as SnackbarMessageQueue;
+                }
+            }
+            catch
+            {
+                // If binding fails, the XAML binding will still attempt to attach the queue.
+            }
             _viewModel.SelectionRestoreRequested += ViewModel_SelectionRestoreRequested;
             _viewModel.RequestTreeScrollOffset = GetTreeScrollOffset;
             _viewModel.ScrollOffsetRestoreRequested += ViewModel_ScrollOffsetRestoreRequested;
 
             Loaded += MainWindow_Loaded;
+            PreviewKeyDown += MainWindow_PreviewKeyDown;
+        }
+
+        private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Let text inputs handle their own navigation
+            if (Keyboard.FocusedElement is System.Windows.Controls.TextBox ||
+                Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase)
+            {
+                return;
+            }
+
+            if (DataContext is MainViewModel vm)
+            {
+                if (e.Key == Key.Up && vm.NavigateSelectionCommand?.CanExecute(-1) == true)
+                {
+                    vm.NavigateSelectionCommand.Execute(-1);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Down && vm.NavigateSelectionCommand?.CanExecute(1) == true)
+                {
+                    vm.NavigateSelectionCommand.Execute(1);
+                    e.Handled = true;
+                }
+            }
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -48,22 +86,6 @@ namespace MyNewsFeeder.Views
             _viewModel.SetWebView(linkWebView);
             _viewModel.SetArticleWebView(articleWebView);
             _viewModel.ClearBrowserOnStartup();
-        }
-
-        private void TreeView_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
-        {
-            if (DataContext is MainViewModel vm)
-            {
-                if (vm.SuppressSelectionDuringRefresh)
-                {
-                    return;
-                }
-
-                if (e.NewValue is FeedItem article)
-                {
-                    vm.OnArticleSelected(article);
-                }
-            }
         }
 
         private void AboutButton_Click(object sender, RoutedEventArgs e)
@@ -120,15 +142,7 @@ namespace MyNewsFeeder.Views
         {
             if (DataContext is MainViewModel vm)
             {
-                vm.SaveCategoryExpandedStates();
-                vm.SaveFeedExpandedStates();
-            }
-        }
-
-        private void TreeViewItem_ExpandedCollapsed(object sender, RoutedEventArgs e)
-        {
-            if (ReferenceEquals(sender, e.OriginalSource) && DataContext is MainViewModel vm)
-            {
+                vm.SaveSectionExpandedStates();
                 vm.SaveCategoryExpandedStates();
                 vm.SaveFeedExpandedStates();
             }
@@ -136,7 +150,7 @@ namespace MyNewsFeeder.Views
 
         private void ViewModel_SelectionRestoreRequested(string linkToRestore)
         {
-            if (string.IsNullOrWhiteSpace(linkToRestore) || FeedTreeView == null)
+            if (string.IsNullOrWhiteSpace(linkToRestore) || _viewModel?.ArticleSections == null)
             {
                 return;
             }
@@ -145,37 +159,37 @@ namespace MyNewsFeeder.Views
             {
                 try
                 {
-                    FeedTreeView.UpdateLayout();
-
-                    foreach (var categoryObj in FeedTreeView.Items)
+                    foreach (var section in _viewModel.ArticleSections)
                     {
-                        if (categoryObj is CategoryGroupViewModel category)
+                        foreach (var child in section.Items)
                         {
-                            var catContainer = FeedTreeView.ItemContainerGenerator.ContainerFromItem(category) as TreeViewItem;
-                            catContainer?.UpdateLayout();
-                            catContainer?.SetCurrentValue(TreeViewItem.IsExpandedProperty, true);
-
-                            if (category.Feeds == null) continue;
-                            foreach (var feed in category.Feeds)
+                            if (child is CategoryGroupViewModel category)
                             {
-                                var feedContainer = catContainer?.ItemContainerGenerator.ContainerFromItem(feed) as TreeViewItem;
-                                feedContainer?.UpdateLayout();
-                                feedContainer?.SetCurrentValue(TreeViewItem.IsExpandedProperty, feed.IsExpanded);
-
-                                if (feed.Items == null) continue;
-                                foreach (var article in feed.Items)
+                                if (category.Feeds == null) continue;
+                                foreach (var feed in category.Feeds)
                                 {
-                                    if (string.IsNullOrWhiteSpace(article.Link) ||
-                                        !string.Equals(article.Link.Trim(), linkToRestore.Trim(), StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        continue;
-                                    }
+                                    if (feed.Items == null) continue;
+                                    var match = feed.Items.FirstOrDefault(a =>
+                                        !string.IsNullOrWhiteSpace(a.Link) &&
+                                        string.Equals(a.Link.Trim(), linkToRestore.Trim(), StringComparison.OrdinalIgnoreCase));
 
-                                    var articleContainer = feedContainer?.ItemContainerGenerator.ContainerFromItem(article) as TreeViewItem;
-                                    if (articleContainer != null)
+                                    if (match != null)
                                     {
-                                        articleContainer.IsSelected = true;
+                                        _viewModel.OnArticleSelected(match);
+                                        return;
                                     }
+                                }
+                            }
+                            else if (child is FeedGroupViewModel feedGroup)
+                            {
+                                if (feedGroup.Items == null) continue;
+                                var match = feedGroup.Items.FirstOrDefault(a =>
+                                    !string.IsNullOrWhiteSpace(a.Link) &&
+                                    string.Equals(a.Link.Trim(), linkToRestore.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                                if (match != null)
+                                {
+                                    _viewModel.OnArticleSelected(match);
                                     return;
                                 }
                             }
@@ -191,13 +205,12 @@ namespace MyNewsFeeder.Views
 
         private double GetTreeScrollOffset()
         {
-            var sv = FindScrollViewer(FeedTreeView);
-            return sv?.VerticalOffset ?? 0;
+            return SectionScrollViewer?.VerticalOffset ?? 0;
         }
 
         private void ViewModel_ScrollOffsetRestoreRequested(double offset)
         {
-            if (FeedTreeView == null)
+            if (SectionScrollViewer == null)
             {
                 return;
             }
@@ -206,11 +219,10 @@ namespace MyNewsFeeder.Views
             {
                 try
                 {
-                    FeedTreeView.UpdateLayout();
-                    var sv = FindScrollViewer(FeedTreeView);
-                    if (sv != null)
+                    SectionScrollViewer.UpdateLayout();
+                    if (SectionScrollViewer != null)
                     {
-                        sv.ScrollToVerticalOffset(offset);
+                        SectionScrollViewer.ScrollToVerticalOffset(offset);
                     }
                 }
                 catch

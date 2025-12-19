@@ -22,7 +22,7 @@
 
                 <!-- Dark Mode Setting -->
                 <CheckBox Content="Dark Mode"
-                          IsChecked="{Binding DarkMode}"
+                          IsChecked="{Binding PendingDarkMode}"
                           Margin="0,10"/>
 
                 <!-- Auto Refresh Setting -->

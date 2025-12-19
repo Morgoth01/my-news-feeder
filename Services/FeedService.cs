@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -7,17 +5,22 @@ using System.ServiceModel.Syndication;
 using System.Threading.Tasks;
 using System.Xml;
 using MyNewsFeeder.Models;
+using System.Net.Sockets;
+using System.Collections.Generic;
+using System;
 
 namespace MyNewsFeeder.Services
 {
     public class FeedService
     {
         private readonly HttpClient _httpClient;
+        private readonly List<string> _lastBlockedFeeds = new List<string>();
         private static readonly string[] AllowedSchemes =
         {
-            Uri.UriSchemeHttp,
             Uri.UriSchemeHttps
         };
+
+        public IReadOnlyList<string> LastBlockedFeeds => _lastBlockedFeeds.AsReadOnly();
 
         public FeedService()
         {
@@ -39,9 +42,34 @@ namespace MyNewsFeeder.Services
                        .UserAgent.ParseAdd($"MyNewsFeeder/{version}");
         }
 
+        public async Task<string> TryDetectFeedTitleAsync(string url)
+        {
+            try
+            {
+                if (!TryNormalizeFeedUrl(url, out var normalizedUrl))
+                {
+                    return null;
+                }
+
+                using var response = await _httpClient.GetAsync(normalizedUrl);
+                response.EnsureSuccessStatusCode();
+
+                using var stream = await response.Content.ReadAsStreamAsync();
+                using var xmlReader = XmlReader.Create(stream);
+                var syndicationFeed = SyndicationFeed.Load(xmlReader);
+                var title = syndicationFeed?.Title?.Text;
+                return string.IsNullOrWhiteSpace(title) ? null : title.Trim();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public async Task<List<FeedItem>> FetchArticlesAsync(List<Feed> feeds, string keywordFilter, int maxItems, IReadOnlyCollection<string> advertisementKeywords = null)
         {
             var articles = new List<FeedItem>();
+            _lastBlockedFeeds.Clear();
             var normalizedAdvertisementKeywords = NormalizeAdvertisementKeywords(advertisementKeywords);
             var hasAdvertisementKeywords = normalizedAdvertisementKeywords.Count > 0;
 
@@ -49,10 +77,11 @@ namespace MyNewsFeeder.Services
             {
                 if (!TryNormalizeFeedUrl(feed.Url, out var normalizedUrl))
                 {
+                    _lastBlockedFeeds.Add(feed.Name);
                     articles.Add(new FeedItem
                     {
                         FeedName = feed.Name,
-                        Title = "[ERROR] Unsupported or invalid feed URL",
+                        Title = "[BLOCKED] Feed URL rejected by security policy",
                         Description = string.Empty,
                         Link = string.Empty,
                         PublicationDate = DateTime.MinValue
@@ -307,13 +336,50 @@ namespace MyNewsFeeder.Services
                 return false;
             }
 
-            if (!string.IsNullOrEmpty(candidate.Host) && IPAddress.TryParse(candidate.Host, out _))
+            if (IsBlockedHost(candidate.Host))
             {
-                // Allow IP-based feeds but still block loopback/local if desired in future.
+                return false;
             }
 
             uri = candidate;
             return true;
+        }
+
+        private static bool IsBlockedHost(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                return true;
+            }
+
+            if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (IPAddress.TryParse(host, out var ip))
+            {
+                if (IPAddress.IsLoopback(ip))
+                {
+                    return true;
+                }
+
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    var bytes = ip.GetAddressBytes();
+                    // 10.0.0.0/8
+                    if (bytes[0] == 10)
+                        return true;
+                    // 172.16.0.0 - 172.31.255.255
+                    if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+                        return true;
+                    // 192.168.0.0/16
+                    if (bytes[0] == 192 && bytes[1] == 168)
+                        return true;
+                }
+            }
+
+            return false;
         }
     }
 }

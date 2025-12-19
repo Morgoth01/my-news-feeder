@@ -1,12 +1,14 @@
+
 <Window x:Class="MyNewsFeeder.Views.MainWindow"
+        x:Name="RootWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:vm="clr-namespace:MyNewsFeeder.ViewModels"
-        xmlns:sel="clr-namespace:MyNewsFeeder.Views"
         xmlns:conv="clr-namespace:MyNewsFeeder.Converters"
         xmlns:models="clr-namespace:MyNewsFeeder.Models"
+        xmlns:behaviors="clr-namespace:MyNewsFeeder.Views.Behaviors"
         Title="My News Feeder"
         Height="700"
         Width="1200"
@@ -25,50 +27,109 @@
         Loaded="MainWindow_Loaded"
         Closing="Window_Closing">
 
-    <!-- Enhanced Converter Registration -->
     <Window.Resources>
         <conv:StringEqualsConverter x:Key="StringEqualsConverter"/>
         <conv:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <conv:DoubleToGridLengthConverter x:Key="DoubleToGridLengthConverter"/>
-        <Style x:Key="CategoryContainerStyle"
-               TargetType="TreeViewItem"
-               BasedOn="{StaticResource MaterialDesignTreeViewItem}">
-            <Setter Property="IsExpanded"
-                    Value="{Binding IsExpanded, Mode=TwoWay}"/>
-            <Setter Property="Foreground"
-                    Value="{DynamicResource MaterialDesignBody}"/>
-            <EventSetter Event="Expanded"
-                         Handler="TreeViewItem_ExpandedCollapsed"/>
-            <EventSetter Event="Collapsed"
-                         Handler="TreeViewItem_ExpandedCollapsed"/>
+        <conv:MultiStringEqualsConverter x:Key="MultiStringEqualsConverter"/>
+        <conv:BooleanToTextConverter x:Key="BooleanToTextConverter"/>
+        <conv:HtmlToPlainTextConverter x:Key="HtmlToPlainTextConverter"/>
+
+        <!-- Modern context menu styling (light/dark aware) -->
+        <Style x:Key="ArticleContextMenuStyle" TargetType="ContextMenu">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="MinWidth" Value="160"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{DynamicResource MaterialDesignPaper}"
+                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="4"
+                                SnapsToDevicePixels="True">
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
-        <Style x:Key="FeedContainerStyle"
-               TargetType="TreeViewItem"
-               BasedOn="{StaticResource MaterialDesignTreeViewItem}">
-            <Setter Property="IsExpanded"
-                    Value="{Binding IsExpanded, Mode=TwoWay}"/>
-            <Setter Property="Foreground"
-                    Value="{DynamicResource MaterialDesignBody}"/>
-            <EventSetter Event="Expanded"
-                         Handler="TreeViewItem_ExpandedCollapsed"/>
-            <EventSetter Event="Collapsed"
-                         Handler="TreeViewItem_ExpandedCollapsed"/>
+
+        <Style x:Key="ArticleMenuItemStyle" TargetType="MenuItem">
+            <Style.Resources>
+                <!-- Make icons follow the current menu item foreground (for contrast on hover/checked) -->
+                <Style TargetType="materialDesign:PackIcon">
+                    <Setter Property="Foreground"
+                            Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}"/>
+                </Style>
+            </Style.Resources>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Icon" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Outer"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                BorderThickness="0"
+                                SnapsToDevicePixels="True">
+                                <Grid Margin="4,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter Grid.Column="0"
+                                                      ContentSource="Icon"
+                                                      VerticalAlignment="Center"
+                                                      Margin="0,0,6,0"/>
+                                <ContentPresenter Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="Outer" Property="Background" Value="#33272727"/>
+                            </Trigger>
+                            <!-- Ensure good contrast when a checked item is highlighted -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsChecked" Value="True"/>
+                                    <Condition Property="IsHighlighted" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
-        <Style x:Key="DefaultContainerStyle"
-               TargetType="TreeViewItem"
-               BasedOn="{StaticResource MaterialDesignTreeViewItem}">
-            <Setter Property="Foreground"
-                    Value="{DynamicResource MaterialDesignBody}"/>
-            <EventSetter Event="Expanded"
-                         Handler="TreeViewItem_ExpandedCollapsed"/>
-            <EventSetter Event="Collapsed"
-                         Handler="TreeViewItem_ExpandedCollapsed"/>
-        </Style>
-        <sel:TreeViewItemStyleSelector x:Key="TvItemStyleSelector"
-                                       CategoryStyle="{StaticResource CategoryContainerStyle}"
-                                       FeedStyle="{StaticResource FeedContainerStyle}"
-                                       DefaultStyle="{StaticResource DefaultContainerStyle}"/>
     </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="Up"
+                    Command="{Binding NavigateSelectionCommand}"
+                    CommandParameter="-1"/>
+        <KeyBinding Key="Down"
+                    Command="{Binding NavigateSelectionCommand}"
+                    CommandParameter="1"/>
+    </Window.InputBindings>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -79,399 +140,1017 @@
         <!-- Toolbar -->
         <ToolBar Grid.Row="0"
                  Style="{StaticResource MaterialDesignToolBar}">
-            <Button Content="Manage Feeds"
-                    Command="{Binding ManageFeedsCommand}"
-                    Style="{StaticResource MaterialDesignRaisedButton}"/>
-            <Separator/>
-            <Button Content="About"
-                    ToolTip="About MyNewsFeeder"
-                    Click="AboutButton_Click"
-                    Style="{StaticResource MaterialDesignFlatButton}"
-                    Foreground="{DynamicResource MaterialDesignBody}"
-                    Margin="5"/>
-
-            <Separator/>
-            <TextBlock Text="Keyword:"
-                       VerticalAlignment="Center"
-                       Margin="5,0"/>
-            <TextBox Width="150"
-                     Text="{Binding Keyword, UpdateSourceTrigger=PropertyChanged}"
-                     Margin="5,0">
-                <TextBox.InputBindings>
-                    <KeyBinding Key="Enter" Command="{Binding RefreshCommand}" />
-                </TextBox.InputBindings>
-            </TextBox>
-            <Button Content="Refresh"
-                    Command="{Binding RefreshCommand}"
-                    Style="{StaticResource MaterialDesignRaisedButton}"/>
-            <Separator/>
-            <materialDesign:PopupBox x:Name="SettingsPopupBox"
-                                     StaysOpen="True">
-                <StackPanel Background="{DynamicResource MaterialDesignPaper}"
-                            Margin="8"
-                            MinWidth="250">
-                    <TextBlock Text="Settings"
-                               FontWeight="Bold"
-                               FontSize="14"
-                               Margin="4,4,4,8"
-                               Foreground="{DynamicResource MaterialDesignBody}"/>
-
-                    <!-- Existing Settings -->
-                    <CheckBox Content="Dark Mode"
-                              IsChecked="{Binding DarkMode}"
-                              Foreground="{DynamicResource MaterialDesignBody}"
-                              Margin="4"/>
-                    <CheckBox Content="Auto Refresh"
-                              IsChecked="{Binding AutoRefresh}"
-                              Foreground="{DynamicResource MaterialDesignBody}"
-                              Margin="4"/>
-                    <StackPanel Orientation="Horizontal"
-                                Margin="4,0,4,4"
-                                Visibility="{Binding AutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock Text="Interval:"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource MaterialDesignBody}"
-                                   Margin="20,0,8,0"/>
-                        <ComboBox Width="120"
-                                  ItemsSource="{Binding AvailableRefreshIntervals}"
-                                  SelectedItem="{Binding AutoRefreshIntervalMinutes}"
-                                  Style="{StaticResource MaterialDesignComboBox}"
-                                  ToolTip="Select auto-refresh interval">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock>
-                                        <TextBlock.Text>
-                                            <MultiBinding StringFormat="{}{0} min">
-                                                <Binding/>
-                                            </MultiBinding>
-                                        </TextBlock.Text>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
-                    <TextBlock Text="{Binding AutoRefreshIntervalDisplay}"
-                               FontSize="10"
-                               Margin="24,0,4,4"
-                               Foreground="{DynamicResource MaterialDesignBodyLight}"
-                               Visibility="{Binding AutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                    <CheckBox Content="Enable AdBlocker"
-                              IsChecked="{Binding AdBlockerEnabled}"
-                              Foreground="{DynamicResource MaterialDesignBody}"
-                              Margin="4"/>
-                    <CheckBox Content="Hide advertisement articles"
-                              IsChecked="{Binding AdvertisementFilterEnabled}"
-                              Foreground="{DynamicResource MaterialDesignBody}"
-                              Margin="4"
-                              ToolTip="Filter feed items that look like ads based on configurable keywords."/>
-                    <TextBlock Text="Filter keywords (one per line)"
-                               Margin="24,0,4,2"
-                               Foreground="{DynamicResource MaterialDesignBodyLight}"
-                               Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
-                               FontSize="10"/>
-                    <TextBox Text="{Binding AdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
-                             AcceptsReturn="True"
-                             Height="96"
-                             Margin="24,0,4,4"
-                             VerticalScrollBarVisibility="Auto"
-                             Foreground="{DynamicResource MaterialDesignBody}"
-                             Background="{DynamicResource MaterialDesignPaper}"
-                             Style="{StaticResource MaterialDesignTextBox}"
-                             Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
-                             TextWrapping="Wrap"/>
-
-                    <!-- Always-On Content -->
-                    <CheckBox Content="Show Content Always-On"
-                              IsChecked="{Binding IsShowContentAlwaysOn}"
-                              ToolTip="Keep browser window open and auto-load articles when switching"
-                              Foreground="{DynamicResource MaterialDesignBody}"
-                              Margin="4"/>
-
-                    <Separator Margin="4"/>
-
-                    <!-- Feed Count Settings -->
-                    <TextBlock Text="Feed Settings"
-                               FontWeight="Bold"
-                               FontSize="12"
-                               Margin="4,8,4,4"
-                               Foreground="{DynamicResource MaterialDesignBody}"/>
-
-                    <StackPanel Orientation="Horizontal"
-                                Margin="4">
-                        <TextBlock Text="Max Articles per Feed:"
-                                   VerticalAlignment="Center"
-                                   Foreground="{DynamicResource MaterialDesignBody}"
-                                   Margin="0,0,8,0"/>
-                        <TextBox Width="60"
-                                 Text="{Binding MaxFeeds, UpdateSourceTrigger=PropertyChanged}"
-                                 VerticalAlignment="Center"
-                                 Style="{StaticResource MaterialDesignTextBox}"
-                                 ToolTip="Number of articles to load per feed (1-50)"/>
-                        <TextBlock Text="(1-50)"
-                                   VerticalAlignment="Center"
-                                   Margin="5,0,0,0"
-                                   FontSize="10"
-                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                    </StackPanel>
-
-                    <!-- Cache Management-->
-                    <TextBlock Text="Cache Management"
-                               FontWeight="Bold"
-                               FontSize="12"
-                               Margin="4,8,4,4"
-                               Foreground="{DynamicResource MaterialDesignBody}"/>
-
-                    <Button Content="Clear Browser Cache"
-                            Command="{Binding ClearCacheCommand}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}"
-                            Foreground="{DynamicResource MaterialDesignBody}"
-                            Margin="4"
-                            ToolTip="Clear cached images, files and browsing data to free up space"/>
-
-                    <TextBlock Text="Automatically clears old cache every 2 hours"
-                               FontSize="10"
-                               Margin="4,0,4,4"
-                               Foreground="{DynamicResource MaterialDesignBodyLight}"
-                               TextWrapping="Wrap"/>
-
-                    <!-- Display current settings -->
-                    <TextBlock Text="{Binding CurrentFeedSettingsDisplay}"
-                               FontSize="10"
-                               Margin="4,0,4,4"
-                               Foreground="{DynamicResource MaterialDesignBodyLight}"
-                               TextWrapping="Wrap"/>
-
-                    <Separator Margin="4"/>
-
-                    <!-- Existing AdBlocker Settings -->
-                    <Button Content="AdBlocker Settings"
-                            Command="{Binding AdBlockerSettingsCommand}"
+            <DockPanel LastChildFill="True">
+                <TextBlock Text="{Binding NextAutoRefreshDisplay}"
+                           DockPanel.Dock="Right"
+                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Center"
+                           Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Manage Feeds"
+                            Command="{Binding ManageFeedsCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                    <Separator/>
+                    <Button Content="About"
+                            ToolTip="About MyNewsFeeder"
+                            Click="AboutButton_Click"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{DynamicResource MaterialDesignBody}"
-                            Margin="4"/>
+                            Margin="5"/>
 
-                    <Separator Margin="4"/>
+                    <Separator/>
+                    <TextBlock Text="Keyword:"
+                               VerticalAlignment="Center"
+                               Margin="5,0"/>
+                    <TextBox Width="150"
+                             Text="{Binding Keyword, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="5,0">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding RefreshCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                    <Separator/>
+                    <materialDesign:PopupBox x:Name="SettingsPopupBox"
+                                             StaysOpen="True">
+                        <StackPanel Background="{DynamicResource MaterialDesignPaper}"
+                                    Margin="8"
+                                    MinWidth="250">
+                            <TextBlock Text="Settings"
+                                       FontWeight="Bold"
+                                       FontSize="14"
+                                       Margin="4,4,4,8"
+                                       Foreground="{DynamicResource MaterialDesignBody}"/>
 
-                    <!-- : Action buttons with proper closing -->
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Right"
-                                Margin="4">
+                            <!-- Existing Settings -->
+                            <CheckBox Content="Dark Mode"
+                                      IsChecked="{Binding PendingDarkMode}"
+                                      Foreground="{DynamicResource MaterialDesignBody}"
+                                      Margin="4"/>
+                            <CheckBox Content="Auto Refresh"
+                                      IsChecked="{Binding PendingAutoRefresh}"
+                                      Foreground="{DynamicResource MaterialDesignBody}"
+                                      Margin="4"/>
+                            <TextBlock Text="{Binding NextAutoRefreshDisplay}"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       FontSize="10"
+                                       Margin="24,0,4,4"
+                                       Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="4,0,4,4"
+                                        Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="Interval:"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource MaterialDesignBody}"
+                                           Margin="20,0,8,0"/>
+                                <ComboBox Width="120"
+                                          ItemsSource="{Binding AvailableRefreshIntervals}"
+                                          SelectedItem="{Binding PendingAutoRefreshIntervalMinutes}"
+                                          Style="{StaticResource MaterialDesignComboBox}"
+                                          ToolTip="Select auto-refresh interval">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock>
+                                                <TextBlock.Text>
+                                                    <MultiBinding StringFormat="{}{0} min">
+                                                        <Binding/>
+                                                    </MultiBinding>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+                            <TextBlock Text="{Binding AutoRefreshIntervalDisplay}"
+                                       FontSize="10"
+                                       Margin="24,0,4,4"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <CheckBox Content="Enable AdBlocker"
+                                      IsChecked="{Binding AdBlockerEnabled}"
+                                      Foreground="{DynamicResource MaterialDesignBody}"
+                                      Margin="4"/>
+                            <CheckBox Content="Hide advertisement articles"
+                                      IsChecked="{Binding AdvertisementFilterEnabled}"
+                                      Foreground="{DynamicResource MaterialDesignBody}"
+                                      Margin="4"
+                                      ToolTip="Filter feed items that look like ads based on configurable keywords."/>
+                            <TextBlock Text="Filter keywords (one per line)"
+                                       Margin="24,0,4,2"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                       FontSize="10"/>
+                            <TextBox Text="{Binding AdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
+                                     AcceptsReturn="True"
+                                     Height="96"
+                                     Margin="24,0,4,4"
+                                     VerticalScrollBarVisibility="Auto"
+                                     Foreground="{DynamicResource MaterialDesignBody}"
+                                     Background="{DynamicResource MaterialDesignPaper}"
+                                     Style="{StaticResource MaterialDesignTextBox}"
+                                     Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                     TextWrapping="Wrap"/>
 
-                        <!-- Save button with adaptive styling -->
-                        <Button Content="Save Feed Settings"
-                                Command="{Binding SaveSettingsCommand}"
-                                Margin="0,0,8,0"
-                                ToolTip="Save feed count settings and refresh feeds">
-                            <Button.Style>
-                                <Style TargetType="Button"
-                                       BasedOn="{StaticResource MaterialDesignRaisedButton}">
-                                    <Setter Property="Background"
-                                            Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                    <Setter Property="Foreground"
-                                            Value="White"/>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                            <!-- Always-On Content -->
+                            <CheckBox Content="Show Content Always-On"
+                                      IsChecked="{Binding IsShowContentAlwaysOn}"
+                                      ToolTip="Keep browser window open and auto-load articles when switching"
+                                      Foreground="{DynamicResource MaterialDesignBody}"
+                                      Margin="4"/>
 
-                        <!-- Reset button with adaptive styling -->
-                        <Button Content="Reset to Default"
-                                Command="{Binding ResetSettingsCommand}"
-                                Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Foreground="{DynamicResource MaterialDesignBody}"
-                                Margin="0,0,8,0"
-                                ToolTip="Reset feed settings to default values"/>
+                            <Separator Margin="4"/>
 
-                        <!-- Close button -->
-                        <Button Content="Close"
-                                Click="CloseSettingsPopup_Click"
-                                Style="{StaticResource MaterialDesignFlatButton}"
-                                Foreground="{DynamicResource MaterialDesignBody}"/>
-                    </StackPanel>
+                            <!-- Feed Count Settings -->
+                            <TextBlock Text="Feed Settings"
+                                       FontWeight="Bold"
+                                       FontSize="12"
+                                       Margin="4,8,4,4"
+                                       Foreground="{DynamicResource MaterialDesignBody}"/>
+
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="4">
+                                <TextBlock Text="Max Articles per Feed:"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource MaterialDesignBody}"
+                                           Margin="0,0,8,0"/>
+                                <TextBox Width="60"
+                                         Text="{Binding MaxFeeds, UpdateSourceTrigger=PropertyChanged}"
+                                         VerticalAlignment="Center"
+                                         Style="{StaticResource MaterialDesignTextBox}"
+                                         ToolTip="Number of articles to load per feed (1-50)"/>
+                                <TextBlock Text="(1-50)"
+                                           VerticalAlignment="Center"
+                                           Margin="5,0,0,0"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            </StackPanel>
+
+                            <!-- Cache Management-->
+                            <TextBlock Text="Cache Management"
+                                       FontWeight="Bold"
+                                       FontSize="12"
+                                       Margin="4,8,4,4"
+                                       Foreground="{DynamicResource MaterialDesignBody}"/>
+
+                            <Button Content="Clear Browser Cache"
+                                    Command="{Binding ClearCacheCommand}"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Foreground="{DynamicResource MaterialDesignBody}"
+                                    Margin="4"
+                                    ToolTip="Clear cached images, files and browsing data to free up space"/>
+
+                            <TextBlock Text="Automatically clears old cache every 2 hours"
+                                       FontSize="10"
+                                       Margin="4,0,4,4"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       TextWrapping="Wrap"/>
+
+                            <!-- Display current settings -->
+                            <TextBlock Text="{Binding CurrentFeedSettingsDisplay}"
+                                       FontSize="10"
+                                       Margin="4,0,4,4"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       TextWrapping="Wrap"/>
+
+                            <Separator Margin="4"/>
+
+                            <!-- Existing AdBlocker Settings -->
+                            <Button Content="AdBlocker Settings"
+                                    Command="{Binding AdBlockerSettingsCommand}"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Foreground="{DynamicResource MaterialDesignBody}"
+                                    Margin="4"/>
+
+                            <Separator Margin="4"/>
+
+                            <!-- : Action buttons with proper closing -->
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        Margin="4">
+
+                                <!-- Save button with adaptive styling -->
+                                <Button Content="Save Settings"
+                                        Command="{Binding SaveSettingsCommand}"
+                                        Margin="0,0,8,0"
+                                        ToolTip="Save feed count settings and refresh feeds">
+                                    <Button.Style>
+                                        <Style TargetType="Button"
+                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                            <Setter Property="Background"
+                                                    Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                            <Setter Property="Foreground"
+                                                    Value="White"/>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+
+                                <!-- Reset button with adaptive styling -->
+                                <Button Content="Reset to Default"
+                                        Command="{Binding ResetSettingsCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Foreground="{DynamicResource MaterialDesignBody}"
+                                        Margin="0,0,8,0"
+                                        ToolTip="Reset feed settings to default values"/>
+
+                                <!-- Close button -->
+                                <Button Content="Close"
+                                        Click="CloseSettingsPopup_Click"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                        Foreground="{DynamicResource MaterialDesignBody}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </materialDesign:PopupBox>
                 </StackPanel>
-            </materialDesign:PopupBox>
+            </DockPanel>
         </ToolBar>
 
         <!-- Main Content with Resizable Splitters -->
-        <Grid Grid.Row="1">
+            <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding TreeWidth, Mode=TwoWay, Converter={StaticResource DoubleToGridLengthConverter}}"
-                                  MinWidth="200"/>
+                <ColumnDefinition Width="110"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="{Binding PendingTreeWidth, Mode=TwoWay, Converter={StaticResource DoubleToGridLengthConverter}}"
+                                  MinWidth="260"/>
                 <ColumnDefinition Width="5"/>
                 <ColumnDefinition Width="*"
                                   MinWidth="400"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Feed Tree -->
-            <TreeView x:Name="FeedTreeView"
-                      Grid.Column="0"
-                      ItemsSource="{Binding CategoryGroups}"
-                      ItemContainerStyleSelector="{StaticResource TvItemStyleSelector}"
-                      SelectedItemChanged="TreeView_SelectedItemChanged"
-                      VirtualizingStackPanel.IsVirtualizing="True"
-                      VirtualizingStackPanel.VirtualizationMode="Recycling"
-                      ScrollViewer.CanContentScroll="True"
-                      Margin="5"
-                      Background="{DynamicResource MaterialDesignPaper}">
-                <TreeView.ItemTemplate>
-                    <HierarchicalDataTemplate ItemsSource="{Binding Feeds}">
-                        <StackPanel Orientation="Horizontal"
-                                    VerticalAlignment="Center"
-                                    Margin="0,2">
-                            <StackPanel.ToolTip>
-                                <StackPanel>
-                                    <TextBlock Text="{Binding ArticleCount, StringFormat=Gesamt: {0}}"/>
-                                    <TextBlock Text="{Binding UnreadCount, StringFormat=Ungelesen: {0}}"/>
+            <!-- Section Icons -->
+            <Border Grid.Column="0"
+                    Margin="5"
+                    Padding="6"
+                    Background="{DynamicResource MaterialDesignPaper}"
+                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="Sections"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource MaterialDesignBody}"
+                               Margin="4,0,0,8"/>
+                    <materialDesign:PopupBox StaysOpen="True"
+                                             PlacementMode="RightAndAlignTopEdges"
+                                             Margin="0,0,0,8"
+                                             HorizontalAlignment="Stretch"
+                                             Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Border}}">
+                <materialDesign:PopupBox.ToggleContent>
+                            <Border Padding="6,4"
+                                    Background="{DynamicResource MaterialDesignCardBackground}"
+                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    HorizontalAlignment="Stretch"
+                                    Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Border}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="FilterVariant"
+                                                             Width="16"
+                                                             Height="16"
+                                                             Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                             VerticalAlignment="Center"/>
+                                    <TextBlock Text="Filters"
+                                               Margin="6,0,0,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource MaterialDesignBody}"/>
                                 </StackPanel>
-                            </StackPanel.ToolTip>
-                            <Ellipse Width="8"
-                                     Height="8"
-                                     Fill="{DynamicResource UnreadDotBrush}"
-                                     VerticalAlignment="Center"
-                                     Margin="0,0,6,0"
-                                    Effect="{DynamicResource GlowPurpleEffect}">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasUnread}" Value="True">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <materialDesign:PackIcon Kind="{Binding IconKind}"
-                                                     Width="18"
-                                                     Height="18"
-                                                     VerticalAlignment="Center"
-                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"
-                                                     Margin="0,0,6,0"/>
-                            <TextBlock Text="{Binding Name}"
-                                       FontWeight="Bold"
-                                       Foreground="{DynamicResource MaterialDesignBody}"
-                                       Margin="0,0,4,0"/>
+                            </Border>
+                        </materialDesign:PopupBox.ToggleContent>
+                        <StackPanel Margin="4"
+                                    MinWidth="260">
+                            <StackPanel.Resources>
+                                <Style x:Key="FilterActionButtonStyle"
+                                       TargetType="Button"
+                                       BasedOn="{StaticResource MaterialDesignFlatButton}">
+                                    <!-- Default to accent purple in light mode -->
+                                    <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <!-- High-contrast light blue for dark mode -->
+                                            <Setter Property="Foreground" Value="#64B5F6"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                                <Style TargetType="CheckBox">
+                                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                </Style>
+                            </StackPanel.Resources>
+                            <TextBlock Text="Filter by category"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4"
+                                       Foreground="{DynamicResource MaterialDesignBody}"/>
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0,0,0,6">
+                                    <Button Content="Select all"
+                                            Command="{Binding SelectAllCategoriesCommand}"
+                                            Style="{StaticResource FilterActionButtonStyle}"
+                                            Margin="0,0,8,0"/>
+                                    <Button Content="Clear"
+                                            Command="{Binding ClearCategoriesCommand}"
+                                            Style="{StaticResource FilterActionButtonStyle}"/>
+                            </StackPanel>
+                            <ScrollViewer Height="120"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding FilterCategories}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:SelectableFilterItem}">
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                      Content="{Binding Name}"
+                                                      Foreground="{DynamicResource MaterialDesignBody}"
+                                                      Margin="0,2"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <Separator Margin="0,8,0,8"/>
+                            <TextBlock Text="Filter by feed"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4"
+                                       Foreground="{DynamicResource MaterialDesignBody}"/>
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0,0,0,6">
+                                    <Button Content="Select all"
+                                            Command="{Binding SelectAllFeedsCommand}"
+                                            Style="{StaticResource FilterActionButtonStyle}"
+                                            Margin="0,0,8,0"/>
+                                    <Button Content="Clear"
+                                            Command="{Binding ClearFeedsCommand}"
+                                            Style="{StaticResource FilterActionButtonStyle}"/>
+                            </StackPanel>
+                            <ScrollViewer Height="120"
+                                          VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding FilterFeeds}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:SelectableFilterItem}">
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                      Content="{Binding Name}"
+                                                      Foreground="{DynamicResource MaterialDesignBody}"
+                                                      Margin="0,2"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
                         </StackPanel>
-                        <HierarchicalDataTemplate.ItemTemplate>
-                            <HierarchicalDataTemplate ItemsSource="{Binding PagedItems}">
-                                <StackPanel Orientation="Horizontal"
-                                            VerticalAlignment="Center"
-                                            Margin="0,2">
-                                    <StackPanel.ToolTip>
-                                        <TextBlock Text="{Binding ItemCount, StringFormat=Articles: {0}}"/>
-                                    </StackPanel.ToolTip>
-                                    <Ellipse Width="7"
-                                             Height="7"
-                                             Fill="{DynamicResource UnreadDotBrush}"
-                                             VerticalAlignment="Center"
-                                             Margin="0,0,6,0"
-                                             Effect="{DynamicResource GlowPurpleEffect}">
-                                        <Ellipse.Style>
-                                            <Style TargetType="Ellipse">
-                                                <Setter Property="Visibility" Value="Collapsed"/>
+                    </materialDesign:PopupBox>
+                    <ListBox ItemsSource="{Binding ArticleSections}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             VirtualizingStackPanel.IsVirtualizing="True"
+                             VirtualizingStackPanel.VirtualizationMode="Recycling"
+                             ScrollViewer.CanContentScroll="True"
+                             SelectedItem="{Binding SelectedSection, Mode=TwoWay}"
+                             HorizontalContentAlignment="Stretch">
+                        <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="6"/>
+                                    <Setter Property="Margin" Value="0,4,0,4"/>
+                                    <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="SnapsToDevicePixels" Value="True"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="Bd"
+                                                        Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="8">
+                                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                                      Margin="0"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="#0F1E88E5"/>
+                                                        <Setter TargetName="Bd" Property="BorderBrush" Value="#1E88E5"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="Bd" Property="Background" Value="#1A7C4DFF"/>
+                                                        <Setter TargetName="Bd" Property="BorderBrush" Value="#7C4DFF"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ArticleSectionViewModel}">
+                                <Border Padding="6"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1">
+                                    <Border.InputBindings>
+                                        <MouseBinding MouseAction="LeftClick"
+                                                      Command="{Binding DataContext.SelectSectionCommand, ElementName=RootWindow}"
+                                                      CommandParameter="{Binding}"/>
+                                    </Border.InputBindings>
+                                    <StackPanel Orientation="Vertical"
+                                                HorizontalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="{Binding IconKind}"
+                                                                 Width="20"
+                                                                 Height="20"
+                                                                 Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                                 HorizontalAlignment="Center"
+                                                                 VerticalAlignment="Center"
+                                                                 Margin="0,2"/>
+                                        <Border Background="{DynamicResource PrimaryHueMidBrush}"
+                                                CornerRadius="6"
+                                                Padding="4,1"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Top"
+                                                Margin="0,4,0,0"
+                                                Visibility="Collapsed">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <MultiDataTrigger>
+                                                            <MultiDataTrigger.Conditions>
+                                                                <Condition Binding="{Binding HasUnread}" Value="True"/>
+                                                                <Condition Binding="{Binding HideUnreadIndicators}" Value="False"/>
+                                                            </MultiDataTrigger.Conditions>
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </MultiDataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="{Binding UnreadCount}"
+                                                       Foreground="White"
+                                                       FontWeight="Bold"
+                                                       FontSize="10"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="11"
+                                                   Margin="0,6,0,0"
+                                                   Foreground="{DynamicResource MaterialDesignBody}"
+                                                   TextAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Modern Feed Explorer -->
+            <Border Grid.Column="2"
+                    Margin="5"
+                    Padding="6"
+                    Background="{DynamicResource MaterialDesignPaper}"
+                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                    BorderThickness="1">
+                <Border.Resources>
+                    <DataTemplate DataType="{x:Type models:FeedItem}">
+                        <Border x:Name="ArticleCard"
+                                Margin="22,4,6,4"
+                                Padding="12,8"
+                                Background="{DynamicResource MaterialDesignCardBackground}"
+                                CornerRadius="8"
+                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                BorderThickness="2"
+                                Focusable="True">
+                            <Border.InputBindings>
+                                <MouseBinding MouseAction="LeftClick"
+                                              Command="{Binding DataContext.ArticleClickCommand, ElementName=RootWindow}"
+                                              CommandParameter="{Binding}"/>
+                            </Border.InputBindings>
+                            <Border.ContextMenu>
+                                <ContextMenu Style="{StaticResource ArticleContextMenuStyle}">
+                                    <MenuItem Header="{Binding IsPinned, Converter={StaticResource BooleanToTextConverter}, ConverterParameter='Unpin|Pin'}"
+                                              IsCheckable="True"
+                                              IsChecked="{Binding IsPinned}"
+                                              Command="{Binding DataContext.PinArticleCommand, Source={x:Reference RootWindow}}"
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                        <MenuItem.Icon>
+                                            <materialDesign:PackIcon Kind="PinOutline" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                                    <MenuItem Header="{Binding IsReadLater, Converter={StaticResource BooleanToTextConverter}, ConverterParameter='Unsave|Read Later'}"
+                                                              IsCheckable="True"
+                                                              IsChecked="{Binding IsReadLater}"
+                                                              Command="{Binding DataContext.ReadLaterArticleCommand, Source={x:Reference RootWindow}}"
+                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                                        <MenuItem.Icon>
+                                                            <materialDesign:PackIcon Kind="ClockOutline"
+                                                                                     Width="16"
+                                                                                     Height="16"
+                                                                                     Margin="0,0,2,0"
+                                                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                    <MenuItem Header="Unread"
+                                              Command="{Binding DataContext.MarkUnreadCommand, Source={x:Reference RootWindow}}"
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                        <MenuItem.Style>
+                                            <Style TargetType="MenuItem" BasedOn="{StaticResource ArticleMenuItemStyle}">
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding HasUnread}" Value="True">
-                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                                        <Setter Property="IsEnabled" Value="False"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </Ellipse.Style>
-                                    </Ellipse>
-                                    <materialDesign:PackIcon Kind="{Binding IconKind}"
-                                                             Width="16"
-                                                             Height="16"
-                                                             VerticalAlignment="Center"
-                                                             Foreground="{DynamicResource PrimaryHueMidBrush}"
-                                                             Margin="0,0,6,0"/>
-                                    <TextBlock Text="{Binding Name}"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource MaterialDesignBody}"/>
+                                        </MenuItem.Style>
+                                        <MenuItem.Icon>
+                                            <materialDesign:PackIcon Kind="EmailOutline" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator/>
+                                    <MenuItem Header="Copy Link"
+                                              Command="{Binding DataContext.CopyArticleLinkCommand, Source={x:Reference RootWindow}}"
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                        <MenuItem.Icon>
+                                            <materialDesign:PackIcon Kind="ContentCopy" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Pinned">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Read Later">
+                                            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                        </DataTrigger>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsSelected}" Value="True"/>
+                                                <Condition Binding="{Binding DataContext.SuppressAutoScroll, ElementName=RootWindow}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Background" Value="#221642"/>
+                                            <Setter Property="BorderBrush" Value="#FF80FF"/>
+                                            <Setter Property="BorderThickness" Value="3"/>
+                                            <Setter Property="behaviors:BringIntoViewBehavior.Enabled" Value="True"/>
+                                            <Setter Property="Effect">
+                                                <Setter.Value>
+                                                    <DropShadowEffect Color="#FF80FF"
+                                                                      BlurRadius="12"
+                                                                      ShadowDepth="0"
+                                                                      Opacity="0.45"/>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Rectangle x:Name="UnreadStripe"
+                                           Width="4"
+                                           RadiusX="2"
+                                           RadiusY="2"
+                                           Fill="{DynamicResource UnreadDotBrush}"
+                                           VerticalAlignment="Stretch"
+                                           Visibility="Collapsed"/>
+                                <StackPanel Grid.Column="1"
+                                            Margin="10,0,0,0">
+                                    <TextBlock x:Name="TitleText"
+                                               Text="{Binding Title}"
+                                               Foreground="{DynamicResource MaterialDesignBody}"
+                                               TextWrapping="Wrap"
+                                               TextAlignment="Left">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="Normal"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock x:Name="DescriptionText"
+                                               Text="{Binding Description, Converter={StaticResource HtmlToPlainTextConverter}}"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                               Margin="0,2,0,4"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="Wrap"
+                                               Visibility="Collapsed"/>
+                                    <StackPanel Orientation="Horizontal"
+                                                VerticalAlignment="Center">
+                                        <materialDesign:PackIcon Kind="ClockOutline"
+                                                                 Width="14"
+                                                                 Height="14"
+                                                                 Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                                 Margin="0,0,6,0"/>
+                                        <TextBlock Text="{Binding PublicationDate, StringFormat={}{0:dd.MM. HH:mm}}"
+                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                   FontSize="11"
+                                                   Margin="0,0,6,0"/>
+                                        <TextBlock Text="•"
+                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                   FontSize="11"
+                                                   Margin="0,0,6,0"/>
+                                        <TextBlock Text="{Binding FeedName}"
+                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                   FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   MaxWidth="180"/>
+                                    </StackPanel>
                                 </StackPanel>
-                                <HierarchicalDataTemplate.ItemTemplate>
-                                    <DataTemplate>
-                                        <ContentControl Content="{Binding}">
-                                            <ContentControl.Resources>
-                                                <DataTemplate DataType="{x:Type models:FeedItem}">
-                                                    <StackPanel Orientation="Horizontal"
-                                                                Margin="0,2">
-                                                        <Ellipse Width="9"
-                                                                 Height="9"
-                                                                 Fill="{DynamicResource UnreadDotBrush}"
-                                                                 VerticalAlignment="Center"
-                                                                 Margin="0,0,6,0"
-                                                                 SnapsToDevicePixels="True">
-                                                            <Ellipse.Effect>
-                                                                <StaticResource ResourceKey="GlowPurpleEffect"/>
-                                                            </Ellipse.Effect>
-                                                            <Ellipse.Style>
-                                                                <Style TargetType="Ellipse">
-                                                                    <Setter Property="Opacity" Value="0"/>
+                            </Grid>
+                        </Border>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsUnread}" Value="True">
+                                <Setter TargetName="UnreadStripe" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DataContext.UseCompactArticleCards, ElementName=RootWindow}" Value="True">
+                                <Setter TargetName="ArticleCard" Property="Padding" Value="8,6"/>
+                                <Setter TargetName="ArticleCard" Property="Margin" Value="18,2,4,2"/>
+                                <Setter TargetName="TitleText" Property="FontSize" Value="13"/>
+                                <Setter TargetName="DescriptionText" Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DataContext.UseCompactArticleCards, ElementName=RootWindow}" Value="False">
+                                <Setter TargetName="ArticleCard" Property="Padding" Value="12,8"/>
+                                <Setter TargetName="ArticleCard" Property="Margin" Value="22,4,6,4"/>
+                                <Setter TargetName="DescriptionText" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Description}" Value="">
+                                <Setter TargetName="DescriptionText" Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding Description}" Value="{x:Null}">
+                                <Setter TargetName="DescriptionText" Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+
+                    <DataTemplate DataType="{x:Type vm:LoadMoreItem}">
+                        <Button Content="Load more"
+                                Command="{Binding LoadMoreCommand}"
+                                Margin="22,8,0,2"
+                                Padding="12,6"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                HorizontalAlignment="Left"/>
+                    </DataTemplate>
+                </Border.Resources>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="2,0,0,8" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="ViewList"
+                                                 Width="18"
+                                                 Height="18"
+                                                 Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                        <TextBlock Text="Display"
+                                   FontWeight="SemiBold"
+                                   Margin="6,0,0,0"
+                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                        <CheckBox Content="Compact cards"
+                                  IsChecked="{Binding UseCompactArticleCards, Mode=TwoWay}"
+                                  Margin="10,0,0,0"
+                                  VerticalAlignment="Center"
+                                  Foreground="{DynamicResource MaterialDesignBody}"/>
+                    </StackPanel>
+
+                    <ScrollViewer x:Name="SectionScrollViewer"
+                                  Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding VisibleSections}"
+                                      VirtualizingStackPanel.IsVirtualizing="True"
+                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                      ScrollViewer.CanContentScroll="True">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ArticleSectionViewModel}">
+                                <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                          Margin="0,0,0,10">
+                                    <Expander.Header>
+                                        <Border Background="#663A2D9B"
+                                                Padding="10"
+                                                CornerRadius="8">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Orientation="Horizontal"
+                                                            Grid.Column="0"
+                                                            VerticalAlignment="Center"
+                                                            Margin="0,0,8,0">
+                                                    <materialDesign:PackIcon Kind="{Binding IconKind}"
+                                                                             Width="18"
+                                                                             Height="18"
+                                                                             Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                                             Margin="0,0,6,0"/>
+                                                    <TextBlock Text="{Binding Name}"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource MaterialDesignBody}"/>
+                                                </StackPanel>
+                                                <Border Background="{DynamicResource PrimaryHueMidBrush}"
+                                                        Padding="8,2"
+                                                        CornerRadius="8"
+                                                        Grid.Column="1"
+                                                        Visibility="Collapsed"
+                                                        VerticalAlignment="Center"
+                                                        Margin="0,0,8,0">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasUnread}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <TextBlock Text="{Binding UnreadCount}"
+                                                               FontWeight="Bold"
+                                                               Foreground="White"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </Expander.Header>
+
+                                    <Border Background="{DynamicResource MaterialDesignCardBackground}"
+                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="8"
+                                            Margin="0,6,0,0">
+                                        <ItemsControl ItemsSource="{Binding Items}"
+                                                      Tag="{Binding Name}"
+                                                      VirtualizingStackPanel.IsVirtualizing="True"
+                                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                                      ScrollViewer.CanContentScroll="True">
+                                            <ItemsControl.Resources>
+                                                <DataTemplate DataType="{x:Type vm:CategoryGroupViewModel}">
+                                                    <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                                              Margin="0,4,0,6">
+                                                    <Expander.Header>
+                                                        <Border BorderThickness="3,0,0,0"
+                                                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                                                                Padding="8,6"
+                                                                CornerRadius="6">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding IsUnread}" Value="True">
-                                                                            <Setter Property="Opacity" Value="1"/>
+                                                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Pinned">
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Read Later">
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                                                            <Setter Property="Padding" Value="8,4"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
-                                                            </Ellipse.Style>
-                                                        </Ellipse>
-                                                        <materialDesign:PackIcon Kind="FileDocumentOutline"
-                                                                                 Width="14"
-                                                                                 Height="14"
-                                                                                 VerticalAlignment="Center"
-                                                                                 Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                                                                 Margin="0,0,6,0"/>
-                                                        <StackPanel>
-                                                            <TextBlock Text="{Binding Title}"
-                                                                       TextWrapping="Wrap"
-                                                                       MaxWidth="220"
-                                                                       Foreground="{DynamicResource MaterialDesignBody}">
-                                                                <TextBlock.Style>
-                                                                    <Style TargetType="TextBlock">
-                                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                            </Border.Style>
+                                                                <Grid VerticalAlignment="Center" Margin="4,0,0,0">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <StackPanel Orientation="Horizontal"
+                                                                                Grid.Column="0"
+                                                                                VerticalAlignment="Center">
+                                                                        <materialDesign:PackIcon Kind="{Binding IconKind}"
+                                                                                                 Width="16"
+                                                                                                 Height="16"
+                                                                                                 Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                                                                 Margin="0,0,6,0"/>
+                                                                        <TextBlock Text="{Binding Name}"
+                                                                                   FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                                                                    </StackPanel>
+                                                                    <Border Background="{DynamicResource MaterialDesignDivider}"
+                                                                            CornerRadius="8"
+                                                                            Padding="8,2"
+                                                                            Grid.Column="1"
+                                                                            Margin="8,0,0,0"
+                                                                            VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding ArticleCount}"
+                                                                                   Foreground="{DynamicResource MaterialDesignBody}"
+                                                                                   FontWeight="Bold"/>
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Border>
+                                                        </Expander.Header>
+                                                        <ItemsControl ItemsSource="{Binding Feeds}"
+                                                                      VirtualizingStackPanel.IsVirtualizing="True"
+                                                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                                                      ScrollViewer.CanContentScroll="True">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate DataType="{x:Type vm:FeedGroupViewModel}">
+                                                                    <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                                                              Margin="20,2,0,4">
+                                                                        <Expander.Header>
+                                                                            <Border BorderThickness="3,0,0,0"
+                                                                                    BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                                                                                    Padding="8,6"
+                                                                                    CornerRadius="4">
+                                                                                <Border.Style>
+                                                                                    <Style TargetType="Border">
+                                                                                        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Pinned">
+                                                                                                <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Read Later">
+                                                                                                <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                                                                                <Setter Property="Padding" Value="8,4"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </Border.Style>
+                                                                <Grid VerticalAlignment="Center">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <StackPanel Orientation="Horizontal"
+                                                                                Grid.Column="0"
+                                                                                VerticalAlignment="Center"
+                                                                                Margin="4,0,0,0">
+                                                                                        <materialDesign:PackIcon Kind="{Binding IconKind}"
+                                                                                                                 Width="14"
+                                                                                                                 Height="14"
+                                                                                                                 Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                                                                                 Opacity="0.8"
+                                                                                                                 Margin="0,0,6,0"/>
+                                                                                        <TextBlock Text="{Binding Name}"
+                                                                                                   FontWeight="SemiBold"
+                                                                                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                                                                                    </StackPanel>
+                                                            <Border Background="{DynamicResource MaterialDesignDivider}"
+                                                                    CornerRadius="8"
+                                                                    Padding="6,2"
+                                                                    Grid.Column="1"
+                                                                    Margin="8,0,0,0"
+                                                                    VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding ItemCount}"
+                                                                           Foreground="{DynamicResource MaterialDesignBody}"
+                                                                           FontWeight="Bold"/>
+                                                            </Border>
+                                                            <Border Grid.Column="2"
+                                                                    Background="{DynamicResource PrimaryHueMidBrush}"
+                                                                    CornerRadius="8"
+                                                                    Padding="6,2"
+                                                                    Margin="6,0,0,0"
+                                                                    VerticalAlignment="Center">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
                                                                         <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsUnread}" Value="True">
-                                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                            <DataTrigger Binding="{Binding UnreadCount}" Value="0">
+                                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                                    </DataTrigger>
+                                                                                                </Style.Triggers>
+                                                                                            </Style>
+                                                                                        </Border.Style>
+                                                                <TextBlock Text="{Binding UnreadCount}"
+                                                                           Foreground="White"
+                                                                           FontWeight="SemiBold"
+                                                                           FontSize="11"
+                                                                           ToolTip="Unread in this feed"/>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                </Expander.Header>
+                                                        <ItemsControl ItemsSource="{Binding PagedItems}"
+                                                                      Tag="{Binding Category}"
+                                                                      VirtualizingStackPanel.IsVirtualizing="True"
+                                                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                                                      ScrollViewer.CanContentScroll="True"/>
+                                                                    </Expander>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </Expander>
+                                                </DataTemplate>
+
+                                                <DataTemplate DataType="{x:Type vm:FeedGroupViewModel}">
+                                                    <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                                              Margin="0,2,0,6">
+                                                        <Expander.Header>
+                                                            <Border BorderThickness="3,0,0,0"
+                                                                    BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                                                                    Padding="8,6"
+                                                                    CornerRadius="4">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Category}" Value="Pinned">
+                                                                                <Setter Property="BorderBrush" Value="#4C6EE3"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Category}" Value="Read Later">
+                                                                                <Setter Property="BorderBrush" Value="#FFB74D"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                                                                <Setter Property="Padding" Value="8,4"/>
                                                                             </DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
-                                                            <TextBlock Text="{Binding PublicationDate, StringFormat={}{0:dd.MM. HH:mm}}"
-                                                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                                                       FontSize="11"/>
-                                                        </StackPanel>
-                                                    </StackPanel>
+                                                                </Border.Style>
+                                                                <Grid VerticalAlignment="Center" Margin="4,0,0,0">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <StackPanel Orientation="Horizontal"
+                                                                                Grid.Column="0"
+                                                                                VerticalAlignment="Center">
+                                                                        <materialDesign:PackIcon Kind="{Binding IconKind}"
+                                                                                                 Width="14"
+                                                                                                 Height="14"
+                                                                                                 Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                                                                 Opacity="0.8"
+                                                                                                 Margin="0,0,6,0"/>
+                                                                        <TextBlock Text="{Binding Name}"
+                                                                                   FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                                                                    </StackPanel>
+                                                                    <Border Background="{DynamicResource MaterialDesignDivider}"
+                                                                            CornerRadius="8"
+                                                                            Padding="6,2"
+                                                                            Grid.Column="1"
+                                                                            Margin="8,0,0,0"
+                                                                            VerticalAlignment="Center">
+                                                                        <TextBlock Text="{Binding ItemCount}"
+                                                                                   Foreground="{DynamicResource MaterialDesignBody}"
+                                                                                   FontWeight="Bold"/>
+                                                                    </Border>
+                                                                    <Border Grid.Column="2"
+                                                                            Background="{DynamicResource PrimaryHueMidBrush}"
+                                                                            CornerRadius="8"
+                                                                            Padding="6,2"
+                                                                            Margin="6,0,0,0"
+                                                                            VerticalAlignment="Center">
+                                                                        <Border.Style>
+                                                                            <Style TargetType="Border">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding UnreadCount}" Value="0">
+                                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Border.Style>
+                                                                        <TextBlock Text="{Binding UnreadCount}"
+                                                                                   Foreground="White"
+                                                                                   FontWeight="SemiBold"
+                                                                                   FontSize="11"
+                                                                                   ToolTip="Unread in this feed"/>
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Border>
+                                                        </Expander.Header>
+                                                        <ItemsControl ItemsSource="{Binding PagedItems}"
+                                                                      Tag="{Binding Category}"
+                                                                      VirtualizingStackPanel.IsVirtualizing="True"
+                                                                      VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                                                      ScrollViewer.CanContentScroll="True"/>
+                                                    </Expander>
                                                 </DataTemplate>
-
-                                                <DataTemplate DataType="{x:Type vm:LoadMoreItem}">
-                                                    <Button Content="Load more"
-                                                            Command="{Binding LoadMoreCommand}"
-                                                            HorizontalAlignment="Left"
-                                                            Margin="0,4,0,0"
-                                                            Padding="12,4"
-                                                            Foreground="{DynamicResource PrimaryHueMidBrush}"
-                                                            Style="{StaticResource MaterialDesignOutlinedButton}"/>
-                                                </DataTemplate>
-                                            </ContentControl.Resources>
-                                        </ContentControl>
-                                    </DataTemplate>
-                                </HierarchicalDataTemplate.ItemTemplate>
-                            </HierarchicalDataTemplate>
-                        </HierarchicalDataTemplate.ItemTemplate>
-                    </HierarchicalDataTemplate>
-                </TreeView.ItemTemplate>
-            </TreeView>
-
+                                            </ItemsControl.Resources>
+                                        </ItemsControl>
+                                    </Border>
+                                </Expander>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                </Grid>
+            </Border>
             <!-- Vertical Splitter -->
-            <GridSplitter Grid.Column="1"
+            <GridSplitter Grid.Column="3"
                           Width="5"
                           HorizontalAlignment="Stretch"
                           Background="{DynamicResource MaterialDesignDivider}"
                           ResizeBehavior="PreviousAndNext"/>
 
-            <!-- : Article Content and Browser with Dynamic Sizing -->
-            <Grid Grid.Column="2">
+            <!-- Article Content and Browser -->
+            <Grid Grid.Column="4">
                 <Grid.RowDefinitions>
-                    <!-- CHANGED: Use Star sizing for dynamic resizing -->
                     <RowDefinition Height="*"
                                    MinHeight="200"/>
                     <RowDefinition Height="5"/>
@@ -501,36 +1180,32 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- Container for Show Content and Copy Link buttons -->
                             <Grid Margin="5">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
-                                    <!-- Show Content button column -->
                                     <ColumnDefinition Width="Auto"/>
-                                    <!-- Copy Link button column -->
                                 </Grid.ColumnDefinitions>
 
-                                <!-- Show Content Button -->
                                 <Button Grid.Column="0"
                                         Content="{Binding ShowContentButtonText}"
                                         Command="{Binding ShowContentCommand}"
                                         Margin="0,0,8,0"
                                         Height="30">
                                     <Button.Style>
-                                                <Style TargetType="Button"
-                                                       BasedOn="{StaticResource MaterialDesignRaisedButton}">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
-                                                                     Value="True">
-                                                            <Setter Property="Background"
-                                                                    Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                                            <Setter Property="ToolTip"
-                                                                    Value="Always-On mode is active"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
-                                                                     Value="False">
-                                                            <Setter Property="Background"
-                                                                    Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                        <Style TargetType="Button"
+                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
+                                                             Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                    <Setter Property="ToolTip"
+                                                            Value="Always-On mode is active"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
+                                                             Value="False">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource PrimaryHueMidBrush}"/>
                                                     <Setter Property="ToolTip"
                                                             Value="Click to show/hide content"/>
                                                 </DataTrigger>
@@ -539,7 +1214,6 @@
                                     </Button.Style>
                                 </Button>
 
-                                <!-- Copy Link Button -->
                                 <Button Grid.Column="1"
                                         Content="{Binding CopyLinkButtonText}"
                                         Command="{Binding CopyLinkCommand}"
@@ -547,7 +1221,6 @@
                                         Height="30"/>
                             </Grid>
 
-                            <!-- Auto-adjust height button -->
                             <Button Grid.Column="2"
                                     Content="📏"
                                     ToolTip="Auto-adjust height"
@@ -558,14 +1231,13 @@
                                     Margin="2"/>
                         </Grid>
 
-                        <!-- Article WebView -->
                         <wv:WebView2 x:Name="articleWebView"
                                      Grid.Row="1"
-                                     Margin="2"/>
+                                     Margin="2"
+                                     Visibility="{Binding IsNotLoading, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     </Grid>
                 </Border>
-
-                <!-- Horizontal Splitter with size change tracking -->
+                <!-- Horizontal Splitter -->
                 <GridSplitter Grid.Row="1"
                               Height="5"
                               HorizontalAlignment="Stretch"
@@ -575,7 +1247,7 @@
                               Cursor="SizeNS"
                               DragCompleted="GridSplitter_DragCompleted"/>
 
-                <!-- Placeholder bar keeps splitter usable when browser is hidden -->
+                <!-- Placeholder bar -->
                 <Border Grid.Row="2"
                         Background="Transparent"
                         MinHeight="12">
@@ -591,7 +1263,7 @@
                     </Border.Style>
                 </Border>
 
-                <!-- : Dynamic Browser Window that extends to bottom -->
+                <!-- Browser Pane -->
                 <Border Grid.Row="2"
                         BorderBrush="{DynamicResource MaterialDesignDivider}"
                         BorderThickness="1"
@@ -605,7 +1277,6 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Browser Controls with better layout -->
                         <ToolBar Grid.Row="0"
                                  Style="{StaticResource MaterialDesignToolBar}">
                             <Button Content="⬅"
@@ -642,13 +1313,62 @@
                                        Foreground="{DynamicResource MaterialDesignBodyLight}"/>
                         </ToolBar>
 
-                        <!-- External Browser WebView - NOW DYNAMIC -->
                         <wv:WebView2 x:Name="linkWebView"
                                      Grid.Row="1"
-                                     Margin="2"/>
+                                     Margin="2"
+                                     Visibility="{Binding IsNotLoading, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     </Grid>
                 </Border>
             </Grid>
         </Grid>
+
+        <!-- Loading overlay -->
+        <Grid Grid.RowSpan="2"
+              Background="#B3000000"
+              Panel.ZIndex="999"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              IsHitTestVisible="True"
+              Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Margin="0"
+                        Orientation="Vertical">
+                <materialDesign:PackIcon Kind="Loading"
+                                         Width="48"
+                                         Height="48"
+                                         Foreground="{DynamicResource PrimaryHueMidBrush}">
+                    <materialDesign:PackIcon.RenderTransform>
+                        <RotateTransform x:Name="LoadingSpinner" Angle="0" CenterX="24" CenterY="24"/>
+                    </materialDesign:PackIcon.RenderTransform>
+                    <materialDesign:PackIcon.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever">
+                                    <DoubleAnimation Storyboard.TargetName="LoadingSpinner"
+                                                     Storyboard.TargetProperty="Angle"
+                                                     From="0" To="360" Duration="0:0:1"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </materialDesign:PackIcon.Triggers>
+                </materialDesign:PackIcon>
+                <TextBlock Text="Loading your feeds..."
+                           Foreground="White"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Center"
+                           Margin="0,12,0,0"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Refresh summary toast -->
+        <materialDesign:Snackbar x:Name="RefreshSummarySnackbar"
+                                 MessageQueue="{Binding SnackbarMessageQueue}"
+                                 Margin="12"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Bottom"
+                                 Panel.ZIndex="1200"
+                                 IsHitTestVisible="False"/>
     </Grid>
 </Window>

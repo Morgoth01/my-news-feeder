@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -17,6 +18,11 @@ namespace MyNewsFeeder.Services
         private readonly List<Regex> _blockedPatterns;
         private readonly HttpClient _httpClient;
         private bool _isInitialized = false;
+        private readonly HashSet<string> _allowedDomains = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Allow domains that are known to break when blocked.
+            "html-load.com"
+        };
 
         // Updated filter list URLs with correct endpoints
         private readonly Dictionary<string, string> _filterLists = new()
@@ -428,6 +434,12 @@ namespace MyNewsFeeder.Services
                 var host = uri.Host.ToLowerInvariant();
                 var fullUrl = url.ToLowerInvariant();
 
+                // Skip blocking if the host is explicitly allowed.
+                if (_allowedDomains.Contains(host) || _allowedDomains.Any(d => host.EndsWith("." + d)))
+                {
+                    return false;
+                }
+
                 // ENHANCED: Specific ad domain checks (including Taboola/Outbrain)
                 var specificAdDomains = new[]
                 {
@@ -545,6 +557,23 @@ namespace MyNewsFeeder.Services
             }
 
             return (_blockedDomains.Count, _blockedPatterns.Count, lastUpdate, availableLists, failedLists);
+        }
+
+        // Allowlist management (for domains that must not be blocked)
+        public void AddAllowedDomain(string domain)
+        {
+            if (!string.IsNullOrWhiteSpace(domain))
+            {
+                _allowedDomains.Add(domain.Trim().ToLowerInvariant());
+            }
+        }
+
+        public void RemoveAllowedDomain(string domain)
+        {
+            if (!string.IsNullOrWhiteSpace(domain))
+            {
+                _allowedDomains.Remove(domain.Trim().ToLowerInvariant());
+            }
         }
 
         // Domain management methods

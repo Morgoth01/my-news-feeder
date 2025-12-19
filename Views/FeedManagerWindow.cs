@@ -22,6 +22,8 @@ namespace MyNewsFeeder.Views
         private Feed _draggedFeed;
         private Point _categoryStartPoint;
         private bool _categoryIsDragging = false;
+        private Point _feedStartPoint;
+        private bool _feedIsDragging = false;
 
         public FeedManagerWindow()
         {
@@ -43,13 +45,7 @@ namespace MyNewsFeeder.Views
         {
             if (sender is Border border)
             {
-                var row = FindParent<DataGridRow>(border);
-                if (row?.DataContext is Feed feed)
-                {
-                    _draggedFeed = feed;
-                    DragDrop.DoDragDrop(border, feed, DragDropEffects.Move);
-                    _draggedFeed = null;
-                }
+                StartFeedDrag(border);
             }
         }
 
@@ -71,7 +67,7 @@ namespace MyNewsFeeder.Views
             }
 
             var draggedFeed = e.Data.GetData(typeof(Feed)) as Feed ?? _draggedFeed;
-            var targetFeed = GetFeedFromBorder(border);
+            var targetFeed = GetFeedFromElement(border);
 
             var canDrop = CanDropOnTarget(draggedFeed, targetFeed);
             e.Effects = canDrop ? DragDropEffects.Move : DragDropEffects.None;
@@ -106,7 +102,7 @@ namespace MyNewsFeeder.Views
             }
 
             var draggedFeed = e.Data.GetData(typeof(Feed)) as Feed ?? _draggedFeed;
-            var targetFeed = sender is Border dropBorder ? GetFeedFromBorder(dropBorder) : null;
+            var targetFeed = sender is DependencyObject dropElement ? GetFeedFromElement(dropElement) : null;
 
             if (draggedFeed == null || targetFeed == null)
             {
@@ -131,14 +127,19 @@ namespace MyNewsFeeder.Views
             e.Handled = true;
         }
 
-        private Feed GetFeedFromBorder(Border border)
+        private Feed GetFeedFromElement(DependencyObject element)
         {
-            if (border == null)
+            if (element == null)
             {
                 return null;
             }
 
-            return border.DataContext as Feed ?? FindParent<DataGridRow>(border)?.DataContext as Feed;
+            if (element is FrameworkElement fe && fe.DataContext is Feed feedCtx)
+            {
+                return feedCtx;
+            }
+
+            return FindParent<DataGridRow>(element)?.DataContext as Feed;
         }
 
         private bool CanDropOnTarget(Feed draggedFeed, Feed targetFeed)
@@ -212,6 +213,50 @@ namespace MyNewsFeeder.Views
                     }
                 }
             }
+        }
+
+        private void FeedDataGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _feedStartPoint = e.GetPosition(null);
+            _feedIsDragging = false;
+        }
+
+        private void FeedDataGrid_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed || _feedIsDragging)
+            {
+                return;
+            }
+
+            var mousePos = e.GetPosition(null);
+            var diff = _feedStartPoint - mousePos;
+
+            if (Math.Abs(diff.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(diff.Y) < SystemParameters.MinimumVerticalDragDistance)
+            {
+                return;
+            }
+
+            if (e.OriginalSource is DependencyObject source)
+            {
+                StartFeedDrag(source);
+            }
+        }
+
+        private void StartFeedDrag(DependencyObject source)
+        {
+            var row = FindParent<DataGridRow>(source);
+            var feed = row?.DataContext as Feed;
+            if (feed == null)
+            {
+                return;
+            }
+
+            _draggedFeed = feed;
+            _feedIsDragging = true;
+            DragDrop.DoDragDrop(row, feed, DragDropEffects.Move);
+            _draggedFeed = null;
+            _feedIsDragging = false;
         }
 
         private void CategoryListBox_DragEnter(object sender, DragEventArgs e)

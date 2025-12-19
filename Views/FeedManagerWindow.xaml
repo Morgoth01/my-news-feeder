@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:local="clr-namespace:MyNewsFeeder.Converters"
+        xmlns:viewModels="clr-namespace:MyNewsFeeder.ViewModels"
         Title="Feed Manager"
         Height="700"
         Width="1000"
@@ -17,6 +18,12 @@
 
         <Window.Resources>
                 <local:CategoryVisibilityConverter x:Key="CategoryVisibilityConverter"/>
+                <local:FeedMoveConverter x:Key="FeedMoveConverter"/>
+                <!-- Improve caret visibility in dark mode -->
+                <Style TargetType="TextBox" BasedOn="{StaticResource MaterialDesignTextBox}">
+                        <!-- Make the caret clearly visible in dark mode -->
+                        <Setter Property="CaretBrush" Value="#64B5F6"/>
+                </Style>
         </Window.Resources>
 
         <Grid Margin="20">
@@ -173,17 +180,38 @@
                                                   ItemsSource="{Binding Feeds}"
                                                   SelectedItem="{Binding SelectedFeed}"
                                                   AutoGenerateColumns="False"
-                                                  CanUserAddRows="False"
-                                                  CanUserDeleteRows="False"
-                                                  materialDesign:DataGridAssist.CellPadding="13 8 8 8"
-                                                  materialDesign:DataGridAssist.ColumnHeaderPadding="8"
-                                                  Style="{StaticResource MaterialDesignDataGrid}">
+                                    CanUserAddRows="False"
+                                    CanUserDeleteRows="False"
+                                    materialDesign:DataGridAssist.CellPadding="13 8 8 8"
+                                    materialDesign:DataGridAssist.ColumnHeaderPadding="8"
+                                    Style="{StaticResource MaterialDesignDataGrid}"
+                                    PreviewMouseLeftButtonDown="FeedDataGrid_PreviewMouseLeftButtonDown"
+                                    MouseMove="FeedDataGrid_MouseMove">
 
-                                                <DataGrid.Columns>
-                                                        <!-- Drag Handle Column -->
-                                                        <DataGridTemplateColumn Header=""
-                                                                                Width="30"
-                                                                                CanUserResize="False">
+                                        <DataGrid.RowStyle>
+                                                <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                                        <Style.Triggers>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                                <Setter Property="Background" Value="#50464646"/>
+                                                                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                                                        </Trigger>
+                                                                        <MultiTrigger>
+                                                                                <MultiTrigger.Conditions>
+                                                                                        <Condition Property="IsSelected" Value="True"/>
+                                                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                                                </MultiTrigger.Conditions>
+                                                                                <Setter Property="Background" Value="#605D5D5D"/>
+                                                                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                                                        </MultiTrigger>
+                                                                </Style.Triggers>
+                                                        </Style>
+                                                </DataGrid.RowStyle>
+
+                                        <DataGrid.Columns>
+                                                <!-- Drag Handle Column -->
+                                                <DataGridTemplateColumn Header=""
+                                                                        Width="30"
+                                                                        CanUserResize="False">
                                                                 <DataGridTemplateColumn.CellTemplate>
                                                                         <DataTemplate>
                                                                                 <Border x:Name="DragHandle"
@@ -204,9 +232,40 @@
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                         </DataGridTemplateColumn>
 
-                                                        <!-- Enabled Column -->
-                                                        <DataGridTemplateColumn Header="Enabled"
-                                                                                Width="70">
+                                                <!-- Inline move buttons -->
+                                                <DataGridTemplateColumn Header="Move"
+                                                                        Width="70"
+                                                                        CanUserResize="False">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                                <DataTemplate>
+                                                                        <StackPanel Orientation="Horizontal"
+                                                                                    HorizontalAlignment="Center"
+                                                                                    Opacity="0.8">
+                                                                                <Button Style="{StaticResource MaterialDesignIconButton}"
+                                                                                        Width="28"
+                                                                                        Height="28"
+                                                                                        ToolTip="Move up"
+                                                                                        Command="{Binding DataContext.MoveFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                        CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=DataContext, Converter={StaticResource FeedMoveConverter}, ConverterParameter=up}">
+                                                                                        <materialDesign:PackIcon Kind="ChevronUp" Width="16" Height="16"/>
+                                                                                </Button>
+                                                                                <Button Style="{StaticResource MaterialDesignIconButton}"
+                                                                                        Width="28"
+                                                                                        Height="28"
+                                                                                        Margin="6,0,0,0"
+                                                                                        ToolTip="Move down"
+                                                                                        Command="{Binding DataContext.MoveFeedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                        CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=DataContext, Converter={StaticResource FeedMoveConverter}, ConverterParameter=down}">
+                                                                                        <materialDesign:PackIcon Kind="ChevronDown" Width="16" Height="16"/>
+                                                                                </Button>
+                                                                        </StackPanel>
+                                                                </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+
+                                                <!-- Enabled Column -->
+                                                <DataGridTemplateColumn Header="Enabled"
+                                                                        Width="70">
                                                                 <DataGridTemplateColumn.CellTemplate>
                                                                         <DataTemplate>
                                                                                 <CheckBox IsChecked="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}"
@@ -247,7 +306,7 @@
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             Margin="0,20,0,0">
-                        <Button Content="Close"
+                        <Button Content="Save Feed Settings"
                                 Command="{Binding CloseCommand}"
                                 CommandParameter="{Binding RelativeSource={RelativeSource AncestorType=Window}}"
                                 Style="{StaticResource MaterialDesignRaisedButton}"

@@ -29,6 +29,7 @@ namespace MyNewsFeeder.Models
         public List<string> AdvertisementKeywords { get; set; } = new List<string>(DefaultAdvertisementKeywords);
         public bool GroupFeedsByCategory { get; set; } = false;
         public Dictionary<string, bool> TreeViewExpandedStates { get; set; } = new Dictionary<string, bool>();
+        public Dictionary<string, bool> SectionExpandedStates { get; set; } = new Dictionary<string, bool>();
         public bool IsShowContentAlwaysOn { get; set; } = false;
         public double ArticleWindowHeight { get; set; } = 350;
         public double BrowserWindowHeight { get; set; } = 350;
@@ -44,6 +45,7 @@ namespace MyNewsFeeder.Models
         public bool EnableNotifications { get; set; } = false;
         public string Language { get; set; } = "en-US";
         public int AutoRefreshIntervalMinutes { get; set; } = 10;
+        public bool UseCompactArticleCards { get; set; } = false;
 
         // New category-related properties
         public Dictionary<string, bool> CategoryExpandedStates { get; set; } = new Dictionary<string, bool>();
@@ -51,6 +53,10 @@ namespace MyNewsFeeder.Models
 
         // Persistent read-state across sessions (link-based)
         public HashSet<string> ReadArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> PinnedArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> ReadLaterArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public List<FeedItem> PinnedArticleSnapshots { get; set; } = new List<FeedItem>();
+        public List<FeedItem> ReadLaterArticleSnapshots { get; set; } = new List<FeedItem>();
 
         public static readonly int[] AvailableRefreshIntervals = { 5, 10, 15, 20, 30, 45, 60 };
 
@@ -80,6 +86,7 @@ namespace MyNewsFeeder.Models
             AdvertisementKeywords = new List<string>(DefaultAdvertisementKeywords);
             GroupFeedsByCategory = false;
             TreeViewExpandedStates = new Dictionary<string, bool>();
+            SectionExpandedStates = new Dictionary<string, bool>();
             IsShowContentAlwaysOn = false;
             ArticleWindowHeight = 350;
             BrowserWindowHeight = 350;
@@ -88,11 +95,16 @@ namespace MyNewsFeeder.Models
             ArticlePreviewHeight = 400;
             EnableNotifications = false;
             Language = "en-US";
+            UseCompactArticleCards = false;
 
             // Reset category settings
             CategoryExpandedStates = new Dictionary<string, bool>();
             Categories = new List<string> { "Default" };
             ReadArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            PinnedArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            ReadLaterArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            PinnedArticleSnapshots = new List<FeedItem>();
+            ReadLaterArticleSnapshots = new List<FeedItem>();
 
         }
 
@@ -113,6 +125,7 @@ namespace MyNewsFeeder.Models
                 AdvertisementKeywords = new List<string>(this.AdvertisementKeywords ?? new List<string>()),
                 GroupFeedsByCategory = this.GroupFeedsByCategory,
                 TreeViewExpandedStates = new Dictionary<string, bool>(this.TreeViewExpandedStates),
+                SectionExpandedStates = new Dictionary<string, bool>(this.SectionExpandedStates),
                 IsShowContentAlwaysOn = this.IsShowContentAlwaysOn,
                 ArticleWindowHeight = this.ArticleWindowHeight,
                 BrowserWindowHeight = this.BrowserWindowHeight,
@@ -128,10 +141,15 @@ namespace MyNewsFeeder.Models
                 EnableNotifications = this.EnableNotifications,
                 Language = this.Language,
                 AutoRefreshIntervalMinutes = this.AutoRefreshIntervalMinutes,
+                UseCompactArticleCards = this.UseCompactArticleCards,
                 // Clone category settings
                 CategoryExpandedStates = new Dictionary<string, bool>(this.CategoryExpandedStates),
                 Categories = new List<string>(this.Categories),
-                ReadArticleLinks = new HashSet<string>(this.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase)
+                ReadArticleLinks = new HashSet<string>(this.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase),
+                PinnedArticleLinks = new HashSet<string>(this.PinnedArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase),
+                ReadLaterArticleLinks = new HashSet<string>(this.ReadLaterArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase),
+                PinnedArticleSnapshots = new List<FeedItem>(this.PinnedArticleSnapshots ?? new List<FeedItem>()),
+                ReadLaterArticleSnapshots = new List<FeedItem>(this.ReadLaterArticleSnapshots ?? new List<FeedItem>())
             };
         }
     }

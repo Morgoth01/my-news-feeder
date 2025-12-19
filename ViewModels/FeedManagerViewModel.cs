@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Xml.Linq;
 using Microsoft.Win32;
@@ -19,15 +20,30 @@ namespace MyNewsFeeder.ViewModels
         public event PropertyChangedEventHandler PropertyChanged;
 
         private readonly SettingsService _settingsService;
+        private readonly FeedService _feedService;
         private Feed _selectedFeed;
         private Category _selectedCategory;
         private string _newCategoryName;
         private AppSettings _settings;
         private bool _groupFeedsByCategory;
+        private bool _isDirty;
+        public bool WasClosedBySave { get; private set; }
 
         public ObservableCollection<Feed> Feeds { get; set; }
         public ObservableCollection<Category> Categories { get; set; }
         public ObservableCollection<string> CategoryNames { get; set; }
+        public bool IsDirty
+        {
+            get => _isDirty;
+            private set
+            {
+                if (_isDirty != value)
+                {
+                    _isDirty = value;
+                    OnPropertyChanged(nameof(IsDirty));
+                }
+            }
+        }
 
         public Feed SelectedFeed
         {
@@ -76,9 +92,8 @@ namespace MyNewsFeeder.ViewModels
                 OnPropertyChanged(nameof(GroupFeedsByCategory));
 
                 _settings.GroupFeedsByCategory = value;
-                TrySaveSettings();
                 ApplyFeedOrdering();
-                SaveFeeds();
+                MarkDirty();
             }
         }
 
@@ -90,10 +105,12 @@ namespace MyNewsFeeder.ViewModels
         public ICommand ImportCommand { get; }
         public ICommand ExportCommand { get; }
         public ICommand CloseCommand { get; }
+        public ICommand MoveFeedCommand { get; }
 
-        public FeedManagerViewModel(SettingsService settingsService)
+        public FeedManagerViewModel(SettingsService settingsService, FeedService feedService = null)
         {
             _settingsService = settingsService;
+            _feedService = feedService ?? new FeedService();
             _settings = _settingsService.LoadSettings();
 
             // Initialize collections
@@ -127,6 +144,7 @@ namespace MyNewsFeeder.ViewModels
             ImportCommand = new RelayCommand(_ => ImportFeeds());
             ExportCommand = new RelayCommand(_ => ExportFeeds());
             CloseCommand = new RelayCommand(param => CloseWindow(param));
+            MoveFeedCommand = new RelayCommand(param => MoveFeed(param as FeedMoveRequest));
         }
 
         private void LoadCategories()
@@ -134,13 +152,49 @@ namespace MyNewsFeeder.ViewModels
             Categories.Clear();
             CategoryNames.Clear();
 
-            // Ensure Default category always exists
-            if (!_settings.Categories.Contains("Default"))
+            var originalCategories = _settings.Categories != null
+                ? new List<string>(_settings.Categories)
+                : new List<string>();
+
+            var merged = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void AddCategoryName(string name)
             {
-                _settings.Categories.Insert(0, "Default");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    return;
+                }
+                if (seen.Add(name))
+                {
+                    merged.Add(name);
+                }
             }
 
-            foreach (var categoryName in _settings.Categories)
+            // Ensure Default category always exists
+            AddCategoryName("Default");
+
+            // Existing categories from settings (preserve order)
+            foreach (var category in _settings.Categories)
+            {
+                AddCategoryName(category);
+            }
+
+            // Merge in categories found in feeds (so Feed Manager shows them after settings reset)
+            foreach (var feed in Feeds)
+            {
+                AddCategoryName(string.IsNullOrWhiteSpace(feed.Category) ? "Default" : feed.Category);
+            }
+
+            // Persist merged list back to settings
+            _settings.Categories = merged;
+            var categoriesChanged = !originalCategories.SequenceEqual(merged, StringComparer.OrdinalIgnoreCase);
+            if (categoriesChanged)
+            {
+                MarkDirty();
+            }
+
+            foreach (var categoryName in merged)
             {
                 var category = new Category
                 {
@@ -229,15 +283,19 @@ namespace MyNewsFeeder.ViewModels
 
         private void Feed_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Feed.IsEnabled) || e.PropertyName == nameof(Feed.Category))
+            if (e.PropertyName == nameof(Feed.IsEnabled) || e.PropertyName == nameof(Feed.Category) || e.PropertyName == nameof(Feed.Name) || e.PropertyName == nameof(Feed.Url))
             {
+                if (e.PropertyName == nameof(Feed.Url))
+                {
+                    _ = TryAutoFillFeedNameAsync(sender as Feed);
+                }
+
                 if (_groupFeedsByCategory && e.PropertyName == nameof(Feed.Category))
                 {
                     ApplyFeedOrdering();
                 }
 
-                // Auto-save when IsEnabled or Category changes
-                SaveFeeds();
+                MarkDirty();
             }
         }
 
@@ -277,7 +335,7 @@ namespace MyNewsFeeder.ViewModels
             }
 
             SelectedFeed = newFeed;
-            SaveFeeds();
+            MarkDirty();
         }
 
         private void RemoveFeed()
@@ -287,7 +345,7 @@ namespace MyNewsFeeder.ViewModels
             var feedToRemove = SelectedFeed;
             Feeds.Remove(feedToRemove);
             SelectedFeed = Feeds.FirstOrDefault();
-            SaveFeeds();
+            MarkDirty();
         }
 
         private void AddCategory()
@@ -306,7 +364,7 @@ namespace MyNewsFeeder.ViewModels
             CategoryNames.Add(categoryName);
 
             NewCategoryName = string.Empty;
-            SaveCategories();
+            MarkDirty();
         }
 
         private void RemoveCategory()
@@ -327,8 +385,7 @@ namespace MyNewsFeeder.ViewModels
             CategoryNames.Remove(categoryName);
 
             SelectedCategory = Categories.FirstOrDefault();
-            SaveCategories();
-            SaveFeeds();
+            MarkDirty();
 
             MessageBox.Show($"Category '{categoryName}' removed. {feedsToMove.Count} feeds moved to 'Default' category.",
                 "Category Removed", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -362,13 +419,11 @@ namespace MyNewsFeeder.ViewModels
                     SelectedCategory = draggedCategory;
 
                     // Save changes
-                    SaveCategories();
-
                     if (_groupFeedsByCategory)
                     {
                         ApplyFeedOrdering();
-                        SaveFeeds();
                     }
+                    MarkDirty();
                 }
             }
             catch (Exception)
@@ -451,7 +506,7 @@ namespace MyNewsFeeder.ViewModels
                         {
                             ApplyFeedOrdering();
                         }
-                        SaveFeeds();
+                        MarkDirty();
 
                         var message = $"Import completed!\n\nAdded: {addedCount} feeds\nSkipped duplicates: {duplicateCount} feeds";
                         MessageBox.Show(message, "Import Successful",
@@ -620,8 +675,28 @@ namespace MyNewsFeeder.ViewModels
         {
             if (parameter is Window window)
             {
-                SaveFeeds();
-                SaveCategories();
+                WasClosedBySave = true;
+
+                if (IsDirty)
+                {
+                    SaveFeeds();
+                    SaveCategories();
+                    TrySaveSettings();
+                }
+
+                try
+                {
+                    if (window.IsLoaded)
+                    {
+                        // Signal that the Save button was used (even if nothing changed) so callers can decide to reload.
+                        window.DialogResult = true;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // In case the window was not shown modally, just close without setting DialogResult.
+                }
+
                 window.Close();
             }
         }
@@ -630,6 +705,11 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
+                if (!ConfirmInsecureFeeds())
+                {
+                    return;
+                }
+
                 var normalizedFeeds = FeedService.NormalizeAndFilterFeeds(Feeds);
 
                 if (normalizedFeeds.Count != Feeds.Count)
@@ -663,6 +743,41 @@ namespace MyNewsFeeder.ViewModels
             {
                 MessageBox.Show($"Error saving feeds: {ex.Message}", "Error");
             }
+        }
+
+        private bool ConfirmInsecureFeeds()
+        {
+            var insecureFeeds = Feeds
+                .Where(f =>
+                {
+                    if (string.IsNullOrWhiteSpace(f?.Url))
+                    {
+                        return false;
+                    }
+                    if (!Uri.TryCreate(f.Url.Trim(), UriKind.Absolute, out var uri))
+                    {
+                        return false;
+                    }
+                    return string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+
+            if (!insecureFeeds.Any())
+            {
+                return true;
+            }
+
+            var feedList = string.Join("\n", insecureFeeds.Select(f => $"- {f.Name} ({f.Url})"));
+            var message = "HTTP feeds are blocked. Please use HTTPS URLs.\n\n" +
+                          $"{feedList}";
+
+            MessageBox.Show(
+                message,
+                "HTTP feeds blocked",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            return false;
         }
 
         protected void OnPropertyChanged(string propertyName)
@@ -708,12 +823,80 @@ namespace MyNewsFeeder.ViewModels
 
                     SelectedFeed = draggedFeed;
 
-                    SaveFeeds();
+                    MarkDirty();
                 }
             }
             catch (Exception)
             {
                 // Ignore reorder failures; UI remains unchanged.
+            }
+        }
+
+        public void MoveFeed(FeedMoveRequest request)
+        {
+            try
+            {
+                if (request == null || request.Feed == null || Feeds == null || Feeds.Count == 0)
+                {
+                    return;
+                }
+
+                var currentIndex = Feeds.IndexOf(request.Feed);
+                if (currentIndex < 0)
+                {
+                    return;
+                }
+
+                var targetIndex = request.Direction == FeedMoveDirection.Up
+                    ? currentIndex - 1
+                    : currentIndex + 1;
+
+                if (targetIndex < 0 || targetIndex >= Feeds.Count)
+                {
+                    return;
+                }
+
+                Feeds.Move(currentIndex, targetIndex);
+                SelectedFeed = request.Feed;
+                MarkDirty();
+            }
+            catch (Exception)
+            {
+                // Ignore move failures; keep UI stable.
+            }
+        }
+
+        private void MarkDirty()
+        {
+            IsDirty = true;
+        }
+
+        private async Task TryAutoFillFeedNameAsync(Feed feed)
+        {
+            try
+            {
+                if (feed == null)
+                {
+                    return;
+                }
+
+                var currentName = feed.Name?.Trim();
+                if (!string.IsNullOrWhiteSpace(currentName) &&
+                    !string.Equals(currentName, "New Feed", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(currentName, feed.Url, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                var detectedTitle = await _feedService.TryDetectFeedTitleAsync(feed.Url);
+                if (!string.IsNullOrWhiteSpace(detectedTitle))
+                {
+                    feed.Name = detectedTitle;
+                }
+            }
+            catch
+            {
+                // Ignore detection errors to keep UI responsive.
             }
         }
     }

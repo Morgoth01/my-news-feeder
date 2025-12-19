@@ -14,6 +14,7 @@ namespace MyNewsFeeder.ViewModels
         private string _iconKind = "FolderMultipleOutline";
         private ObservableCollection<FeedGroupViewModel> _feeds;
         private int _unreadCount;
+        private bool _hideUnreadIndicators;
         
         public string Name
         {
@@ -81,6 +82,18 @@ namespace MyNewsFeeder.ViewModels
         public int ArticleCount => Feeds?.Sum(feed => feed.Items?.Count ?? 0) ?? 0;
         public int UnreadCount => _unreadCount;
         public bool HasUnread => UnreadCount > 0;
+        public bool HideUnreadIndicators
+        {
+            get => _hideUnreadIndicators;
+            set
+            {
+                if (_hideUnreadIndicators != value)
+                {
+                    _hideUnreadIndicators = value;
+                    OnPropertyChanged(nameof(HideUnreadIndicators));
+                }
+            }
+        }
         
         public CategoryGroupViewModel()
         {

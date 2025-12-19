@@ -20,6 +20,7 @@ namespace MyNewsFeeder.ViewModels
         private int _currentPageSize = 20;
         private int _loadedItemsCount;
         private readonly LoadMoreItem _loadMoreMarker = new LoadMoreItem();
+        private bool _hideUnreadIndicators;
 
         public string Name
         {
@@ -90,6 +91,18 @@ namespace MyNewsFeeder.ViewModels
         public int UnreadCount => Items?.Count(item => !item.IsRead) ?? 0;
         public bool HasUnread => UnreadCount > 0;
         public bool HasMoreItems => Items != null && _loadedItemsCount < (Items?.Count ?? 0);
+        public bool HideUnreadIndicators
+        {
+            get => _hideUnreadIndicators;
+            set
+            {
+                if (_hideUnreadIndicators != value)
+                {
+                    _hideUnreadIndicators = value;
+                    OnPropertyChanged(nameof(HideUnreadIndicators));
+                }
+            }
+        }
 
         public ObservableCollection<object> PagedItems => _pagedItems;
 

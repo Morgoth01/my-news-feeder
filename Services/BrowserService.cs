@@ -22,7 +22,6 @@ namespace MyNewsFeeder.Services
 
         private static readonly string[] AllowedSchemes =
         {
-            Uri.UriSchemeHttp,
             Uri.UriSchemeHttps
         };
 
@@ -54,6 +53,30 @@ namespace MyNewsFeeder.Services
             return true;
         }
 
+        public bool ConfirmAndOpenExternal(string url, out bool userCancelled)
+        {
+            userCancelled = false;
+            if (!TryGetAllowedUri(url, out var uri))
+            {
+                return false;
+            }
+
+            var result = System.Windows.MessageBox.Show(
+                $"Open external link?\n\n{uri.AbsoluteUri}",
+                "Open external link",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning,
+                System.Windows.MessageBoxResult.No);
+
+            if (result != System.Windows.MessageBoxResult.Yes)
+            {
+                userCancelled = true;
+                return false;
+            }
+
+            return TryOpenExternalLink(uri.AbsoluteUri);
+        }
+
         public void SetWebView(WebView2 webView)
         {
             _linkWebView = webView;
@@ -81,6 +104,8 @@ namespace MyNewsFeeder.Services
                 // Navigation events for native dark mode only
                 _linkWebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
                 _linkWebView.CoreWebView2.DOMContentLoaded += OnDOMContentLoaded;
+
+                ApplyPreferredColorScheme();
 
                 // Enhanced security settings
                 _linkWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
@@ -372,6 +397,7 @@ namespace MyNewsFeeder.Services
         public void SetDarkMode(bool enabled)
         {
             _darkModeEnabled = enabled;
+            ApplyPreferredColorScheme();
             ApplyNativeDarkModeToWebView();
         }
 
@@ -556,6 +582,27 @@ namespace MyNewsFeeder.Services
                 {
                     // Ignore failures while applying native dark mode script.
                 }
+            }
+        }
+
+        /// <summary>
+        /// Ensure the WebView reports the correct preferred color scheme to pages.
+        /// </summary>
+        private void ApplyPreferredColorScheme()
+        {
+            try
+            {
+                var profile = _linkWebView?.CoreWebView2?.Profile;
+                if (profile != null)
+                {
+                    profile.PreferredColorScheme = _darkModeEnabled
+                        ? CoreWebView2PreferredColorScheme.Dark
+                        : CoreWebView2PreferredColorScheme.Light;
+                }
+            }
+            catch
+            {
+                // Older runtimes may not support PreferredColorScheme; ignore and continue.
             }
         }
 
