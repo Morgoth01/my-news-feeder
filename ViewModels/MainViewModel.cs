@@ -15,6 +15,7 @@ using MyNewsFeeder.Services;
 using MyNewsFeeder.Views;
 using MaterialDesignThemes.Wpf;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace MyNewsFeeder.ViewModels
 {
@@ -71,8 +72,12 @@ namespace MyNewsFeeder.ViewModels
         private string _nextAutoRefreshDisplay;
         private bool _useCompactArticleCards;
         private bool _pendingDarkMode;
+        private bool _pendingAutoUpdateCheck;
+        private bool _autoUpdatePromptedThisSession;
         private ArticleSectionViewModel _selectedSection;
         private string _treeFilterText;
+        private bool _autoUpdateEnabledCached;
+        private CoreWebView2Environment _sharedEnvironment;
         public ObservableCollection<SelectableFilterItem> FilterCategories { get; }
         public ObservableCollection<SelectableFilterItem> FilterFeeds { get; }
         private readonly List<FeedGroupViewModel> _sectionFilteredFeedsBuffer = new List<FeedGroupViewModel>();
@@ -423,6 +428,39 @@ namespace MyNewsFeeder.ViewModels
             RefreshCurrentArticleHtml();
         }
 
+        private void NavigateCurrentArticleInBrowser()
+        {
+            if (string.IsNullOrWhiteSpace(SelectedArticleLink))
+            {
+                return;
+            }
+
+            _browserService.NavigateWithClear(SelectedArticleLink);
+        }
+
+        public void SetAutoUpdatePreference(bool enabled)
+        {
+            _settings.AutoUpdateCheckEnabled = enabled;
+            _pendingAutoUpdateCheck = enabled;
+            _autoUpdateEnabledCached = enabled;
+            _settingsService.SaveSettings(_settings);
+        }
+
+        public async Task<CoreWebView2Environment> GetSharedWebViewEnvironmentAsync()
+        {
+            if (_sharedEnvironment != null) return _sharedEnvironment;
+
+            var userDataFolder = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyNewsFeeder",
+                "WebView2Cache");
+
+            System.IO.Directory.CreateDirectory(userDataFolder);
+
+            _sharedEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
+            return _sharedEnvironment;
+        }
+
         public bool AutoRefresh
         {
             get => _settings.AutoRefresh;
@@ -448,6 +486,21 @@ namespace MyNewsFeeder.ViewModels
                 {
                     _nextAutoRefreshDisplay = value;
                     OnPropertyChanged(nameof(NextAutoRefreshDisplay));
+                }
+            }
+        }
+
+        public bool AutoUpdateCheckEnabled => _settings.AutoUpdateCheckEnabled;
+
+        public bool PendingAutoUpdateCheck
+        {
+            get => _pendingAutoUpdateCheck;
+            set
+            {
+                if (_pendingAutoUpdateCheck != value)
+                {
+                    _pendingAutoUpdateCheck = value;
+                    OnPropertyChanged(nameof(PendingAutoUpdateCheck));
                 }
             }
         }
@@ -650,10 +703,12 @@ namespace MyNewsFeeder.ViewModels
                 {
                     _settings = new AppSettings();
                 }
+                _autoUpdateEnabledCached = _settings.AutoUpdateCheckEnabled;
                 _pendingDarkMode = _settings.DarkMode;
                 _pendingAutoRefresh = _settings.AutoRefresh;
                 _pendingAutoRefreshIntervalMinutes = _settings.AutoRefreshIntervalMinutes > 0 ? _settings.AutoRefreshIntervalMinutes : 10;
                 _pendingTreeWidth = _settings.TreeWidth;
+                _pendingAutoUpdateCheck = _settings.AutoUpdateCheckEnabled;
                 _readArticleLinks = new HashSet<string>(_settings.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
                 _pinnedArticleLinks = new HashSet<string>(_settings.PinnedArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
                 _readLaterArticleLinks = new HashSet<string>(_settings.ReadLaterArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
@@ -665,6 +720,8 @@ namespace MyNewsFeeder.ViewModels
                 _pendingAutoRefresh = _settings.AutoRefresh;
                 _pendingAutoRefreshIntervalMinutes = _settings.AutoRefreshIntervalMinutes > 0 ? _settings.AutoRefreshIntervalMinutes : 10;
                 _pendingTreeWidth = _settings.TreeWidth;
+                _pendingAutoUpdateCheck = _settings.AutoUpdateCheckEnabled;
+                _autoUpdateEnabledCached = _settings.AutoUpdateCheckEnabled;
             }
 
             _filterDebounceTimer.Interval = TimeSpan.FromMilliseconds(120);
@@ -772,7 +829,8 @@ namespace MyNewsFeeder.ViewModels
             AdBlockerSettingsCommand = new RelayCommand(async _ => await ShowAdBlockerSettingsAsync());
             BrowserBackCommand = new RelayCommand(_ => _browserService.GoBack());
             BrowserForwardCommand = new RelayCommand(_ => _browserService.GoForward());
-            BrowserReloadCommand = new RelayCommand(_ => _browserService.Reload());
+            BrowserReloadCommand = new RelayCommand(_ => NavigateCurrentArticleInBrowser(),
+                                                    _ => !string.IsNullOrWhiteSpace(SelectedArticleLink));
             AutoAdjustHeightCommand = new RelayCommand(async _ => await AdjustArticleHeightAsync());
             SaveSettingsCommand = new RelayCommand(_ => SaveFeedSettings());
             ResetSettingsCommand = new RelayCommand(_ => ResetFeedSettings());
@@ -818,6 +876,9 @@ namespace MyNewsFeeder.ViewModels
             }
 
             StartCacheCleanupTimer();
+
+            PromptAutoUpdateIfNeeded();
+            _ = CheckForUpdatesAsync();
 
         }
 
@@ -2672,6 +2733,7 @@ namespace MyNewsFeeder.ViewModels
                 _settings.AutoRefreshIntervalMinutes = _pendingAutoRefreshIntervalMinutes;
                 _settings.TreeWidth = _pendingTreeWidth;
                 _settings.DarkMode = _pendingDarkMode;
+                _settings.AutoUpdateCheckEnabled = _autoUpdateEnabledCached;
                 _settingsService.SaveSettings(_settings);
 
                 OnPropertyChanged(nameof(CurrentFeedSettingsDisplay));
@@ -2714,6 +2776,59 @@ namespace MyNewsFeeder.ViewModels
                     "Error",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Error);
+            }
+        }
+
+        private void PromptAutoUpdateIfNeeded()
+        {
+            if (_settings.AutoUpdatePromptShown)
+            {
+                return;
+            }
+
+            var result = System.Windows.MessageBox.Show(
+                "Enable automatic update checks?\n" +
+                "Manage automatic update checks in About → Automatic update check",
+                "Automatic Updates",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            _settings.AutoUpdateCheckEnabled = result == System.Windows.MessageBoxResult.Yes;
+            _settings.AutoUpdatePromptShown = true;
+            _pendingAutoUpdateCheck = _settings.AutoUpdateCheckEnabled;
+
+            _settingsService.SaveSettings(_settings);
+
+            OnPropertyChanged(nameof(PendingAutoUpdateCheck));
+            OnPropertyChanged(nameof(AutoUpdateCheckEnabled));
+        }
+
+        private async Task CheckForUpdatesAsync()
+        {
+            if (!_settings.AutoUpdateCheckEnabled)
+            {
+                return;
+            }
+
+            if (_autoUpdatePromptedThisSession)
+            {
+                return;
+            }
+
+            try
+            {
+                _autoUpdatePromptedThisSession = true;
+                await UpdateChecker.RunInteractiveCheckAsync(
+                    Application.Current?.MainWindow,
+                    showUpToDateMessage: false,
+                    showFailureMessage: false);
+                // sync cached value in case user changed setting via About dialog during prompt
+                _autoUpdateEnabledCached = _settings.AutoUpdateCheckEnabled;
+            }
+            catch
+            {
+                // Silently ignore update check errors to avoid bothering the user.
+                _autoUpdatePromptedThisSession = false; // allow retry on next app start
             }
         }
 

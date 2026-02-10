@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Resources;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 
@@ -19,10 +22,21 @@ namespace MyNewsFeeder.Services
         private readonly AdBlockerService _adBlocker;
         private bool _darkModeEnabled = false;
         private bool _adBlockerEnabled = true;
+        private CoreWebView2Environment _sharedEnvironment;
+        private readonly Stack<string> _backStack = new Stack<string>();
+        private readonly Stack<string> _forwardStack = new Stack<string>();
+        private bool _suppressHistoryPush;
+        private string _currentUrl;
+        private static string _logoDataUri;
+        private string _userDataFolder;
 
         private static readonly string[] AllowedSchemes =
         {
             Uri.UriSchemeHttps
+        };
+        private static readonly string[] ExternalLinkWhitelistPrefixes =
+        {
+            "https://github.com/Morgoth01/my-news-feeder"
         };
 
         public BrowserService()
@@ -61,6 +75,11 @@ namespace MyNewsFeeder.Services
                 return false;
             }
 
+            if (IsWhitelistedExternal(uri))
+            {
+                return TryOpenExternalLink(uri.AbsoluteUri);
+            }
+
             var result = System.Windows.MessageBox.Show(
                 $"Open external link?\n\n{uri.AbsoluteUri}",
                 "Open external link",
@@ -77,10 +96,79 @@ namespace MyNewsFeeder.Services
             return TryOpenExternalLink(uri.AbsoluteUri);
         }
 
+        private static bool IsWhitelistedExternal(Uri uri)
+        {
+            if (uri == null) return false;
+            var absolute = uri.AbsoluteUri;
+            return ExternalLinkWhitelistPrefixes.Any(prefix =>
+                absolute.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        }
+
         public void SetWebView(WebView2 webView)
         {
             _linkWebView = webView;
-            _ = InitializeWebViewAsync();
+            if (_linkWebView?.CoreWebView2 != null)
+            {
+                WireCoreWebView(_linkWebView.CoreWebView2);
+                _isInitialized = true;
+                _suppressHistoryPush = true;
+                _currentUrl = _linkWebView.Source?.ToString();
+            }
+            else
+            {
+                _ = InitializeWebViewAsync();
+            }
+        }
+
+        private void WireCoreWebView(CoreWebView2 core)
+        {
+            // Setup ad blocking for all requests
+            core.WebResourceRequested += OnWebResourceRequested;
+            core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+
+            // Handle new window requests to apply ad blocking
+            core.NewWindowRequested += OnNewWindowRequested;
+
+            // Navigation events for native dark mode only
+            core.NavigationCompleted += OnNavigationCompleted;
+            core.DOMContentLoaded += OnDOMContentLoaded;
+            core.NavigationStarting += OnNavigationStarting;
+
+            ApplyPreferredColorScheme();
+
+            // Enhanced security settings
+            core.Settings.AreDefaultContextMenusEnabled = false;
+            core.Settings.IsZoomControlEnabled = true;
+            core.Settings.AreBrowserAcceleratorKeysEnabled = false;
+            core.Settings.AreDevToolsEnabled = true; // needed for devtools protocol calls
+            core.Settings.IsGeneralAutofillEnabled = false;
+            core.Settings.IsPasswordAutosaveEnabled = false;
+            core.Settings.AreHostObjectsAllowed = false;
+            core.Settings.IsStatusBarEnabled = false;
+
+            // Apply JavaScript-based popup blocking in background
+            _ = Task.Run(async () => await ApplyPopupBlockingScript());
+
+            // Warm up renderer
+            if (string.IsNullOrWhiteSpace(_linkWebView.Source?.ToString()))
+            {
+                core.Navigate("about:blank");
+            }
+        }
+
+        private async Task<CoreWebView2Environment> GetSharedEnvironmentAsync()
+        {
+            if (_sharedEnvironment != null) return _sharedEnvironment;
+
+            _userDataFolder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MyNewsFeeder",
+                "WebView2Cache");
+
+            Directory.CreateDirectory(_userDataFolder);
+
+            _sharedEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: _userDataFolder);
+            return _sharedEnvironment;
         }
 
         private async Task InitializeWebViewAsync()
@@ -92,32 +180,13 @@ namespace MyNewsFeeder.Services
 
             try
             {
-                await _linkWebView.EnsureCoreWebView2Async();
-
-                // Setup ad blocking for all requests
-                _linkWebView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
-                _linkWebView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
-
-                // Handle new window requests to apply ad blocking
-                _linkWebView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
-
-                // Navigation events for native dark mode only
-                _linkWebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
-                _linkWebView.CoreWebView2.DOMContentLoaded += OnDOMContentLoaded;
-
-                ApplyPreferredColorScheme();
-
-                // Enhanced security settings
-                _linkWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-                _linkWebView.CoreWebView2.Settings.IsZoomControlEnabled = true;
-                _linkWebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = true;
-                _linkWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
-                _linkWebView.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
-                _linkWebView.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
-                _linkWebView.CoreWebView2.Settings.AreHostObjectsAllowed = false;
-
-                // Apply JavaScript-based popup blocking in background
-                _ = Task.Run(async () => await ApplyPopupBlockingScript());
+                // If already initialized elsewhere (e.g., MainWindow), skip re-init
+                if (_linkWebView.CoreWebView2 == null)
+                {
+                    var env = await GetSharedEnvironmentAsync();
+                    await _linkWebView.EnsureCoreWebView2Async(env);
+                    WireCoreWebView(_linkWebView.CoreWebView2);
+                }
 
                 _isInitialized = true;
 
@@ -214,6 +283,11 @@ namespace MyNewsFeeder.Services
             {
                 try
                 {
+                    // new article: clear history stacks
+                    _backStack.Clear();
+                    _forwardStack.Clear();
+                    _suppressHistoryPush = true;
+
                     if (forceReload)
                     {
                         // Reduced clear delay
@@ -252,6 +326,10 @@ namespace MyNewsFeeder.Services
             {
                 try
                 {
+                    _backStack.Clear();
+                    _forwardStack.Clear();
+                    _suppressHistoryPush = true; // new article load
+
                     // Step 1: Clear browser content
                     _linkWebView.CoreWebView2.Navigate("about:blank");
 
@@ -282,6 +360,10 @@ namespace MyNewsFeeder.Services
             {
                 try
                 {
+                    _backStack.Clear();
+                    _forwardStack.Clear();
+                    _suppressHistoryPush = true; // new article load
+
                     // Direct navigation without loading screen
                     _linkWebView.CoreWebView2.Navigate(url);
                 }
@@ -293,6 +375,36 @@ namespace MyNewsFeeder.Services
             else
             {
                 OpenInDefaultBrowser(url);
+            }
+        }
+
+        private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
+        {
+            try
+            {
+                var uri = e.Uri;
+                if (string.IsNullOrWhiteSpace(uri))
+                {
+                    return;
+                }
+
+                if (_suppressHistoryPush)
+                {
+                    _suppressHistoryPush = false;
+                    _currentUrl = uri;
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(_currentUrl))
+                {
+                    _backStack.Push(_currentUrl);
+                }
+                _forwardStack.Clear();
+                _currentUrl = uri;
+            }
+            catch
+            {
+                // Ignore navigation tracking errors.
             }
         }
 
@@ -353,12 +465,15 @@ namespace MyNewsFeeder.Services
         {
             try
             {
-                if (_linkWebView?.CoreWebView2 != null && _linkWebView.CoreWebView2.CanGoBack)
+                if (_backStack.Count > 0 && _linkWebView?.CoreWebView2 != null)
                 {
-                    _linkWebView.CoreWebView2.GoBack();
+                    var target = _backStack.Pop();
+                    _forwardStack.Push(_currentUrl ?? string.Empty);
+                    _suppressHistoryPush = true;
+                    _linkWebView.CoreWebView2.Navigate(target);
                 }
             }
-            catch (Exception)
+            catch
             {
                 // Ignore navigation history errors.
             }
@@ -368,9 +483,15 @@ namespace MyNewsFeeder.Services
         {
             try
             {
-                if (_linkWebView?.CoreWebView2 != null && _linkWebView.CoreWebView2.CanGoForward)
+                if (_forwardStack.Count > 0 && _linkWebView?.CoreWebView2 != null)
                 {
-                    _linkWebView.CoreWebView2.GoForward();
+                    var target = _forwardStack.Pop();
+                    if (!string.IsNullOrWhiteSpace(_currentUrl))
+                    {
+                        _backStack.Push(_currentUrl);
+                    }
+                    _suppressHistoryPush = true;
+                    _linkWebView.CoreWebView2.Navigate(target);
                 }
             }
             catch (Exception)
@@ -636,6 +757,7 @@ namespace MyNewsFeeder.Services
             try
             {
                 await ClearSelectiveCacheAsync();
+                PruneDiskCache();
             }
             catch (Exception)
             {
@@ -651,6 +773,7 @@ namespace MyNewsFeeder.Services
                 {
                     await _linkWebView.CoreWebView2.Profile.ClearBrowsingDataAsync();
                 }
+                PruneDiskCache();
             }
             catch (Exception)
             {
@@ -674,6 +797,7 @@ namespace MyNewsFeeder.Services
 
                     await _linkWebView.CoreWebView2.Profile.ClearBrowsingDataAsync(dataKinds);
                 }
+                PruneDiskCache();
             }
             catch (Exception)
             {
@@ -696,6 +820,7 @@ namespace MyNewsFeeder.Services
 
                     await _linkWebView.CoreWebView2.Profile.ClearBrowsingDataAsync(dataKinds, startTime, endTime);
                 }
+                PruneDiskCache();
             }
             catch (Exception)
             {
@@ -758,6 +883,8 @@ namespace MyNewsFeeder.Services
         {
             var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
             var textColor = _darkModeEnabled ? "#e0e0e0" : "#666";
+            var accent = _darkModeEnabled ? "#8e8cd8" : "#7b5bd6";
+            var logo = GetLogoDataUri();
 
             return $@"
 <!DOCTYPE html>
@@ -765,33 +892,142 @@ namespace MyNewsFeeder.Services
 <head>
     <meta charset='utf-8'>
     <meta name='color-scheme' content='{(_darkModeEnabled ? "dark light" : "light dark")}'>
-    <style>
-        :root {{
-            color-scheme: {(_darkModeEnabled ? "dark" : "light")};
-        }}
-        body {{
-            font-family: 'Segoe UI', sans-serif;
-            background-color: {backgroundColor};
-            color: {textColor};
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }}
-        .loading {{
-            text-align: center;
-            font-size: 14px;
-        }}
-    </style>
+        <style>
+            :root {{
+                color-scheme: {(_darkModeEnabled ? "dark" : "light")};
+            }}
+            body {{
+                font-family: 'Segoe UI', sans-serif;
+                background-color: {backgroundColor};
+                color: {textColor};
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+            }}
+            .loading {{
+                text-align: center;
+                font-size: 14px;
+            }}
+            .logo {{
+                width: 72px;
+                height: 72px;
+                margin: 0 auto 12px auto;
+                display: block;
+                animation: spin 2.4s linear infinite;
+                filter: drop-shadow(0 0 6px {accent});
+            }}
+            @keyframes spin {{
+                from {{ transform: rotate(0deg); }}
+                to   {{ transform: rotate(360deg); }}
+            }}
+        </style>
 </head>
 <body>
     <div class='loading'>
-        <p>Loading...</p>
+        {(logo != null ? $"<img class=\"logo\" src=\"{logo}\" alt=\"Loading\" />" : "")}
+        <p>Loading…</p>
     </div>
 </body>
 </html>";
         }
+
+        private string GetLogoDataUri()
+        {
+            if (_logoDataUri != null) return _logoDataUri;
+            try
+            {
+                // Try embedded resource first (pack URI)
+                var packUri = new Uri("pack://application:,,,/Resources/mynewsfeeder.ico", UriKind.Absolute);
+                var resourceStream = Application.GetResourceStream(packUri);
+                byte[] bytes = null;
+                if (resourceStream != null)
+                {
+                    using var ms = new MemoryStream();
+                    resourceStream.Stream.CopyTo(ms);
+                    bytes = ms.ToArray();
+                }
+                else
+                {
+                    // Fallback to file in output/working directory
+                    var exeDir = AppDomain.CurrentDomain.BaseDirectory ?? string.Empty;
+                    var path = Path.Combine(exeDir, "Resources", "mynewsfeeder.ico");
+                    if (!File.Exists(path))
+                    {
+                        path = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "mynewsfeeder.ico");
+                        if (!File.Exists(path))
+                        {
+                            return null;
+                        }
+                    }
+                    bytes = File.ReadAllBytes(path);
+                }
+
+                var b64 = Convert.ToBase64String(bytes);
+                _logoDataUri = $"data:image/x-icon;base64,{b64}";
+                return _logoDataUri;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void PruneDiskCache()
+        {
+            try
+            {
+                var root = _userDataFolder;
+                if (string.IsNullOrWhiteSpace(root))
+                {
+                    // Attempt to infer from shared environment if already created
+                    root = _sharedEnvironment?.UserDataFolder;
+                }
+
+                if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+                {
+                    return;
+                }
+
+                // WebView2 places caches under EBWebView/Default
+                var targets = new[]
+                {
+                    Path.Combine(root, "EBWebView", "Default", "Cache"),
+                    Path.Combine(root, "EBWebView", "Default", "Code Cache"),
+                    Path.Combine(root, "EBWebView", "Default", "GPUCache"),
+                    Path.Combine(root, "EBWebView", "Default", "Service Worker", "CacheStorage"),
+                    Path.Combine(root, "EBWebView", "Crashpad"),
+                };
+
+                foreach (var dir in targets)
+                {
+                    TryDeleteDirectory(dir);
+                }
+            }
+            catch
+            {
+                // ignore pruning failures
+            }
+        }
+
+        private void TryDeleteDirectory(string path)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        // Deprecated warm-up stub (kept to avoid re-adding usage warnings if referenced in the future)
+        private Task PreWarmAsync() => Task.CompletedTask;
 
         // Navigation completed with immediate dark mode application
         private void OnNavigationCompleted(object sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
@@ -838,5 +1074,12 @@ namespace MyNewsFeeder.Services
                 // Ignore navigation callbacks that fail during shutdown.
             }
         }
+
+        private void OnHistoryChanged(object sender, object e)
+        {
+            // No-op: history is trimmed during navigation completed to keep article history scoped.
+        }
+
+        // DevTools-based history helpers removed; custom stacks manage navigation now.
     }
 }

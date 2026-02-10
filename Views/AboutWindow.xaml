@@ -70,6 +70,11 @@
                                 Width="150"
                                 HorizontalAlignment="Left"
                                 Margin="0,0,0,8"/>
+                        <CheckBox x:Name="AutoUpdateToggle"
+                                  Content="Automatic update check"
+                                  Margin="0,0,0,8"
+                                  Checked="AutoUpdateToggle_Checked"
+                                  Unchecked="AutoUpdateToggle_Checked"/>
                         <TextBlock Text="Check for the latest version"
                                    FontSize="12"
                                    Foreground="{DynamicResource MaterialDesignBodyLight}"/>

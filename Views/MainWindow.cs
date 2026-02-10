@@ -1,10 +1,12 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Web.WebView2.Core;
 using MyNewsFeeder.Models;
 using System.Linq;
 using System.Windows.Input;
@@ -22,6 +24,7 @@ namespace MyNewsFeeder.Views
             IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
 
         private MainViewModel _viewModel;
+        private bool _warmupDone;
 
         public MainWindow()
         {
@@ -81,11 +84,49 @@ namespace MyNewsFeeder.Views
 
             // initialize webviews
             _viewModel = DataContext as MainViewModel;
-            await linkWebView.EnsureCoreWebView2Async();
-            await articleWebView.EnsureCoreWebView2Async();
+            var env = await _viewModel.GetSharedWebViewEnvironmentAsync();
+            await linkWebView.EnsureCoreWebView2Async(env);
+            await articleWebView.EnsureCoreWebView2Async(env);
             _viewModel.SetWebView(linkWebView);
             _viewModel.SetArticleWebView(articleWebView);
             _viewModel.ClearBrowserOnStartup();
+            await PreWarmBrowserWebViewAsync();
+        }
+
+        private async Task PreWarmBrowserWebViewAsync()
+        {
+            if (_warmupDone || linkWebView?.CoreWebView2 == null)
+            {
+                return;
+            }
+
+            _warmupDone = true;
+            try
+            {
+                // Hide without breaking bindings
+                linkWebView.SetCurrentValue(VisibilityProperty, Visibility.Hidden);
+
+                var tcs = new TaskCompletionSource<bool>();
+                void Handler(object s, CoreWebView2NavigationCompletedEventArgs e)
+                {
+                    linkWebView.CoreWebView2.NavigationCompleted -= Handler;
+                    tcs.TrySetResult(true);
+                }
+                linkWebView.CoreWebView2.NavigationCompleted += Handler;
+
+                linkWebView.CoreWebView2.Navigate("https://github.com/Morgoth01/my-news-feeder");
+                await Task.WhenAny(tcs.Task, Task.Delay(3000));
+                linkWebView.CoreWebView2.Navigate("about:blank");
+            }
+            catch
+            {
+                // ignore warm-up failures
+            }
+            finally
+            {
+                // Restore binding-driven visibility
+                linkWebView.ClearValue(VisibilityProperty);
+            }
         }
 
         private void AboutButton_Click(object sender, RoutedEventArgs e)

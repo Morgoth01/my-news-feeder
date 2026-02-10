@@ -46,6 +46,8 @@ namespace MyNewsFeeder.Models
         public string Language { get; set; } = "en-US";
         public int AutoRefreshIntervalMinutes { get; set; } = 10;
         public bool UseCompactArticleCards { get; set; } = false;
+        public bool AutoUpdateCheckEnabled { get; set; } = true;
+        public bool AutoUpdatePromptShown { get; set; } = false;
 
         // New category-related properties
         public Dictionary<string, bool> CategoryExpandedStates { get; set; } = new Dictionary<string, bool>();
@@ -96,6 +98,8 @@ namespace MyNewsFeeder.Models
             EnableNotifications = false;
             Language = "en-US";
             UseCompactArticleCards = false;
+            AutoUpdateCheckEnabled = true;
+            AutoUpdatePromptShown = false;
 
             // Reset category settings
             CategoryExpandedStates = new Dictionary<string, bool>();
@@ -142,6 +146,8 @@ namespace MyNewsFeeder.Models
                 Language = this.Language,
                 AutoRefreshIntervalMinutes = this.AutoRefreshIntervalMinutes,
                 UseCompactArticleCards = this.UseCompactArticleCards,
+                AutoUpdateCheckEnabled = this.AutoUpdateCheckEnabled,
+                AutoUpdatePromptShown = this.AutoUpdatePromptShown,
                 // Clone category settings
                 CategoryExpandedStates = new Dictionary<string, bool>(this.CategoryExpandedStates),
                 Categories = new List<string>(this.Categories),
