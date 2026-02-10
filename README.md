@@ -93,6 +93,12 @@ By default, the ad blocker loads these popular filter lists:
 
 You can add custom domains or hosts in adblocker_hosts.txt.
 
+### FAQ
+#### Why is the first webview2 load slower?
+The first load after starting the app is slower because WebView2 has to start its browser engine, initialize the profile and caches, and set up networking. After that, the engine stays warm and cached, so the next pages load much faster.
+
+---
+
 Enjoy streamlined, distraction-free news reading with My News Feeder!
 
 #### Dark Mode
