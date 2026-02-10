@@ -72,8 +72,9 @@ Enter a keyword and click enter or the refresh button to filter your feeds
 ## Features
 * Add and manage unlimited RSS/Atom feeds
 * Import/Export feeds
+* Context menu on articles: pin, read later, mark unread, copy link.
 * Built-in ad blocker with filter lists
-* Filter feeds by keyword
+* Filter feeds
 * User-configurable auto-refresh interval
 * Native dark mode support per site (if available)
 * "Always-On" browser integration for seamless reading
@@ -94,26 +95,29 @@ You can add custom domains or hosts in adblocker_hosts.txt.
 
 Enjoy streamlined, distraction-free news reading with My News Feeder!
 
-Dark Mode
-<img width="2879" height="1823" alt="image" src="https://github.com/user-attachments/assets/2ff41c44-002f-43fa-bc2f-99656576a813" />
+#### Dark Mode
+<img width="3840" height="2076" alt="image" src="https://github.com/user-attachments/assets/1ceb26e0-a529-4094-a429-b79db342b191" />
 
-Light Mode
-<img width="2879" height="1823" alt="image" src="https://github.com/user-attachments/assets/a5c16255-4b5b-4d3a-8975-f2296f76b88a" />
+#### Light Mode
+<img width="3840" height="2076" alt="image" src="https://github.com/user-attachments/assets/cbccfe38-d51a-4880-81db-948af19dcc07" />
 
-Integrated Browser
-<img width="2879" height="1823" alt="image" src="https://github.com/user-attachments/assets/978bad70-f842-4be9-a96d-4afb2ba98b11" />
+#### Toggle for compact cards
+<img width="3840" height="2076" alt="image" src="https://github.com/user-attachments/assets/2e52d768-eb22-4821-8360-e6050e10b1ff" />
 
-Settings
+#### Settings
+<img width="671" height="1121" alt="image" src="https://github.com/user-attachments/assets/ea1f01b6-8cfe-40af-8dde-9590db7c4af7" />
 
-<img width="313" alt="gHaJbnFoD8" src="https://github.com/user-attachments/assets/b0b71196-ed36-4f5e-a0e8-2ade945a2d93" />
+#### Filter feeds
+<img width="1723" height="1223" alt="image" src="https://github.com/user-attachments/assets/d2f00688-a9af-4b5e-8f78-9b4be48e607e" />
 
-Filter feeds by Keyword
-<img width="1376" alt="RIwECWTp5l" src="https://github.com/user-attachments/assets/ee2733c8-4109-40f0-801a-d9bf76be3c02" />
+#### Filter feeds by keyword
+<img width="1609" height="1417" alt="image" src="https://github.com/user-attachments/assets/49899e2d-1ba3-488c-9c9d-e9bf2c81b14d" />
 
-Feed Manager
+#### Article context menu
+<img width="1635" height="1572" alt="image" src="https://github.com/user-attachments/assets/81e8a19c-217f-4614-9c1a-08dd1cc493eb" />
 
-<img width="2507" height="1388" alt="image" src="https://github.com/user-attachments/assets/7a3a13c6-a7b9-45f0-a7e3-a30d156867c0" />
-
+#### Feed Manager
+<img width="2510" height="1549" alt="image" src="https://github.com/user-attachments/assets/a1877609-e9bf-4dd6-8133-b3710df45193" />
 
 ## Application Libraries
 
