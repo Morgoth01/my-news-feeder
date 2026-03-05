@@ -16,10 +16,12 @@ For the complete User Guide and detailed feature documentation, see the Wiki: [h
 
 ## App Screenshots
 ### Light-Mode
-<img width="2543" height="1763" alt="gfcGWf3DgA" src="https://github.com/user-attachments/assets/11798957-35dd-4b7e-9542-ae8806c78fed" />
+<img width="1453" height="1007" alt="meeI4Ewpzq" src="https://github.com/user-attachments/assets/9ecb474a-0202-46f2-a69e-f13e7ca9b14d" />
+
 
 ### Dark-Mode
-<img width="2543" height="1763" alt="I5AAPfDJU0" src="https://github.com/user-attachments/assets/0b2fddb7-b085-4dc0-8c80-52e07f070af7" />
+<img width="1453" height="1007" alt="XayiYDAoNf" src="https://github.com/user-attachments/assets/0752c27e-4289-45f7-ac05-f1ad75a7d099" />
+
 
 ## Application Libraries
 
