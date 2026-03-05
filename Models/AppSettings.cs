@@ -18,6 +18,7 @@ namespace MyNewsFeeder.Models
         };
         public bool DarkMode { get; set; } = false;
         public bool AutoRefresh { get; set; } = false;
+        public bool LiveRefresh { get; set; } = false;
         public int MaxItems { get; set; } = 10;
         public int MaxFeeds { get; set; } = 10;
         public string KeywordFilter { get; set; } = string.Empty;
@@ -43,8 +44,12 @@ namespace MyNewsFeeder.Models
         public bool ShowThumbnails { get; set; } = false;
         public int ArticlePreviewHeight { get; set; } = 400;
         public bool EnableNotifications { get; set; } = false;
+        public List<string> ImportantKeywords { get; set; } = new List<string>();
+        public List<ImportantNotificationItem> RecentImportantNotifications { get; set; } = new List<ImportantNotificationItem>();
+        public int ImportantNotificationsRetentionHours { get; set; } = 24;
         public string Language { get; set; } = "en-US";
         public int AutoRefreshIntervalMinutes { get; set; } = 10;
+        public int LiveRefreshIntervalSeconds { get; set; } = 60;
         public bool UseCompactArticleCards { get; set; } = false;
         public bool AutoUpdateCheckEnabled { get; set; } = true;
         public bool AutoUpdatePromptShown { get; set; } = false;
@@ -61,6 +66,7 @@ namespace MyNewsFeeder.Models
         public List<FeedItem> ReadLaterArticleSnapshots { get; set; } = new List<FeedItem>();
 
         public static readonly int[] AvailableRefreshIntervals = { 5, 10, 15, 20, 30, 45, 60 };
+        public static readonly int[] AvailableLiveRefreshIntervals = { 60, 30, 10 };
 
         public bool IsValid()
         {
@@ -69,6 +75,8 @@ namespace MyNewsFeeder.Models
                    FontSize >= 8 && FontSize <= 24 &&
                    TreeWidth >= 100 && TreeWidth <= 500 &&
                    ConnectionTimeout > 0 && ConnectionTimeout <= 300 &&
+                   ImportantNotificationsRetentionHours >= 0 && ImportantNotificationsRetentionHours <= 24 * 30 &&
+                   AvailableLiveRefreshIntervals.Contains(LiveRefreshIntervalSeconds) &&
                    ArticleWindowHeight >= 200 && ArticleWindowHeight <= 2000 &&
                    BrowserWindowHeight >= 200 && BrowserWindowHeight <= 2000;
         }
@@ -77,6 +85,7 @@ namespace MyNewsFeeder.Models
         {
             DarkMode = false;
             AutoRefresh = false;
+            LiveRefresh = false;
             MaxItems = 10;
             MaxFeeds = 10;
             KeywordFilter = string.Empty;
@@ -96,7 +105,11 @@ namespace MyNewsFeeder.Models
             ShowThumbnails = false;
             ArticlePreviewHeight = 400;
             EnableNotifications = false;
+            ImportantKeywords = new List<string>();
+            RecentImportantNotifications = new List<ImportantNotificationItem>();
+            ImportantNotificationsRetentionHours = 24;
             Language = "en-US";
+            LiveRefreshIntervalSeconds = 60;
             UseCompactArticleCards = false;
             AutoUpdateCheckEnabled = true;
             AutoUpdatePromptShown = false;
@@ -118,6 +131,7 @@ namespace MyNewsFeeder.Models
             {
                 DarkMode = this.DarkMode,
                 AutoRefresh = this.AutoRefresh,
+                LiveRefresh = this.LiveRefresh,
                 MaxItems = this.MaxItems,
                 MaxFeeds = this.MaxFeeds,
                 KeywordFilter = this.KeywordFilter,
@@ -143,8 +157,12 @@ namespace MyNewsFeeder.Models
                 ShowThumbnails = this.ShowThumbnails,
                 ArticlePreviewHeight = this.ArticlePreviewHeight,
                 EnableNotifications = this.EnableNotifications,
+                ImportantKeywords = new List<string>(this.ImportantKeywords ?? new List<string>()),
+                RecentImportantNotifications = new List<ImportantNotificationItem>(this.RecentImportantNotifications ?? new List<ImportantNotificationItem>()),
+                ImportantNotificationsRetentionHours = this.ImportantNotificationsRetentionHours,
                 Language = this.Language,
                 AutoRefreshIntervalMinutes = this.AutoRefreshIntervalMinutes,
+                LiveRefreshIntervalSeconds = this.LiveRefreshIntervalSeconds,
                 UseCompactArticleCards = this.UseCompactArticleCards,
                 AutoUpdateCheckEnabled = this.AutoUpdateCheckEnabled,
                 AutoUpdatePromptShown = this.AutoUpdatePromptShown,

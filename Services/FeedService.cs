@@ -8,6 +8,7 @@ using MyNewsFeeder.Models;
 using System.Net.Sockets;
 using System.Collections.Generic;
 using System;
+using System.Threading;
 
 namespace MyNewsFeeder.Services
 {
@@ -19,6 +20,14 @@ namespace MyNewsFeeder.Services
         {
             Uri.UriSchemeHttps
         };
+        private const int MaxConcurrentFeedRequests = 12;
+
+        private sealed class FeedFetchResult
+        {
+            public int Index { get; init; }
+            public List<FeedItem> Items { get; init; } = new List<FeedItem>();
+            public string BlockedFeedName { get; init; }
+        }
 
         public IReadOnlyList<string> LastBlockedFeeds => _lastBlockedFeeds.AsReadOnly();
 
@@ -32,7 +41,7 @@ namespace MyNewsFeeder.Services
             };
 
             _httpClient = new HttpClient(handler, disposeHandler: true);
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
+            _httpClient.Timeout = TimeSpan.FromSeconds(12);
             var version = System.Reflection.Assembly
             .GetEntryAssembly()?
             .GetName()?
@@ -72,89 +81,177 @@ namespace MyNewsFeeder.Services
             _lastBlockedFeeds.Clear();
             var normalizedAdvertisementKeywords = NormalizeAdvertisementKeywords(advertisementKeywords);
             var hasAdvertisementKeywords = normalizedAdvertisementKeywords.Count > 0;
+            var enabledFeeds = (feeds ?? new List<Feed>())
+                .Where(f => f?.IsEnabled == true)
+                .ToList();
 
-            foreach (var feed in feeds.Where(f => f.IsEnabled))
+            if (enabledFeeds.Count == 0)
             {
-                if (!TryNormalizeFeedUrl(feed.Url, out var normalizedUrl))
+                return articles;
+            }
+
+            var concurrency = Math.Min(MaxConcurrentFeedRequests, enabledFeeds.Count);
+            using var semaphore = new SemaphoreSlim(Math.Max(1, concurrency));
+            var tasks = enabledFeeds
+                .Select((feed, index) => FetchFeedWithConcurrencyAsync(
+                    index,
+                    feed,
+                    keywordFilter,
+                    maxItems,
+                    hasAdvertisementKeywords,
+                    normalizedAdvertisementKeywords,
+                    semaphore))
+                .ToList();
+
+            var results = await Task.WhenAll(tasks);
+
+            foreach (var result in results.OrderBy(r => r.Index))
+            {
+                if (!string.IsNullOrWhiteSpace(result.BlockedFeedName))
                 {
-                    _lastBlockedFeeds.Add(feed.Name);
-                    articles.Add(new FeedItem
-                    {
-                        FeedName = feed.Name,
-                        Title = "[BLOCKED] Feed URL rejected by security policy",
-                        Description = string.Empty,
-                        Link = string.Empty,
-                        PublicationDate = DateTime.MinValue
-                    });
-                    continue;
+                    _lastBlockedFeeds.Add(result.BlockedFeedName);
                 }
 
-                try
-                {
-                    using var response = await _httpClient.GetAsync(normalizedUrl);
-                    response.EnsureSuccessStatusCode();
-
-                    using var stream = await response.Content.ReadAsStreamAsync();
-                    using var xmlReader = XmlReader.Create(stream);
-                    var syndicationFeed = SyndicationFeed.Load(xmlReader);
-
-                    // Pull extra items when ad filtering is enabled to still fill the requested count.
-                    var maxFetch = hasAdvertisementKeywords ? maxItems * 4 : maxItems;
-                    var candidates = syndicationFeed.Items
-                        .Where(item =>
-                            string.IsNullOrEmpty(keywordFilter) ||
-                            item.Title.Text.Contains(keywordFilter, StringComparison.OrdinalIgnoreCase) ||
-                            (item.Summary?.Text?.Contains(keywordFilter, StringComparison.OrdinalIgnoreCase) ?? false))
-                        .Take(maxFetch);
-
-                    int addedNonAds = 0;
-
-                    foreach (var item in candidates)
-                    {
-                        var feedItem = new FeedItem
-                        {
-                            FeedName = feed.Name,
-                            Title = item.Title.Text,
-                            Description = item.Summary?.Text ?? string.Empty,
-                            Link = item.Links.FirstOrDefault()?.Uri.ToString() ?? string.Empty,
-                            PublicationDate = item.PublishDate.DateTime
-                        };
-
-                        if (hasAdvertisementKeywords)
-                        {
-                            feedItem.IsAdvertisement = IsAdvertisement(feedItem, item, normalizedAdvertisementKeywords);
-                            if (feedItem.IsAdvertisement)
-                            {
-                                continue; // skip ads when filtering
-                            }
-                        }
-
-                        articles.Add(feedItem);
-                        if (hasAdvertisementKeywords)
-                        {
-                            addedNonAds++;
-                            if (addedNonAds >= maxItems)
-                            {
-                                break;
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Add error entry to articles list
-                    articles.Add(new FeedItem
-                    {
-                        FeedName = feed.Name,
-                        Title = $"[ERROR] {ex.Message}",
-                        Description = string.Empty,
-                        Link = string.Empty,
-                        PublicationDate = DateTime.MinValue
-                    });
-                }
+                articles.AddRange(result.Items);
             }
 
             return articles;
+        }
+
+        private async Task<FeedFetchResult> FetchFeedWithConcurrencyAsync(
+            int index,
+            Feed feed,
+            string keywordFilter,
+            int maxItems,
+            bool hasAdvertisementKeywords,
+            IReadOnlyList<string> normalizedAdvertisementKeywords,
+            SemaphoreSlim semaphore)
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                return await FetchSingleFeedAsync(
+                    index,
+                    feed,
+                    keywordFilter,
+                    maxItems,
+                    hasAdvertisementKeywords,
+                    normalizedAdvertisementKeywords);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
+
+        private async Task<FeedFetchResult> FetchSingleFeedAsync(
+            int index,
+            Feed feed,
+            string keywordFilter,
+            int maxItems,
+            bool hasAdvertisementKeywords,
+            IReadOnlyList<string> normalizedAdvertisementKeywords)
+        {
+            if (!TryNormalizeFeedUrl(feed.Url, out var normalizedUrl))
+            {
+                return new FeedFetchResult
+                {
+                    Index = index,
+                    BlockedFeedName = feed.Name,
+                    Items = new List<FeedItem>
+                    {
+                        new FeedItem
+                        {
+                            FeedName = feed.Name,
+                            FeedUrl = feed.Url,
+                            Title = "[BLOCKED] Feed URL rejected by security policy",
+                            Description = string.Empty,
+                            Link = string.Empty,
+                            PublicationDate = DateTime.MinValue
+                        }
+                    }
+                };
+            }
+
+            try
+            {
+                using var response = await _httpClient.GetAsync(normalizedUrl, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+
+                using var stream = await response.Content.ReadAsStreamAsync();
+                using var xmlReader = XmlReader.Create(stream);
+                var syndicationFeed = SyndicationFeed.Load(xmlReader);
+
+                var feedItems = new List<FeedItem>();
+
+                // Pull extra items when ad filtering is enabled to still fill the requested count.
+                var maxFetch = hasAdvertisementKeywords ? maxItems * 4 : maxItems;
+                var candidates = syndicationFeed.Items
+                    .Where(item =>
+                        string.IsNullOrEmpty(keywordFilter) ||
+                        item.Title.Text.Contains(keywordFilter, StringComparison.OrdinalIgnoreCase) ||
+                        (item.Summary?.Text?.Contains(keywordFilter, StringComparison.OrdinalIgnoreCase) ?? false))
+                    .Take(maxFetch);
+
+                int addedNonAds = 0;
+
+                foreach (var item in candidates)
+                {
+                    var feedItem = new FeedItem
+                    {
+                        FeedName = feed.Name,
+                        FeedUrl = feed.Url,
+                        Title = item.Title.Text,
+                        Description = item.Summary?.Text ?? string.Empty,
+                        Link = item.Links.FirstOrDefault()?.Uri.ToString() ?? string.Empty,
+                        PublicationDate = item.PublishDate.DateTime
+                    };
+
+                    if (hasAdvertisementKeywords)
+                    {
+                        feedItem.IsAdvertisement = IsAdvertisement(feedItem, item, normalizedAdvertisementKeywords);
+                        if (feedItem.IsAdvertisement)
+                        {
+                            continue; // skip ads when filtering
+                        }
+                    }
+
+                    feedItems.Add(feedItem);
+                    if (hasAdvertisementKeywords)
+                    {
+                        addedNonAds++;
+                        if (addedNonAds >= maxItems)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                return new FeedFetchResult
+                {
+                    Index = index,
+                    Items = feedItems
+                };
+            }
+            catch (Exception ex)
+            {
+                return new FeedFetchResult
+                {
+                    Index = index,
+                    Items = new List<FeedItem>
+                    {
+                        new FeedItem
+                        {
+                            FeedName = feed.Name,
+                            FeedUrl = feed.Url,
+                            Title = $"[ERROR] {ex.Message}",
+                            Description = string.Empty,
+                            Link = string.Empty,
+                            PublicationDate = DateTime.MinValue
+                        }
+                    }
+                };
+            }
         }
         private static IReadOnlyList<string> NormalizeAdvertisementKeywords(IReadOnlyCollection<string> keywords)
         {

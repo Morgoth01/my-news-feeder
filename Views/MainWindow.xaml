@@ -120,6 +120,93 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="HelpContextMenuStyle" TargetType="ContextMenu">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="MinWidth" Value="280"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{DynamicResource MaterialDesignPaper}"
+                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="6"
+                                SnapsToDevicePixels="True">
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HelpMenuItemStyle" TargetType="MenuItem">
+            <Style.Resources>
+                <Style TargetType="materialDesign:PackIcon">
+                    <Setter Property="Foreground"
+                            Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}"/>
+                </Style>
+            </Style.Resources>
+            <Setter Property="Padding" Value="18,12"/>
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Outer"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                BorderThickness="0"
+                                SnapsToDevicePixels="True">
+                            <Grid Margin="8,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0"
+                                                  ContentSource="Icon"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,12,0"/>
+                                <ContentPresenter Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  VerticalAlignment="Center"/>
+                                <ContentPresenter Grid.Column="2"
+                                                  ContentSource="InputGestureText"
+                                                  VerticalAlignment="Center"
+                                                  Margin="16,0,0,0"
+                                                  Opacity="0.9"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HelpMenuSeparatorStyle" TargetType="Separator">
+            <Setter Property="Margin" Value="10,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1"
+                                Background="{DynamicResource MaterialDesignDivider}"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Window.InputBindings>
@@ -129,6 +216,47 @@
         <KeyBinding Key="Down"
                     Command="{Binding NavigateSelectionCommand}"
                     CommandParameter="1"/>
+        <KeyBinding Key="PageUp"
+                    Command="{Binding NavigateFeedCommand}"
+                    CommandParameter="-1"/>
+        <KeyBinding Key="PageDown"
+                    Command="{Binding NavigateFeedCommand}"
+                    CommandParameter="1"/>
+        <KeyBinding Key="R"
+                    Modifiers="Control"
+                    Command="{Binding RefreshCommand}"/>
+        <KeyBinding Key="F5"
+                    Command="{Binding RefreshCommand}"/>
+        <KeyBinding Key="M"
+                    Modifiers="Control"
+                    Command="{Binding ManageFeedsCommand}"/>
+        <KeyBinding Key="D"
+                    Modifiers="Control"
+                    Command="{Binding ToggleDarkModeCommand}"/>
+        <KeyBinding Key="L"
+                    Modifiers="Control"
+                    Command="{Binding ShowContentCommand}"/>
+        <KeyBinding Key="R"
+                    Modifiers="Control+Shift"
+                    Command="{Binding ToggleReaderModeCommand}"/>
+        <KeyBinding Key="P"
+                    Modifiers="Control+Shift"
+                    Command="{Binding PinSelectedArticleCommand}"/>
+        <KeyBinding Key="L"
+                    Modifiers="Control+Shift"
+                    Command="{Binding ReadLaterSelectedArticleCommand}"/>
+        <KeyBinding Key="U"
+                    Modifiers="Control+Shift"
+                    Command="{Binding MarkSelectedArticleUnreadCommand}"/>
+        <KeyBinding Key="C"
+                    Modifiers="Control+Shift"
+                    Command="{Binding CopyLinkCommand}"/>
+        <KeyBinding Key="O"
+                    Modifiers="Control"
+                    Command="{Binding OpenSelectedArticleInWindowCommand}"/>
+        <KeyBinding Key="I"
+                    Modifiers="Control"
+                    Command="{Binding ShowImportantNotificationsCommand}"/>
     </Window.InputBindings>
 
     <Grid>
@@ -152,9 +280,59 @@
                             Command="{Binding ManageFeedsCommand}"
                             Style="{StaticResource MaterialDesignRaisedButton}"/>
                     <Separator/>
-                    <Button Content="About"
-                            ToolTip="About MyNewsFeeder"
-                            Click="AboutButton_Click"
+                    <Button x:Name="HelpMenuButton"
+                            Content="Help"
+                            ToolTip="Help actions"
+                            Click="HelpMenuButton_Click"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Foreground="{DynamicResource MaterialDesignBody}"
+                            Margin="5">
+                        <Button.ContextMenu>
+                            <ContextMenu Style="{StaticResource HelpContextMenuStyle}">
+                                <MenuItem Header="Content (Help)"
+                                          Click="HelpMenuContent_Click"
+                                          Style="{StaticResource HelpMenuItemStyle}">
+                                    <MenuItem.Icon>
+                                        <materialDesign:PackIcon Kind="BookOpenPageVariant"
+                                         Width="18"
+                                         Height="18"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Keyboard shortcuts"
+                                          Click="HelpMenuShortcuts_Click"
+                                          Style="{StaticResource HelpMenuItemStyle}">
+                                    <MenuItem.Icon>
+                                        <materialDesign:PackIcon Kind="KeyboardOutline"
+                                                                 Width="18"
+                                                                 Height="18"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator Style="{StaticResource HelpMenuSeparatorStyle}"/>
+                                <MenuItem Header="Check for updates"
+                                          Click="HelpMenuCheckUpdates_Click"
+                                          Style="{StaticResource HelpMenuItemStyle}">
+                                    <MenuItem.Icon>
+                                        <materialDesign:PackIcon Kind="CloudDownloadOutline"
+                                                                 Width="18"
+                                                                 Height="18"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator Style="{StaticResource HelpMenuSeparatorStyle}"/>
+                                <MenuItem Header="About"
+                                          Click="HelpMenuAbout_Click"
+                                          Style="{StaticResource HelpMenuItemStyle}">
+                                    <MenuItem.Icon>
+                                        <materialDesign:PackIcon Kind="InformationOutline"
+                                                                 Width="18"
+                                                                 Height="18"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                    <Button Content="Settings"
+                            ToolTip="Application settings"
+                            Click="SettingsButton_Click"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Foreground="{DynamicResource MaterialDesignBody}"
                             Margin="5"/>
@@ -163,7 +341,8 @@
                     <TextBlock Text="Keyword:"
                                VerticalAlignment="Center"
                                Margin="5,0"/>
-                    <TextBox Width="150"
+                    <TextBox x:Name="KeywordTextBox"
+                             Width="150"
                              Text="{Binding Keyword, UpdateSourceTrigger=PropertyChanged}"
                              Margin="5,0">
                         <TextBox.InputBindings>
@@ -173,196 +352,27 @@
                     <Button Content="Refresh"
                             Command="{Binding RefreshCommand}"
                             Style="{StaticResource MaterialDesignRaisedButton}"/>
-                    <Separator/>
-                    <materialDesign:PopupBox x:Name="SettingsPopupBox"
-                                             StaysOpen="True">
-                        <StackPanel Background="{DynamicResource MaterialDesignPaper}"
-                                    Margin="8"
-                                    MinWidth="250">
-                            <TextBlock Text="Settings"
-                                       FontWeight="Bold"
-                                       FontSize="14"
-                                       Margin="4,4,4,8"
-                                       Foreground="{DynamicResource MaterialDesignBody}"/>
-
-                            <!-- Existing Settings -->
-                            <CheckBox Content="Dark Mode"
-                                      IsChecked="{Binding PendingDarkMode}"
-                                      Foreground="{DynamicResource MaterialDesignBody}"
-                                      Margin="4"/>
-                            <CheckBox Content="Auto Refresh"
-                                      IsChecked="{Binding PendingAutoRefresh}"
-                                      Foreground="{DynamicResource MaterialDesignBody}"
-                                      Margin="4"/>
-                            <TextBlock Text="{Binding NextAutoRefreshDisplay}"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                       FontSize="10"
-                                       Margin="24,0,4,4"
-                                       Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <StackPanel Orientation="Horizontal"
-                                        Margin="4,0,4,4"
-                                        Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock Text="Interval:"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource MaterialDesignBody}"
-                                           Margin="20,0,8,0"/>
-                                <ComboBox Width="120"
-                                          ItemsSource="{Binding AvailableRefreshIntervals}"
-                                          SelectedItem="{Binding PendingAutoRefreshIntervalMinutes}"
-                                          Style="{StaticResource MaterialDesignComboBox}"
-                                          ToolTip="Select auto-refresh interval">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock>
-                                                <TextBlock.Text>
-                                                    <MultiBinding StringFormat="{}{0} min">
-                                                        <Binding/>
-                                                    </MultiBinding>
-                                                </TextBlock.Text>
-                                            </TextBlock>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </StackPanel>
-                            <TextBlock Text="{Binding AutoRefreshIntervalDisplay}"
-                                       FontSize="10"
-                                       Margin="24,0,4,4"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                       Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <CheckBox Content="Enable AdBlocker"
-                                      IsChecked="{Binding AdBlockerEnabled}"
-                                      Foreground="{DynamicResource MaterialDesignBody}"
-                                      Margin="4"/>
-                            <CheckBox Content="Hide advertisement articles"
-                                      IsChecked="{Binding AdvertisementFilterEnabled}"
-                                      Foreground="{DynamicResource MaterialDesignBody}"
-                                      Margin="4"
-                                      ToolTip="Filter feed items that look like ads based on configurable keywords."/>
-                            <TextBlock Text="Filter keywords (one per line)"
-                                       Margin="24,0,4,2"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                       Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                       FontSize="10"/>
-                            <TextBox Text="{Binding AdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
-                                     AcceptsReturn="True"
-                                     Height="96"
-                                     Margin="24,0,4,4"
-                                     VerticalScrollBarVisibility="Auto"
-                                     Foreground="{DynamicResource MaterialDesignBody}"
-                                     Background="{DynamicResource MaterialDesignPaper}"
-                                     Style="{StaticResource MaterialDesignTextBox}"
-                                     Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                     TextWrapping="Wrap"/>
-
-                            <!-- Always-On Content -->
-                            <CheckBox Content="Show Content Always-On"
-                                      IsChecked="{Binding IsShowContentAlwaysOn}"
-                                      ToolTip="Keep browser window open and auto-load articles when switching"
-                                      Foreground="{DynamicResource MaterialDesignBody}"
-                                      Margin="4"/>
-
-                            <Separator Margin="4"/>
-
-                            <!-- Feed Count Settings -->
-                            <TextBlock Text="Feed Settings"
-                                       FontWeight="Bold"
-                                       FontSize="12"
-                                       Margin="4,8,4,4"
-                                       Foreground="{DynamicResource MaterialDesignBody}"/>
-
-                            <StackPanel Orientation="Horizontal"
-                                        Margin="4">
-                                <TextBlock Text="Max Articles per Feed:"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource MaterialDesignBody}"
-                                           Margin="0,0,8,0"/>
-                                <TextBox Width="60"
-                                         Text="{Binding MaxFeeds, UpdateSourceTrigger=PropertyChanged}"
-                                         VerticalAlignment="Center"
-                                         Style="{StaticResource MaterialDesignTextBox}"
-                                         ToolTip="Number of articles to load per feed (1-50)"/>
-                                <TextBlock Text="(1-50)"
-                                           VerticalAlignment="Center"
-                                           Margin="5,0,0,0"
-                                           FontSize="10"
-                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
-                            </StackPanel>
-
-                            <!-- Cache Management-->
-                            <TextBlock Text="Cache Management"
-                                       FontWeight="Bold"
-                                       FontSize="12"
-                                       Margin="4,8,4,4"
-                                       Foreground="{DynamicResource MaterialDesignBody}"/>
-
-                            <Button Content="Clear Browser Cache"
-                                    Command="{Binding ClearCacheCommand}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                                    Foreground="{DynamicResource MaterialDesignBody}"
-                                    Margin="4"
-                                    ToolTip="Clear cached images, files and browsing data to free up space"/>
-
-                            <TextBlock Text="Automatically clears old cache every 2 hours"
-                                       FontSize="10"
-                                       Margin="4,0,4,4"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                       TextWrapping="Wrap"/>
-
-                            <!-- Display current settings -->
-                            <TextBlock Text="{Binding CurrentFeedSettingsDisplay}"
-                                       FontSize="10"
-                                       Margin="4,0,4,4"
-                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                       TextWrapping="Wrap"/>
-
-                            <Separator Margin="4"/>
-
-                            <!-- Existing AdBlocker Settings -->
-                            <Button Content="AdBlocker Settings"
-                                    Command="{Binding AdBlockerSettingsCommand}"
-                                    Style="{StaticResource MaterialDesignFlatButton}"
-                                    Foreground="{DynamicResource MaterialDesignBody}"
-                                    Margin="4"/>
-
-                            <Separator Margin="4"/>
-
-                            <!-- : Action buttons with proper closing -->
-                            <StackPanel Orientation="Horizontal"
-                                        HorizontalAlignment="Right"
-                                        Margin="4">
-
-                                <!-- Save button with adaptive styling -->
-                                <Button Content="Save Settings"
-                                        Command="{Binding SaveSettingsCommand}"
-                                        Margin="0,0,8,0"
-                                        ToolTip="Save feed count settings and refresh feeds">
-                                    <Button.Style>
-                                        <Style TargetType="Button"
-                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
-                                            <Setter Property="Background"
-                                                    Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                            <Setter Property="Foreground"
-                                                    Value="White"/>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-
-                                <!-- Reset button with adaptive styling -->
-                                <Button Content="Reset to Default"
-                                        Command="{Binding ResetSettingsCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                                        Foreground="{DynamicResource MaterialDesignBody}"
-                                        Margin="0,0,8,0"
-                                        ToolTip="Reset feed settings to default values"/>
-
-                                <!-- Close button -->
-                                <Button Content="Close"
-                                        Click="CloseSettingsPopup_Click"
-                                        Style="{StaticResource MaterialDesignFlatButton}"
-                                        Foreground="{DynamicResource MaterialDesignBody}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </materialDesign:PopupBox>
+                    <Button Command="{Binding ShowImportantNotificationsCommand}"
+                            Style="{StaticResource MaterialDesignFlatButton}"
+                            Margin="4,0,0,0"
+                            Padding="8,0"
+                            ToolTip="Latest important feeds">
+                        <materialDesign:PackIcon Width="22"
+                                                 Height="22">
+                            <materialDesign:PackIcon.Style>
+                                <Style TargetType="materialDesign:PackIcon">
+                                    <Setter Property="Kind" Value="BellOutline"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasImportantNotifications}" Value="True">
+                                            <Setter Property="Kind" Value="Bell"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </materialDesign:PackIcon.Style>
+                        </materialDesign:PackIcon>
+                    </Button>
                 </StackPanel>
             </DockPanel>
         </ToolBar>
@@ -616,6 +626,9 @@
                             <Border.InputBindings>
                                 <MouseBinding MouseAction="LeftClick"
                                               Command="{Binding DataContext.ArticleClickCommand, ElementName=RootWindow}"
+                                              CommandParameter="{Binding}"/>
+                                <MouseBinding MouseAction="LeftDoubleClick"
+                                              Command="{Binding DataContext.OpenArticleInWindowCommand, ElementName=RootWindow}"
                                               CommandParameter="{Binding}"/>
                             </Border.InputBindings>
                             <Border.ContextMenu>
@@ -1184,6 +1197,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <Button Grid.Column="0"
@@ -1215,6 +1229,13 @@
                                 </Button>
 
                                 <Button Grid.Column="1"
+                                        Content="{Binding ReaderModeButtonText}"
+                                        Command="{Binding ToggleReaderModeCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Margin="0,0,8,0"
+                                        Height="30"/>
+
+                                <Button Grid.Column="2"
                                         Content="{Binding CopyLinkButtonText}"
                                         Command="{Binding CopyLinkCommand}"
                                         Style="{StaticResource MaterialDesignRaisedButton}"
@@ -1322,7 +1343,7 @@
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch"
               IsHitTestVisible="True"
-              Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+              Visibility="{Binding ShowLoadingOverlay, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Margin="0"
@@ -1367,9 +1388,11 @@
         <!-- Refresh summary toast -->
         <materialDesign:Snackbar x:Name="RefreshSummarySnackbar"
                                  MessageQueue="{Binding SnackbarMessageQueue}"
+                                 Grid.RowSpan="2"
                                  Margin="12"
                                  HorizontalAlignment="Right"
                                  VerticalAlignment="Bottom"
+                                 MaxWidth="520"
                                  Panel.ZIndex="1200"
                                  IsHitTestVisible="False"/>
     </Grid>

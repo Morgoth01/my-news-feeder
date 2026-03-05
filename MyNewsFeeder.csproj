@@ -2,10 +2,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
  <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net9.0-windows10.0.17763.0</TargetFramework>
     <ApplicationIcon>Resources\mynewsfeeder.ico</ApplicationIcon>
     <UseWPF>true</UseWPF>
-    <Version>2.1</Version>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Version>3.0</Version>
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
@@ -14,9 +15,14 @@
     <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2210.55" />
     <PackageReference Include="System.ServiceModel.Syndication" Version="9.0.6" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
     <PackageReference Include="HtmlAgilityPack" Version="1.12.3" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,5 +30,11 @@
 
   <ItemGroup>
     <Resource Include="Resources\mynewsfeeder.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Help\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

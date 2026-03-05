@@ -1,27 +1,31 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using MyNewsFeeder.Views;
 using MyNewsFeeder.ViewModels;
-using MyNewsFeeder.Services;
 
 namespace MyNewsFeeder
 {
     public partial class App : Application
     {
+        private const string AppUserModelId = "MyNewsFeeder";
+
+        [DllImport("shell32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
-
-            var settingsService = new SettingsService();
-            var feedService = new FeedService();
-            var browserService = new BrowserService();
-
-            var mainViewModel = new MainViewModel(feedService, settingsService, browserService);
-
-            var mainWindow = new MainWindow
+            try
             {
-                DataContext = mainViewModel
-            };
+                _ = SetCurrentProcessExplicitAppUserModelID(AppUserModelId);
+            }
+            catch
+            {
+                // Ignore failures; app can still run without an explicit AppUserModelID.
+            }
+
+            var mainWindow = new MainWindow();
 
             mainWindow.Show();
         }

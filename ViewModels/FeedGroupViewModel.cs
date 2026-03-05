@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Collections.Specialized;
+using System.Collections.Generic;
 using System.Linq;
+using System;
 using System.Windows.Input;
 using MyNewsFeeder.Models;
 
@@ -21,6 +23,10 @@ namespace MyNewsFeeder.ViewModels
         private int _loadedItemsCount;
         private readonly LoadMoreItem _loadMoreMarker = new LoadMoreItem();
         private bool _hideUnreadIndicators;
+        private int _batchUpdateDepth;
+        private bool _pendingRefreshPagedItems;
+        private bool _pendingResetLoadedCount;
+        private bool _pendingCountNotification;
 
         public string Name
         {
@@ -155,11 +161,18 @@ namespace MyNewsFeeder.ViewModels
                 }
             }
 
+            var shouldResetPaging = _loadedItemsCount == 0 || (e.Action == NotifyCollectionChangedAction.Reset);
+            if (_batchUpdateDepth > 0)
+            {
+                _pendingCountNotification = true;
+                _pendingRefreshPagedItems = true;
+                _pendingResetLoadedCount |= shouldResetPaging;
+                return;
+            }
+
             OnPropertyChanged(nameof(ItemCount));
             OnPropertyChanged(nameof(UnreadCount));
             OnPropertyChanged(nameof(HasUnread));
-
-            var shouldResetPaging = _loadedItemsCount == 0 || (e.Action == NotifyCollectionChangedAction.Reset);
             RefreshPagedItems(resetLoadedCount: shouldResetPaging);
         }
 
@@ -167,7 +180,7 @@ namespace MyNewsFeeder.ViewModels
         {
             if (Items == null || Items.Count == 0)
             {
-                _pagedItems.Clear();
+                SyncPagedItems(Array.Empty<object>());
                 _loadedItemsCount = 0;
                 OnPropertyChanged(nameof(HasMoreItems));
                 (LoadMoreCommand as RelayCommand)?.RaiseCanExecuteChanged();
@@ -188,30 +201,20 @@ namespace MyNewsFeeder.ViewModels
                 _loadedItemsCount = System.Math.Min(System.Math.Max(_loadedItemsCount, _currentPageSize), totalCount);
             }
 
-            // rebuild page content
-            _pagedItems.Clear();
+            var desiredItems = new List<object>(_loadedItemsCount + 1);
             for (int i = 0; i < _loadedItemsCount; i++)
             {
-                _pagedItems.Add(Items[i]);
+                desiredItems.Add(Items[i]);
             }
 
             // append load-more marker if needed
             if (HasMoreItems)
             {
                 _loadMoreMarker.LoadMoreCommand = LoadMoreCommand;
-                if (!_pagedItems.OfType<LoadMoreItem>().Any())
-                {
-                    _pagedItems.Add(_loadMoreMarker);
-                }
+                desiredItems.Add(_loadMoreMarker);
             }
-            else
-            {
-                var marker = _pagedItems.OfType<LoadMoreItem>().FirstOrDefault();
-                if (marker != null)
-                {
-                    _pagedItems.Remove(marker);
-                }
-            }
+
+            SyncPagedItems(desiredItems);
 
             OnPropertyChanged(nameof(HasMoreItems));
             (LoadMoreCommand as RelayCommand)?.RaiseCanExecuteChanged();
@@ -250,6 +253,102 @@ namespace MyNewsFeeder.ViewModels
             {
                 OnPropertyChanged(nameof(UnreadCount));
                 OnPropertyChanged(nameof(HasUnread));
+            }
+        }
+
+        private void SyncPagedItems(IList<object> desiredItems)
+        {
+            if (desiredItems == null)
+            {
+                return;
+            }
+
+            var desiredSet = new HashSet<object>(desiredItems);
+            for (var index = _pagedItems.Count - 1; index >= 0; index--)
+            {
+                if (!desiredSet.Contains(_pagedItems[index]))
+                {
+                    _pagedItems.RemoveAt(index);
+                }
+            }
+
+            for (var desiredIndex = 0; desiredIndex < desiredItems.Count; desiredIndex++)
+            {
+                var item = desiredItems[desiredIndex];
+                if (desiredIndex < _pagedItems.Count && ReferenceEquals(_pagedItems[desiredIndex], item))
+                {
+                    continue;
+                }
+
+                var currentIndex = _pagedItems.IndexOf(item);
+                if (currentIndex < 0)
+                {
+                    _pagedItems.Insert(Math.Min(desiredIndex, _pagedItems.Count), item);
+                    continue;
+                }
+
+                if (currentIndex > desiredIndex)
+                {
+                    _pagedItems.Move(currentIndex, desiredIndex);
+                }
+            }
+        }
+
+        public IDisposable BeginItemsBatchUpdate()
+        {
+            _batchUpdateDepth++;
+            return new ItemsBatchScope(this);
+        }
+
+        private void EndItemsBatchUpdate()
+        {
+            if (_batchUpdateDepth == 0)
+            {
+                return;
+            }
+
+            _batchUpdateDepth--;
+            if (_batchUpdateDepth > 0)
+            {
+                return;
+            }
+
+            if (_pendingCountNotification)
+            {
+                _pendingCountNotification = false;
+                OnPropertyChanged(nameof(ItemCount));
+                OnPropertyChanged(nameof(UnreadCount));
+                OnPropertyChanged(nameof(HasUnread));
+            }
+
+            if (_pendingRefreshPagedItems)
+            {
+                var resetLoadedCount = _pendingResetLoadedCount;
+                _pendingRefreshPagedItems = false;
+                _pendingResetLoadedCount = false;
+                RefreshPagedItems(resetLoadedCount);
+            }
+        }
+
+        private sealed class ItemsBatchScope : IDisposable
+        {
+            private FeedGroupViewModel _owner;
+
+            public ItemsBatchScope(FeedGroupViewModel owner)
+            {
+                _owner = owner;
+            }
+
+            public void Dispose()
+            {
+                var owner = _owner;
+                if (owner == null)
+                {
+                    return;
+                }
+
+                _owner = null;
+                owner.EndItemsBatchUpdate();
             }
         }
     }

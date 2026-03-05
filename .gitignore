@@ -35,6 +35,7 @@ x64/
 *.tlh
 *.tmp
 *.tmp_proj
+*_wpftmp.csproj
 *.log
 *.vspscc
 *.vssscc
@@ -131,7 +132,10 @@ $RECYCLE.BIN/
 .DS_Store
 
 _NCrunch*
+.vscode/launch.json
+.vscode/tasks.json
 settings.json
 feeds.json
 FilterLists/
 temp_line.txt
+Home.md

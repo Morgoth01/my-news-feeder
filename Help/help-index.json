@@ -1,0 +1,49 @@
+{
+  "topics": [
+    {
+      "id": "getting-started",
+      "title": "Getting Started",
+      "file": "getting-started.md"
+    },
+    {
+      "id": "settings",
+      "title": "Settings",
+      "file": "settings.md"
+    },
+    {
+      "id": "shortcuts",
+      "title": "Keyboard Shortcuts",
+      "file": "shortcuts.md"
+    },
+    {
+      "id": "manage-feeds",
+      "title": "Manage Feeds",
+      "file": "manage-feeds.md"
+    },
+    {
+      "id": "refresh-live-mode",
+      "title": "Refresh and Live Mode",
+      "file": "refresh-live-mode.md"
+    },
+    {
+      "id": "reader-mode",
+      "title": "Reader Mode",
+      "file": "reader-mode.md"
+    },
+    {
+      "id": "important-feeds",
+      "title": "Important Feeds and Notifications",
+      "file": "important-feeds.md"
+    },
+    {
+      "id": "data-backup-uninstall",
+      "title": "Data, Backup, Import/Export, and Uninstall",
+      "file": "data-backup-uninstall.md"
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "file": "troubleshooting.md"
+    }
+  ]
+}

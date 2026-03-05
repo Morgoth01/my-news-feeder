@@ -13,6 +13,7 @@ namespace MyNewsFeeder.Models
         public event PropertyChangedEventHandler PropertyChanged;
 
         public string FeedName { get; set; }
+        public string FeedUrl { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public string Link { get; set; }

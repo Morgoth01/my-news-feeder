@@ -25,6 +25,8 @@ namespace MyNewsFeeder.Views
 
         private MainViewModel _viewModel;
         private bool _warmupDone;
+        private HelpWindow _helpWindow;
+        private SettingsDialog _settingsWindow;
 
         public MainWindow()
         {
@@ -46,6 +48,7 @@ namespace MyNewsFeeder.Views
             _viewModel.SelectionRestoreRequested += ViewModel_SelectionRestoreRequested;
             _viewModel.RequestTreeScrollOffset = GetTreeScrollOffset;
             _viewModel.ScrollOffsetRestoreRequested += ViewModel_ScrollOffsetRestoreRequested;
+            _viewModel.ScrollSelectionToTopRequested += ViewModel_ScrollSelectionToTopRequested;
 
             Loaded += MainWindow_Loaded;
             PreviewKeyDown += MainWindow_PreviewKeyDown;
@@ -53,6 +56,38 @@ namespace MyNewsFeeder.Views
 
         private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F)
+            {
+                KeywordTextBox?.Focus();
+                KeywordTextBox?.SelectAll();
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.H)
+            {
+                ShowHelpWindow();
+                e.Handled = true;
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.OemComma)
+            {
+                ShowSettingsWindow();
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.Escape)
+            {
+                if (_settingsWindow != null && _settingsWindow.IsLoaded && _settingsWindow.IsActive)
+                {
+                    _settingsWindow.Close();
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             // Let text inputs handle their own navigation
             if (Keyboard.FocusedElement is System.Windows.Controls.TextBox ||
                 Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase)
@@ -142,15 +177,154 @@ namespace MyNewsFeeder.Views
             }
         }
 
-        private void CloseSettingsPopup_Click(object sender, RoutedEventArgs e)
+        private void HelpButton_Click(object sender, RoutedEventArgs e)
+        {
+            ShowHelpWindow();
+        }
+
+        private void HelpMenuContent_Click(object sender, RoutedEventArgs e)
+        {
+            CloseHelpMenuPopup();
+            ShowHelpWindow();
+        }
+
+        private void HelpMenuShortcuts_Click(object sender, RoutedEventArgs e)
+        {
+            CloseHelpMenuPopup();
+            ShowHelpWindow("shortcuts");
+        }
+
+        private void HelpMenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.ContextMenu != null)
+            {
+                button.ContextMenu.PlacementTarget = button;
+                button.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                button.ContextMenu.IsOpen = true;
+            }
+        }
+
+        private async void HelpMenuCheckUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            CloseHelpMenuPopup();
+            try
+            {
+                await UpdateChecker.RunInteractiveCheckAsync(this, showUpToDateMessage: true, showFailureMessage: true);
+            }
+            catch
+            {
+                // Ignore update check failures; UpdateChecker handles user-facing messages.
+            }
+        }
+
+        private void HelpMenuAbout_Click(object sender, RoutedEventArgs e)
+        {
+            CloseHelpMenuPopup();
+            AboutButton_Click(sender, e);
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            ShowSettingsWindow();
+        }
+
+        private void ShowHelpWindow(string topicId = null)
         {
             try
             {
-                var popupBox = FindName("SettingsPopupBox") as PopupBox;
-                if (popupBox != null)
-                    popupBox.IsPopupOpen = false;
+                if (_helpWindow == null || !_helpWindow.IsLoaded)
+                {
+                    _helpWindow = new HelpWindow
+                    {
+                        Owner = this
+                    };
+                    _helpWindow.Closed += HelpWindow_Closed;
+                    _helpWindow.Show();
+                    if (!string.IsNullOrWhiteSpace(topicId))
+                    {
+                        _helpWindow.SelectTopicById(topicId);
+                    }
+                    return;
+                }
+
+                if (_helpWindow.WindowState == WindowState.Minimized)
+                {
+                    _helpWindow.WindowState = WindowState.Normal;
+                }
+
+                if (!string.IsNullOrWhiteSpace(topicId))
+                {
+                    _helpWindow.SelectTopicById(topicId);
+                }
+
+                _helpWindow.Activate();
             }
-            catch { }
+            catch (Exception)
+            {
+                // Ignore failures when opening the Help window.
+            }
+        }
+
+        private void HelpWindow_Closed(object sender, EventArgs e)
+        {
+            if (_helpWindow != null)
+            {
+                _helpWindow.Closed -= HelpWindow_Closed;
+                _helpWindow = null;
+            }
+        }
+
+        private void ShowSettingsWindow()
+        {
+            try
+            {
+                if (_settingsWindow == null || !_settingsWindow.IsLoaded)
+                {
+                    _settingsWindow = new SettingsDialog
+                    {
+                        Owner = this,
+                        DataContext = DataContext
+                    };
+                    _settingsWindow.Closed += SettingsWindow_Closed;
+                    _settingsWindow.Show();
+                    return;
+                }
+
+                if (_settingsWindow.WindowState == WindowState.Minimized)
+                {
+                    _settingsWindow.WindowState = WindowState.Normal;
+                }
+
+                _settingsWindow.Activate();
+            }
+            catch
+            {
+                // Ignore failures when opening the Settings window.
+            }
+        }
+
+        private void SettingsWindow_Closed(object sender, EventArgs e)
+        {
+            if (_settingsWindow != null)
+            {
+                _settingsWindow.Closed -= SettingsWindow_Closed;
+                _settingsWindow = null;
+            }
+        }
+
+        private void CloseHelpMenuPopup()
+        {
+            try
+            {
+                if (FindName("HelpMenuButton") is Button button && button.ContextMenu != null)
+                {
+                    button.ContextMenu.IsOpen = false;
+                }
+            }
+            catch
+            {
+                // Ignore popup close failures.
+            }
         }
 
         private void GridSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
@@ -187,6 +361,25 @@ namespace MyNewsFeeder.Views
                 vm.SaveCategoryExpandedStates();
                 vm.SaveFeedExpandedStates();
             }
+
+            try
+            {
+                if (_helpWindow != null)
+                {
+                    _helpWindow.Close();
+                    _helpWindow = null;
+                }
+
+                if (_settingsWindow != null)
+                {
+                    _settingsWindow.Close();
+                    _settingsWindow = null;
+                }
+            }
+            catch
+            {
+                // Ignore helper window shutdown issues during app close.
+            }
         }
 
         private void ViewModel_SelectionRestoreRequested(string linkToRestore)
@@ -216,7 +409,10 @@ namespace MyNewsFeeder.Views
 
                                     if (match != null)
                                     {
-                                        _viewModel.OnArticleSelected(match);
+                                        _viewModel.OnArticleSelected(
+                                            match,
+                                            enableAutoScroll: false,
+                                            preserveOpenWebViews: true);
                                         return;
                                     }
                                 }
@@ -230,7 +426,10 @@ namespace MyNewsFeeder.Views
 
                                 if (match != null)
                                 {
-                                    _viewModel.OnArticleSelected(match);
+                                    _viewModel.OnArticleSelected(
+                                        match,
+                                        enableAutoScroll: false,
+                                        preserveOpenWebViews: true);
                                     return;
                                 }
                             }
@@ -275,6 +474,101 @@ namespace MyNewsFeeder.Views
             // Apply once after current layout work, then once more after render to fight virtualization resets.
             Dispatcher.BeginInvoke(new Action(ApplyOffset), DispatcherPriority.ContextIdle);
             Dispatcher.BeginInvoke(new Action(ApplyOffset), DispatcherPriority.ApplicationIdle);
+        }
+
+        private void ViewModel_ScrollSelectionToTopRequested(FeedItem targetItem)
+        {
+            if (targetItem == null || SectionScrollViewer == null)
+            {
+                return;
+            }
+
+            void Align()
+            {
+                TryAlignFeedItemToTop(targetItem);
+            }
+
+            // Run across multiple priorities to handle deferred container generation.
+            Dispatcher.BeginInvoke(new Action(Align), DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(Align), DispatcherPriority.ContextIdle);
+            Dispatcher.BeginInvoke(new Action(Align), DispatcherPriority.ApplicationIdle);
+        }
+
+        private bool TryAlignFeedItemToTop(FeedItem targetItem)
+        {
+            if (targetItem == null || SectionScrollViewer == null)
+            {
+                return false;
+            }
+
+            SectionScrollViewer.UpdateLayout();
+            var element = FindElementForDataContext(SectionScrollViewer, targetItem);
+            if (element == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                const double headerTopPadding = 6;
+                const double itemTopPaddingFallback = 56;
+
+                var anchor = (FrameworkElement)FindAncestor<Expander>(element) ?? element;
+                var relativePoint = anchor.TransformToAncestor(SectionScrollViewer).Transform(new Point(0, 0));
+                var padding = ReferenceEquals(anchor, element) ? itemTopPaddingFallback : headerTopPadding;
+                var desiredOffset = Math.Max(0, SectionScrollViewer.VerticalOffset + relativePoint.Y - padding);
+                SectionScrollViewer.ScrollToVerticalOffset(desiredOffset);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static T FindAncestor<T>(DependencyObject child) where T : DependencyObject
+        {
+            var current = child;
+            while (current != null)
+            {
+                if (current is T typed)
+                {
+                    return typed;
+                }
+
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            return null;
+        }
+
+        private static FrameworkElement FindElementForDataContext(DependencyObject root, object dataContext)
+        {
+            if (root == null || dataContext == null)
+            {
+                return null;
+            }
+
+            if (root is FrameworkElement element &&
+                ReferenceEquals(element.DataContext, dataContext) &&
+                element.ActualHeight > 0 &&
+                element.Visibility == Visibility.Visible)
+            {
+                return element;
+            }
+
+            var childCount = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < childCount; i++)
+            {
+                var child = VisualTreeHelper.GetChild(root, i);
+                var result = FindElementForDataContext(child, dataContext);
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+
+            return null;
         }
 
         private static ScrollViewer FindScrollViewer(DependencyObject root)

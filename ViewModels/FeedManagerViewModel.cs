@@ -283,7 +283,11 @@ namespace MyNewsFeeder.ViewModels
 
         private void Feed_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(Feed.IsEnabled) || e.PropertyName == nameof(Feed.Category) || e.PropertyName == nameof(Feed.Name) || e.PropertyName == nameof(Feed.Url))
+            if (e.PropertyName == nameof(Feed.IsEnabled) ||
+                e.PropertyName == nameof(Feed.IsImportant) ||
+                e.PropertyName == nameof(Feed.Category) ||
+                e.PropertyName == nameof(Feed.Name) ||
+                e.PropertyName == nameof(Feed.Url))
             {
                 if (e.PropertyName == nameof(Feed.Url))
                 {
@@ -307,7 +311,7 @@ namespace MyNewsFeeder.ViewModels
         private bool CanAddCategory()
         {
             return !string.IsNullOrWhiteSpace(NewCategoryName) &&
-                   !CategoryNames.Contains(NewCategoryName.Trim());
+                   !ContainsCategoryName(NewCategoryName.Trim());
         }
 
         private bool CanRemoveCategory()
@@ -322,6 +326,7 @@ namespace MyNewsFeeder.ViewModels
                 Name = "New Feed",
                 Url = "https://example.com/rss",
                 IsEnabled = true,
+                IsImportant = false,
                 Category = CategoryNames.FirstOrDefault() ?? "Default"
             };
 
@@ -353,15 +358,7 @@ namespace MyNewsFeeder.ViewModels
             if (!CanAddCategory()) return;
 
             var categoryName = NewCategoryName.Trim();
-            var newCategory = new Category
-            {
-                Name = categoryName,
-                Description = $"Category: {categoryName}",
-                IsExpanded = true
-            };
-
-            Categories.Add(newCategory);
-            CategoryNames.Add(categoryName);
+            EnsureCategoryExists(categoryName);
 
             NewCategoryName = string.Empty;
             MarkDirty();
@@ -375,7 +372,9 @@ namespace MyNewsFeeder.ViewModels
             var categoryName = categoryToRemove.Name;
 
             // Move feeds from this category to Default
-            var feedsToMove = Feeds.Where(f => f.Category == categoryName).ToList();
+            var feedsToMove = Feeds
+                .Where(f => string.Equals(NormalizeCategoryName(f.Category), categoryName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
             foreach (var feed in feedsToMove)
             {
                 feed.Category = "Default";
@@ -478,28 +477,47 @@ namespace MyNewsFeeder.ViewModels
 
                     if (importedFeeds.Count > 0)
                     {
+                        foreach (var category in importedFeeds
+                                     .Select(f => NormalizeCategoryName(f.Category))
+                                     .Distinct(StringComparer.OrdinalIgnoreCase))
+                        {
+                            EnsureCategoryExists(category);
+                        }
+
+                        var existingUrls = new HashSet<string>(
+                            Feeds
+                                .Select(f => f?.Url?.Trim())
+                                .Where(url => !string.IsNullOrWhiteSpace(url)),
+                            StringComparer.OrdinalIgnoreCase);
+                        var importedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         var duplicateCount = 0;
                         var addedCount = 0;
 
                         foreach (var feed in importedFeeds)
                         {
-                            // Ensure feed has a valid category
-                            if (string.IsNullOrWhiteSpace(feed.Category) || !CategoryNames.Contains(feed.Category))
+                            feed.Category = NormalizeCategoryName(feed.Category);
+                            if (!ContainsCategoryName(feed.Category))
                             {
                                 feed.Category = "Default";
                             }
 
-                            // Check for duplicates by URL
-                            if (!Feeds.Any(f => f.Url.Equals(feed.Url, StringComparison.OrdinalIgnoreCase)))
-                            {
-                                feed.PropertyChanged += Feed_PropertyChanged;
-                                Feeds.Add(feed);
-                                addedCount++;
-                            }
-                            else
+                            var normalizedUrl = feed.Url?.Trim();
+                            if (string.IsNullOrWhiteSpace(normalizedUrl))
                             {
                                 duplicateCount++;
+                                continue;
                             }
+
+                            // Skip duplicates already in current list and duplicates within import file.
+                            if (!importedUrls.Add(normalizedUrl) || !existingUrls.Add(normalizedUrl))
+                            {
+                                duplicateCount++;
+                                continue;
+                            }
+
+                            feed.PropertyChanged += Feed_PropertyChanged;
+                            Feeds.Add(feed);
+                            addedCount++;
                         }
 
                         if (_groupFeedsByCategory)
@@ -577,21 +595,63 @@ namespace MyNewsFeeder.ViewModels
         private List<Feed> ImportFromOpml(string filePath)
         {
             var feeds = new List<Feed>();
-
             var doc = XDocument.Load(filePath);
-            var outlines = doc.Descendants("outline")
-                .Where(o => o.Attribute("xmlUrl") != null);
 
-            foreach (var outline in outlines)
+            var body = doc
+                .Descendants()
+                .FirstOrDefault(element => IsElementNamed(element, "body"));
+
+            IEnumerable<XElement> rootOutlines;
+            if (body != null)
             {
+                rootOutlines = body.Elements()
+                    .Where(element => IsElementNamed(element, "outline"));
+            }
+            else
+            {
+                rootOutlines = doc.Descendants()
+                    .Where(element =>
+                        IsElementNamed(element, "outline") &&
+                        !(element.Parent is XElement parent && IsElementNamed(parent, "outline")));
+            }
+
+            foreach (var outline in rootOutlines)
+            {
+                ParseOpmlOutline(outline, inheritedCategory: null, feeds);
+            }
+
+            return feeds;
+        }
+
+        private static void ParseOpmlOutline(XElement outline, string inheritedCategory, List<Feed> feeds)
+        {
+            if (outline == null || feeds == null)
+            {
+                return;
+            }
+
+            var xmlUrl = GetAttributeValue(outline, "xmlUrl");
+            var resolvedCategory = ResolveOpmlCategory(outline, inheritedCategory);
+            var childOutlines = outline.Elements().Where(element => IsElementNamed(element, "outline")).ToList();
+            var isFolderOnly = string.IsNullOrWhiteSpace(xmlUrl);
+            var folderLabel = GetOutlineLabel(outline);
+            var hasExplicitCategory = !string.IsNullOrWhiteSpace(GetAttributeValue(outline, "category"));
+
+            if (!isFolderOnly)
+            {
+                var feedName = GetAttributeValue(outline, "title");
+                if (string.IsNullOrWhiteSpace(feedName))
+                {
+                    feedName = GetAttributeValue(outline, "text");
+                }
+
                 var feed = new Feed
                 {
-                    Name = outline.Attribute("title")?.Value ??
-                           outline.Attribute("text")?.Value ??
-                           "Unnamed Feed",
-                    Url = outline.Attribute("xmlUrl")?.Value ?? string.Empty,
-                    IsEnabled = true,
-                    Category = outline.Attribute("category")?.Value ?? "Default"
+                    Name = string.IsNullOrWhiteSpace(feedName) ? "Unnamed Feed" : feedName.Trim(),
+                    Url = xmlUrl ?? string.Empty,
+                    IsEnabled = ParseOpmlBooleanAttribute(outline, "isEnabled", defaultValue: true),
+                    IsImportant = ParseOpmlBooleanAttribute(outline, "isImportant", defaultValue: false),
+                    Category = NormalizeCategoryName(resolvedCategory)
                 };
 
                 if (FeedService.TryNormalizeFeedUrl(feed.Url, out var normalizedUrl))
@@ -601,14 +661,114 @@ namespace MyNewsFeeder.ViewModels
                 }
             }
 
-            return feeds;
+            var nextCategory = resolvedCategory;
+            if (isFolderOnly && !hasExplicitCategory && !string.IsNullOrWhiteSpace(folderLabel))
+            {
+                nextCategory = ResolveFolderCategory(inheritedCategory, folderLabel);
+            }
+
+            foreach (var child in childOutlines)
+            {
+                ParseOpmlOutline(child, nextCategory, feeds);
+            }
+        }
+
+        private static string ResolveOpmlCategory(XElement outline, string inheritedCategory)
+        {
+            var categoryAttribute = GetAttributeValue(outline, "category");
+            if (!string.IsNullOrWhiteSpace(categoryAttribute))
+            {
+                var firstCategory = categoryAttribute
+                    .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(value => value.Trim())
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+                if (!string.IsNullOrWhiteSpace(firstCategory))
+                {
+                    return firstCategory;
+                }
+            }
+
+            return NormalizeCategoryName(inheritedCategory);
+        }
+
+        private static string ResolveFolderCategory(string inheritedCategory, string folderLabel)
+        {
+            var folder = string.IsNullOrWhiteSpace(folderLabel) ? null : folderLabel.Trim();
+            if (string.IsNullOrWhiteSpace(folder))
+            {
+                return NormalizeCategoryName(inheritedCategory);
+            }
+
+            if (string.IsNullOrWhiteSpace(inheritedCategory) || string.Equals(inheritedCategory, "Default", StringComparison.OrdinalIgnoreCase))
+            {
+                return folder;
+            }
+
+            return $"{inheritedCategory} / {folder}";
+        }
+
+        private static string GetOutlineLabel(XElement outline)
+        {
+            var title = GetAttributeValue(outline, "title");
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                return title;
+            }
+
+            return GetAttributeValue(outline, "text");
+        }
+
+        private static string GetAttributeValue(XElement element, string attributeName)
+        {
+            if (element == null || string.IsNullOrWhiteSpace(attributeName))
+            {
+                return string.Empty;
+            }
+
+            var attribute = element.Attributes()
+                .FirstOrDefault(a => string.Equals(a.Name.LocalName, attributeName, StringComparison.OrdinalIgnoreCase));
+            return attribute?.Value?.Trim() ?? string.Empty;
+        }
+
+        private static bool ParseOpmlBooleanAttribute(XElement element, string attributeName, bool defaultValue)
+        {
+            var value = GetAttributeValue(element, attributeName);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return defaultValue;
+            }
+
+            if (string.Equals(value, "0", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "false", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "no", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return defaultValue;
+        }
+
+        private static bool IsElementNamed(XElement element, string localName)
+        {
+            return element != null && string.Equals(element.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase);
         }
 
         // JSON Import
         private List<Feed> ImportFromJson(string filePath)
         {
             var json = File.ReadAllText(filePath);
-            var feeds = JsonSerializer.Deserialize<List<Feed>>(json);
+            var feeds = JsonSerializer.Deserialize<List<Feed>>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
             if (feeds == null)
             {
                 return new List<Feed>();
@@ -631,31 +791,112 @@ namespace MyNewsFeeder.ViewModels
         // OPML Export with category support
         private void ExportToOpml(string filePath)
         {
+            var feedsByCategory = new Dictionary<string, List<Feed>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var feed in Feeds)
+            {
+                var categoryName = NormalizeCategoryName(feed?.Category);
+                if (!feedsByCategory.TryGetValue(categoryName, out var categoryFeeds))
+                {
+                    categoryFeeds = new List<Feed>();
+                    feedsByCategory[categoryName] = categoryFeeds;
+                }
+
+                categoryFeeds.Add(feed);
+            }
+
+            var orderedCategories = new List<string>();
+            void AddCategoryInOrder(string categoryName)
+            {
+                if (string.IsNullOrWhiteSpace(categoryName))
+                {
+                    return;
+                }
+
+                if (orderedCategories.Any(existing =>
+                        string.Equals(existing, categoryName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                if (feedsByCategory.ContainsKey(categoryName))
+                {
+                    orderedCategories.Add(categoryName);
+                }
+            }
+
+            AddCategoryInOrder("Default");
+
+            foreach (var category in _settings.Categories ?? new List<string>())
+            {
+                AddCategoryInOrder(NormalizeCategoryName(category));
+            }
+
+            foreach (var category in CategoryNames)
+            {
+                AddCategoryInOrder(NormalizeCategoryName(category));
+            }
+
+            foreach (var category in feedsByCategory.Keys)
+            {
+                AddCategoryInOrder(category);
+            }
+
+            var body = new XElement("body");
+            foreach (var category in orderedCategories)
+            {
+                if (!feedsByCategory.TryGetValue(category, out var categoryFeeds) || categoryFeeds.Count == 0)
+                {
+                    continue;
+                }
+
+                if (string.Equals(category, "Default", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var feed in categoryFeeds)
+                    {
+                        body.Add(CreateOpmlFeedOutline(feed));
+                    }
+                }
+                else
+                {
+                    body.Add(
+                        new XElement("outline",
+                            new XAttribute("text", category),
+                            new XAttribute("title", category),
+                            categoryFeeds.Select(CreateOpmlFeedOutline)));
+                }
+            }
+
             var doc = new XDocument(
                 new XDeclaration("1.0", "UTF-8", null),
                 new XElement("opml",
-                    new XAttribute("version", "1.0"),
+                    new XAttribute("version", "2.0"),
                     new XElement("head",
                         new XElement("title", "MyNewsFeeder Feeds"),
-                        new XElement("dateCreated", DateTime.Now.ToString("R")),
+                        new XElement("dateCreated", DateTime.UtcNow.ToString("R")),
+                        new XElement("dateModified", DateTime.UtcNow.ToString("R")),
                         new XElement("ownerName", "MyNewsFeeder")
                     ),
-                    new XElement("body",
-                        Feeds.Select(feed =>
-                            new XElement("outline",
-                                new XAttribute("type", "rss"),
-                                new XAttribute("text", feed.Name),
-                                new XAttribute("title", feed.Name),
-                                new XAttribute("xmlUrl", feed.Url),
-                                new XAttribute("category", feed.Category),
-                                new XAttribute("isEnabled", feed.IsEnabled.ToString().ToLower())
-                            )
-                        )
-                    )
+                    body
                 )
             );
 
             doc.Save(filePath);
+        }
+
+        private static XElement CreateOpmlFeedOutline(Feed feed)
+        {
+            var safeName = string.IsNullOrWhiteSpace(feed?.Name) ? "Unnamed Feed" : feed.Name.Trim();
+            var safeUrl = feed?.Url?.Trim() ?? string.Empty;
+            var safeCategory = NormalizeCategoryName(feed?.Category);
+
+            return new XElement("outline",
+                new XAttribute("type", "rss"),
+                new XAttribute("text", safeName),
+                new XAttribute("title", safeName),
+                new XAttribute("xmlUrl", safeUrl),
+                new XAttribute("category", safeCategory),
+                new XAttribute("isEnabled", feed?.IsEnabled == false ? "false" : "true"),
+                new XAttribute("isImportant", feed?.IsImportant == true ? "true" : "false"));
         }
 
         // JSON Export
@@ -669,6 +910,49 @@ namespace MyNewsFeeder.ViewModels
 
             var json = JsonSerializer.Serialize(Feeds.ToList(), options);
             File.WriteAllText(filePath, json);
+        }
+
+        private bool ContainsCategoryName(string categoryName)
+        {
+            if (string.IsNullOrWhiteSpace(categoryName))
+            {
+                return false;
+            }
+
+            return CategoryNames.Any(existing =>
+                string.Equals(existing, categoryName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void EnsureCategoryExists(string categoryName)
+        {
+            var normalized = NormalizeCategoryName(categoryName);
+            if (ContainsCategoryName(normalized))
+            {
+                return;
+            }
+
+            var isExpanded = _settings.CategoryExpandedStates.TryGetValue(normalized, out var expanded)
+                ? expanded
+                : true;
+
+            Categories.Add(new Category
+            {
+                Name = normalized,
+                Description = $"Category: {normalized}",
+                IsExpanded = isExpanded
+            });
+            CategoryNames.Add(normalized);
+
+            _settings.Categories ??= new List<string>();
+            if (!_settings.Categories.Any(existing => string.Equals(existing, normalized, StringComparison.OrdinalIgnoreCase)))
+            {
+                _settings.Categories.Add(normalized);
+            }
+
+            if (!_settings.CategoryExpandedStates.ContainsKey(normalized))
+            {
+                _settings.CategoryExpandedStates[normalized] = isExpanded;
+            }
         }
 
         private void CloseWindow(object parameter)

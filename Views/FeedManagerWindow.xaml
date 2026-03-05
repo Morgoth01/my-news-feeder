@@ -274,6 +274,17 @@
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                         </DataGridTemplateColumn>
 
+                                                <DataGridTemplateColumn Header="Important"
+                                                                        Width="80">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate>
+                                                                                <CheckBox IsChecked="{Binding IsImportant, UpdateSourceTrigger=PropertyChanged}"
+                                                                                          IsEnabled="{Binding IsEnabled}"
+                                                                                          HorizontalAlignment="Center"/>
+                                                                        </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                        </DataGridTemplateColumn>
+
                                                         <!-- Name Column -->
                                                         <DataGridTextColumn Header="Name"
                                                                             Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"

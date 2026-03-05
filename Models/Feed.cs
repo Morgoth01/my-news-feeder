@@ -9,6 +9,7 @@ namespace MyNewsFeeder.Models
         private string _name;
         private string _url;
         private bool _isEnabled = true;
+        private bool _isImportant;
         private string _category = "Default"; // New category property
 
         public string Name
@@ -38,6 +39,16 @@ namespace MyNewsFeeder.Models
             {
                 _isEnabled = value;
                 OnPropertyChanged(nameof(IsEnabled));
+            }
+        }
+
+        public bool IsImportant
+        {
+            get => _isImportant;
+            set
+            {
+                _isImportant = value;
+                OnPropertyChanged(nameof(IsImportant));
             }
         }
 

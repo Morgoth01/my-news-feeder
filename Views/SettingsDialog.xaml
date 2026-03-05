@@ -3,78 +3,317 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         Title="Settings"
-        Height="350"
-        Width="450"
-        Style="{StaticResource MaterialDesignWindow}">
-    <Grid>
+        Height="720"
+        Width="980"
+        MinHeight="560"
+        MinWidth="760"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        TextElement.FontWeight="Regular"
+        TextElement.FontSize="13"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="Auto"
+        FontFamily="{DynamicResource MaterialDesignFont}"
+        Loaded="SettingsDialog_Loaded">
+
+    <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Settings Content -->
-        <ScrollViewer Grid.Row="0"
-                      Margin="20">
-            <StackPanel>
-                <TextBlock Text="Application Settings"
-                           Style="{StaticResource MaterialDesignHeadline5TextBlock}"
-                           Margin="0,0,0,20"/>
+        <TextBlock Grid.Row="0"
+                   Text="Settings"
+                   Style="{StaticResource MaterialDesignHeadline5TextBlock}"
+                   Margin="0,0,0,16"
+                   HorizontalAlignment="Center"/>
 
-                <!-- Dark Mode Setting -->
-                <CheckBox Content="Dark Mode"
-                          IsChecked="{Binding PendingDarkMode}"
-                          Margin="0,10"/>
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                <!-- Auto Refresh Setting -->
-                <CheckBox Content="Auto Refresh"
-                          IsChecked="{Binding AutoRefresh}"
-                          Margin="0,10"/>
+            <GroupBox Grid.Column="0"
+                      Header="Topics"
+                      Style="{StaticResource MaterialDesignCardGroupBox}">
+                <ListBox x:Name="TopicsListBox"
+                         SelectionChanged="TopicsListBox_SelectionChanged"
+                         Style="{StaticResource MaterialDesignListBox}"
+                         Margin="8">
+                    <ListBoxItem Content="General" Tag="general" IsSelected="True"/>
+                    <ListBoxItem Content="Refresh" Tag="refresh"/>
+                    <ListBoxItem Content="Feed Settings" Tag="feed"/>
+                    <ListBoxItem Content="Adblocker" Tag="adblocker"/>
+                    <ListBoxItem Content="Filtering and Notifications" Tag="filter"/>
+                    <ListBoxItem Content="Tools" Tag="tools"/>
+                </ListBox>
+            </GroupBox>
 
-                <!-- Max Items Setting -->
-                <StackPanel Orientation="Horizontal"
-                            Margin="0,10">
-                    <TextBlock Text="Max Items:"
-                               VerticalAlignment="Center"
-                               Width="100"/>
-                    <TextBox Text="{Binding MaxItems}"
-                             Width="100"/>
-                </StackPanel>
+            <GroupBox Grid.Column="2"
+                      Header="Settings"
+                      Style="{StaticResource MaterialDesignCardGroupBox}">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                <!-- Font Size Setting -->
-                <StackPanel Orientation="Horizontal"
-                            Margin="0,10">
-                    <TextBlock Text="Font Size:"
-                               VerticalAlignment="Center"
-                               Width="100"/>
-                    <TextBox Text="{Binding FontSize}"
-                             Width="100"/>
-                </StackPanel>
+                    <TextBlock x:Name="SelectedTopicTitle"
+                               Grid.Row="0"
+                               Text="General"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
 
-                <!-- Refresh Interval Setting -->
-                <StackPanel Orientation="Horizontal"
-                            Margin="0,10">
-                    <TextBlock Text="Refresh Interval (min):"
-                               VerticalAlignment="Center"
-                               Width="150"/>
-                    <TextBox Text="{Binding RefreshInterval}"
-                             Width="100"/>
-                </StackPanel>
-            </StackPanel>
-        </ScrollViewer>
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <Grid>
+                            <StackPanel x:Name="GeneralPanel">
+                                <CheckBox Content="Dark Mode"
+                                          IsChecked="{Binding PendingDarkMode}"
+                                          Margin="0,2"/>
+                                <TextBlock Text="Dark mode applies to app surfaces, article view, and browser panel."
+                                           Margin="20,2,0,0"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Text="For websites: only native website dark themes are used (no CSS filter forcing)."
+                                           Margin="20,2,0,0"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+                                <CheckBox Content="Show Content Always-On"
+                                          IsChecked="{Binding IsShowContentAlwaysOn}"
+                                          Margin="0,8,0,2"
+                                          ToolTip="Keep browser window open and auto-load articles when switching"/>
+                                <TextBlock Text="When enabled, the content panel stays open and automatically loads the newly selected article."
+                                           Margin="20,2,0,0"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
 
-        <!-- Dialog Buttons -->
-        <StackPanel Grid.Row="1"
+                            <StackPanel x:Name="RefreshPanel"
+                                        Visibility="Collapsed">
+                                <CheckBox Content="Auto Refresh"
+                                          IsChecked="{Binding PendingAutoRefresh}"
+                                          Margin="0,2"/>
+                                <CheckBox Content="Live Refresh"
+                                          IsChecked="{Binding PendingLiveRefresh}"
+                                          Margin="20,2,0,6"
+                                          ToolTip="Use fast polling. Disable to use manual interval."
+                                          Visibility="{Binding IsAutoRefreshModeOptionsVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="20,0,0,6"
+                                            Visibility="{Binding IsLiveRefreshSettingsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock Text="Live interval:"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <ComboBox Width="120"
+                                              ItemsSource="{Binding AvailableLiveRefreshIntervals}"
+                                              SelectedItem="{Binding PendingLiveRefreshIntervalSeconds}"
+                                              Style="{StaticResource MaterialDesignComboBox}"
+                                              ToolTip="60s recommended; 10s is expert mode">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock>
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0} sec">
+                                                            <Binding/>
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                                <Border Margin="20,2,0,8"
+                                        Padding="8,6"
+                                        CornerRadius="4"
+                                        BorderThickness="2"
+                                        BorderBrush="#FFB00020"
+                                        Background="#FFFDE9EC"
+                                        Visibility="{Binding IsLiveRefreshExpertModeWarningVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock Text="Warning: 10s increases load and can trigger feed timeouts or rate limits."
+                                               FontSize="11"
+                                               FontWeight="ExtraBold"
+                                               Foreground="#FFB00020"
+                                               TextWrapping="Wrap"/>
+                                </Border>
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="20,0,0,4"
+                                            Visibility="{Binding IsIntervalAutoRefreshSettingsVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock Text="Interval:"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <ComboBox Width="120"
+                                              ItemsSource="{Binding AvailableRefreshIntervals}"
+                                              SelectedItem="{Binding PendingAutoRefreshIntervalMinutes}"
+                                              Style="{StaticResource MaterialDesignComboBox}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock>
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0} min">
+                                                            <Binding/>
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+                                <TextBlock Text="{Binding AutoRefreshIntervalDisplay}"
+                                           FontSize="10"
+                                           Margin="20,0,0,2"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <TextBlock Text="{Binding NextAutoRefreshDisplay}"
+                                           FontSize="10"
+                                           Margin="20,0,0,2"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           Visibility="{Binding PendingAutoRefresh, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+
+                            <StackPanel x:Name="FeedPanel"
+                                        Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="0,2,0,6">
+                                    <TextBlock Text="Max Articles per Feed:"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <TextBox Width="64"
+                                             Text="{Binding MaxFeeds, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource MaterialDesignTextBox}"/>
+                                    <TextBlock Text="(1-50)"
+                                               VerticalAlignment="Center"
+                                               Margin="8,0,0,0"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding CurrentFeedSettingsDisplay}"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <StackPanel x:Name="FilterPanel"
+                                        Visibility="Collapsed">
+                                <CheckBox Content="Hide advertisement articles"
+                                          IsChecked="{Binding AdvertisementFilterEnabled}"
+                                          Margin="0,2"
+                                          ToolTip="Filter feed items that look like ads based on configurable keywords."/>
+                                <TextBlock Text="Filter keywords (one per line)"
+                                           Margin="20,2,0,2"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <TextBox Text="{Binding AdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
+                                         AcceptsReturn="True"
+                                         Height="110"
+                                         Margin="20,0,0,8"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Style="{StaticResource MaterialDesignTextBox}"
+                                         Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                         TextWrapping="Wrap"/>
+
+                                <CheckBox Content="Desktop notifications for important items"
+                                          IsChecked="{Binding DesktopNotificationsEnabled}"
+                                          Margin="0,2"/>
+                                <TextBlock Text="Important keywords (one per line)"
+                                           Margin="20,2,0,2"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           Visibility="{Binding DesktopNotificationsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <TextBox Text="{Binding ImportantKeywordsText, UpdateSourceTrigger=LostFocus}"
+                                         AcceptsReturn="True"
+                                         Height="92"
+                                         Margin="20,0,0,2"
+                                         VerticalScrollBarVisibility="Auto"
+                                         Style="{StaticResource MaterialDesignTextBox}"
+                                         Visibility="{Binding DesktopNotificationsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                         TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <StackPanel x:Name="AdblockerPanel"
+                                        Visibility="Collapsed">
+                                <CheckBox Content="Enable AdBlocker"
+                                          IsChecked="{Binding AdBlockerEnabled}"
+                                          Margin="0,2"/>
+                                <Button Content="AdBlocker Settings"
+                                        Command="{Binding AdBlockerSettingsCommand}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,10,0,0">
+                                    <Button.Style>
+                                        <Style TargetType="Button"
+                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                            <Setter Property="Foreground" Value="#FFFFFFFF"/>
+                                            <Setter Property="TextElement.Foreground" Value="#FFFFFFFF"/>
+                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+
+                            <StackPanel x:Name="ToolsPanel"
+                                        Visibility="Collapsed">
+                                <Button Content="Clear Browser Cache"
+                                        Command="{Binding ClearCacheCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Margin="0,0,0,6"
+                                        HorizontalAlignment="Left"
+                                        ToolTip="Clear cached images, files and browsing data to free up space"/>
+                                <TextBlock Text="Automatically clears old cache every 2 hours"
+                                           FontSize="10"
+                                           Margin="0,0,0,8"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <StackPanel Grid.Row="2"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
-                    Margin="20">
-            <Button Content="OK"
-                    Command="{Binding OkCommand}"
+                    Margin="0,14,0,0">
+            <Button Content="Save Settings"
+                    Command="{Binding SaveSettingsCommand}"
                     Style="{StaticResource MaterialDesignRaisedButton}"
-                    Margin="5"/>
-            <Button Content="Cancel"
-                    Command="{Binding CancelCommand}"
-                    Style="{StaticResource MaterialDesignRaisedButton}"
-                    Margin="5"/>
+                    Margin="0,0,8,0"/>
+            <Button Content="Reset to Default"
+                    Command="{Binding ResetSettingsCommand}"
+                    Margin="0,0,8,0">
+                <Button.Style>
+                    <Style TargetType="Button"
+                           BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                        <Setter Property="Background" Value="#FF5F6368"/>
+                        <Setter Property="Foreground" Value="#FFFFFFFF"/>
+                        <Setter Property="TextElement.Foreground" Value="#FFFFFFFF"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                    </Style>
+                </Button.Style>
+            </Button>
+            <Button Content="Close"
+                    Click="CloseButton_Click"
+                    Margin="0,0,0,0">
+                <Button.Style>
+                    <Style TargetType="Button"
+                           BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+                        <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                        <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                    </Style>
+                </Button.Style>
+            </Button>
         </StackPanel>
     </Grid>
 </Window>

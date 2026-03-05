@@ -30,7 +30,7 @@
                                    FontStyle="Italic"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,8"/>
-                        <TextBlock Text="© 2025 - Claude Peters"
+                        <TextBlock Text="© 2026 - Claude Peters"
                                    FontSize="12"
                                    Foreground="{DynamicResource MaterialDesignBodyLight}"/>
                     </StackPanel>
@@ -128,13 +128,39 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <!-- Microsoft.Extensions.Http -->
+                        <!-- System.Drawing.Common -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <materialDesign:PackIcon Kind="Web" 
+                            <materialDesign:PackIcon Kind="Image" 
                                                      VerticalAlignment="Center" 
                                                      Margin="0,0,8,0"/>
                             <StackPanel>
-                                <TextBlock Text="Microsoft.Extensions.Http" FontWeight="SemiBold"/>
+                                <TextBlock Text="System.Drawing.Common" FontWeight="SemiBold"/>
+                                <TextBlock Text="MIT License" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- System.ServiceModel.Syndication -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <materialDesign:PackIcon Kind="Rss" 
+                                                     VerticalAlignment="Center" 
+                                                     Margin="0,0,8,0"/>
+                            <StackPanel>
+                                <TextBlock Text="System.ServiceModel.Syndication" FontWeight="SemiBold"/>
+                                <TextBlock Text="MIT License" 
+                                           FontSize="11" 
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Microsoft.Toolkit.Uwp.Notifications -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <materialDesign:PackIcon Kind="Bell" 
+                                                     VerticalAlignment="Center" 
+                                                     Margin="0,0,8,0"/>
+                            <StackPanel>
+                                <TextBlock Text="Microsoft.Toolkit.Uwp.Notifications" FontWeight="SemiBold"/>
                                 <TextBlock Text="MIT License" 
                                            FontSize="11" 
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"/>
