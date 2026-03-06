@@ -2,7 +2,7 @@
 
 <div align="center"><img width="256" height="256" alt="mynewsfeeder" src="https://github.com/user-attachments/assets/8a0d0642-4696-47bb-9a1a-643ee5fc4ac0" /></div>
 
-<div align="center">My News Feeder is a lightweight RSS/Atom reader with integrated ad blocking.
+<div align="center">My News Feeder is a lightweight RSS/Atom reader with an integrated browser and ad blocker.
 
 Dive into your favorite feeds without distractions!</div>
 <br/>
