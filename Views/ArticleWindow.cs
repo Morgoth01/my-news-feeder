@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
@@ -20,18 +21,30 @@ namespace MyNewsFeeder.Views
         private readonly string _summaryArticleHtml;
         private readonly string _articleLink;
         private readonly bool _darkMode;
-        private readonly CoreWebView2Environment _sharedEnvironment;
+        private readonly BrowserSession _browserSession;
+        private readonly bool _adBlockerEnabled;
+        private readonly Action<string> _openExternalLinkWithPrompt;
         private readonly ArticleReaderService _articleReaderService;
         private ReaderArticleContent _readerContent;
+        private bool _isShowingOriginalContent;
+        private bool _isVideoPlaybackEnabled;
+        private bool _isOriginalContentLoading;
         private bool _isReaderModeActive;
         private bool _isReaderModeLoading;
+        private bool _isContentFullscreen;
+        private WindowState _windowStateBeforeFullscreen;
+        private WindowStyle _windowStyleBeforeFullscreen;
+        private ResizeMode _resizeModeBeforeFullscreen;
+        private Rect _boundsBeforeFullscreen;
 
         public ArticleWindow(
             string articleTitle,
             string articleHtml,
             string articleLink,
             bool darkMode,
-            CoreWebView2Environment sharedEnvironment)
+            BrowserSession browserSession,
+            bool adBlockerEnabled,
+            Action<string> openExternalLinkWithPrompt)
         {
             InitializeComponent();
 
@@ -40,16 +53,16 @@ namespace MyNewsFeeder.Views
                 : articleHtml;
             _articleLink = articleLink?.Trim() ?? string.Empty;
             _darkMode = darkMode;
-            _sharedEnvironment = sharedEnvironment;
+            _browserSession = browserSession;
+            _adBlockerEnabled = adBlockerEnabled;
+            _openExternalLinkWithPrompt = openExternalLinkWithPrompt;
             _articleReaderService = new ArticleReaderService();
 
             var titleText = string.IsNullOrWhiteSpace(articleTitle) ? "Article" : articleTitle.Trim();
             Title = titleText;
             ArticleTitleText.Text = titleText;
             ArticleLinkText.Text = string.IsNullOrWhiteSpace(_articleLink) ? "No external link" : _articleLink;
-            OpenOriginalButton.IsEnabled = !string.IsNullOrWhiteSpace(_articleLink);
-            ReaderModeButton.IsEnabled = !string.IsNullOrWhiteSpace(_articleLink);
-            UpdateReaderModeButtonText();
+            UpdateActionButtons();
 
             SourceInitialized += (_, __) => EnableDarkTitleBar();
             Loaded += ArticleWindow_Loaded;
@@ -70,20 +83,20 @@ namespace MyNewsFeeder.Views
         {
             try
             {
-                if (_sharedEnvironment != null)
+                _browserSession?.SetDarkMode(_darkMode);
+                _browserSession?.SetAdBlockerEnabled(_adBlockerEnabled);
+                _browserSession?.SetMediaPlaybackEnabled(_isVideoPlaybackEnabled);
+                _browserSession?.SetWebView(ArticleContentWebView);
+
+                if (_browserSession != null)
                 {
-                    await ArticleContentWebView.EnsureCoreWebView2Async(_sharedEnvironment);
-                }
-                else
-                {
-                    await ArticleContentWebView.EnsureCoreWebView2Async();
+                    await _browserSession.EnsureInitializedAsync();
                 }
 
                 if (ArticleContentWebView.CoreWebView2 != null)
                 {
-                    ArticleContentWebView.CoreWebView2.Settings.IsScriptEnabled = false;
-                    ArticleContentWebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
                     ArticleContentWebView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
+                    ArticleContentWebView.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
                     ArticleContentWebView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
                 }
 
@@ -105,7 +118,17 @@ namespace MyNewsFeeder.Views
                 }
 
                 ArticleContentWebView.CoreWebView2.NavigationStarting -= CoreWebView2_NavigationStarting;
+                ArticleContentWebView.CoreWebView2.NavigationCompleted -= CoreWebView2_NavigationCompleted;
                 ArticleContentWebView.CoreWebView2.NewWindowRequested -= CoreWebView2_NewWindowRequested;
+            }
+            catch
+            {
+                // Best effort cleanup only.
+            }
+
+            try
+            {
+                _browserSession?.Dispose();
             }
             catch
             {
@@ -122,18 +145,69 @@ namespace MyNewsFeeder.Views
             }
         }
 
-        private async void ReaderModeButton_Click(object sender, RoutedEventArgs e)
+        private async void RefreshPageButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_isReaderModeLoading)
+            if (_isOriginalContentLoading || _isReaderModeLoading || string.IsNullOrWhiteSpace(_articleLink))
             {
                 return;
             }
 
             if (_isReaderModeActive)
             {
-                _isReaderModeActive = false;
+                _readerContent = null;
+                await LoadReaderModeAsync(forceReaderRefresh: true);
+                return;
+            }
+
+            if (_isShowingOriginalContent)
+            {
+                await ShowOriginalContentAsync();
+            }
+        }
+
+        private async void ShowContentButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isOriginalContentLoading || _isReaderModeLoading)
+            {
+                return;
+            }
+
+            if (_isShowingOriginalContent && !_isReaderModeActive)
+            {
                 NavigateSummaryContent();
-                UpdateReaderModeButtonText();
+                return;
+            }
+
+            await ShowOriginalContentAsync();
+        }
+
+        private async void EnableVideoButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isVideoPlaybackEnabled || _isReaderModeActive || string.IsNullOrWhiteSpace(_articleLink))
+            {
+                return;
+            }
+
+            _isVideoPlaybackEnabled = true;
+            _browserSession?.SetMediaPlaybackEnabled(true);
+            await ShowOriginalContentAsync();
+        }
+
+        private async void ReaderModeButton_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadReaderModeAsync(forceReaderRefresh: false);
+        }
+
+        private async Task LoadReaderModeAsync(bool forceReaderRefresh)
+        {
+            if (_isReaderModeLoading || _isOriginalContentLoading)
+            {
+                return;
+            }
+
+            if (_isReaderModeActive)
+            {
+                NavigateSummaryContent();
                 return;
             }
 
@@ -143,11 +217,16 @@ namespace MyNewsFeeder.Views
             }
 
             _isReaderModeLoading = true;
-            ReaderModeButton.IsEnabled = false;
-            UpdateReaderModeButtonText();
+            UpdateActionButtons();
 
             try
             {
+                if (forceReaderRefresh)
+                {
+                    _readerContent = null;
+                }
+
+                ResetVideoPlaybackState();
                 _readerContent ??= await _articleReaderService.ExtractAsync(_articleLink);
                 if (_readerContent == null || string.IsNullOrWhiteSpace(_readerContent.HtmlContent))
                 {
@@ -161,6 +240,9 @@ namespace MyNewsFeeder.Views
                 }
 
                 var readerHtml = BuildReaderModeHtml(_readerContent);
+                _isShowingOriginalContent = false;
+                _isOriginalContentLoading = false;
+                ApplyWebViewModeSettings(enableScripts: false);
                 ArticleContentWebView.NavigateToString(readerHtml);
                 _isReaderModeActive = true;
             }
@@ -176,14 +258,8 @@ namespace MyNewsFeeder.Views
             finally
             {
                 _isReaderModeLoading = false;
-                ReaderModeButton.IsEnabled = !string.IsNullOrWhiteSpace(_articleLink);
-                UpdateReaderModeButtonText();
+                UpdateActionButtons();
             }
-        }
-
-        private void OpenOriginalButton_Click(object sender, RoutedEventArgs e)
-        {
-            OpenExternalLink(_articleLink);
         }
 
         private void CoreWebView2_NavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
@@ -199,8 +275,24 @@ namespace MyNewsFeeder.Views
                 return;
             }
 
+            if (_isShowingOriginalContent)
+            {
+                return;
+            }
+
             e.Cancel = true;
             OpenExternalLink(e.Uri);
+        }
+
+        private void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (!_isShowingOriginalContent)
+            {
+                return;
+            }
+
+            _isOriginalContentLoading = false;
+            UpdateActionButtons();
         }
 
         private void CoreWebView2_NewWindowRequested(object sender, CoreWebView2NewWindowRequestedEventArgs e)
@@ -209,10 +301,36 @@ namespace MyNewsFeeder.Views
             OpenExternalLink(e.Uri);
         }
 
-        private static void OpenExternalLink(string link)
+        private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.F11)
+            {
+                if (_isContentFullscreen || _isShowingOriginalContent || _isReaderModeActive)
+                {
+                    ToggleContentFullscreen();
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (e.Key == System.Windows.Input.Key.Escape && _isContentFullscreen)
+            {
+                SetContentFullscreen(false);
+                e.Handled = true;
+            }
+        }
+
+        private void OpenExternalLink(string link)
         {
             if (string.IsNullOrWhiteSpace(link))
             {
+                return;
+            }
+
+            if (_openExternalLinkWithPrompt != null)
+            {
+                _openExternalLinkWithPrompt(link);
                 return;
             }
 
@@ -228,7 +346,161 @@ namespace MyNewsFeeder.Views
 
         private void NavigateSummaryContent()
         {
+            _isShowingOriginalContent = false;
+            _isOriginalContentLoading = false;
+            _isReaderModeActive = false;
+            ResetVideoPlaybackState();
+            ApplyWebViewModeSettings(enableScripts: false);
             ArticleContentWebView.NavigateToString(_summaryArticleHtml);
+            UpdateActionButtons();
+        }
+
+        private async Task ShowOriginalContentAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_articleLink))
+            {
+                return;
+            }
+
+            try
+            {
+                if (_browserSession == null)
+                {
+                    OpenExternalLink(_articleLink);
+                    return;
+                }
+
+                if (!await _browserSession.EnsureInitializedAsync())
+                {
+                    OpenExternalLink(_articleLink);
+                    return;
+                }
+
+                _isShowingOriginalContent = true;
+                _isOriginalContentLoading = true;
+                _isReaderModeActive = false;
+                _browserSession.SetMediaPlaybackEnabled(_isVideoPlaybackEnabled);
+                ApplyWebViewModeSettings(enableScripts: true);
+                UpdateActionButtons();
+                await _browserSession.NavigateFastAsync(_articleLink);
+            }
+            catch
+            {
+                _isShowingOriginalContent = false;
+                _isOriginalContentLoading = false;
+                ApplyWebViewModeSettings(enableScripts: false);
+                UpdateActionButtons();
+                OpenExternalLink(_articleLink);
+            }
+        }
+
+        private void ApplyWebViewModeSettings(bool enableScripts)
+        {
+            if (ArticleContentWebView?.CoreWebView2 == null)
+            {
+                return;
+            }
+
+            ArticleContentWebView.CoreWebView2.Settings.IsScriptEnabled = enableScripts;
+            ArticleContentWebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;
+        }
+
+        private void UpdateActionButtons()
+        {
+            var hasLink = !string.IsNullOrWhiteSpace(_articleLink);
+            var hasContentPreview = _isShowingOriginalContent || _isReaderModeActive;
+            var canEnableVideo = hasLink && _isShowingOriginalContent && !_isReaderModeActive && !_isOriginalContentLoading && !_isReaderModeLoading;
+            ShowContentButton.IsEnabled = hasLink && !_isReaderModeLoading && !_isOriginalContentLoading;
+            ReaderModeButton.IsEnabled = hasLink && !_isReaderModeLoading && !_isOriginalContentLoading;
+            RefreshPageButton.IsEnabled = hasLink && hasContentPreview && !_isReaderModeLoading && !_isOriginalContentLoading;
+            FullscreenRefreshButton.IsEnabled = hasLink && hasContentPreview && !_isReaderModeLoading && !_isOriginalContentLoading;
+            FullscreenLinkTextBlock.Text = hasLink ? _articleLink : string.Empty;
+            FullscreenToolbar.Visibility = _isContentFullscreen && hasContentPreview ? Visibility.Visible : Visibility.Collapsed;
+            EnableVideoButton.Visibility = canEnableVideo ? Visibility.Visible : Visibility.Collapsed;
+            EnableVideoButton.IsEnabled = canEnableVideo && !_isVideoPlaybackEnabled;
+            EnableVideoButton.Content = _isVideoPlaybackEnabled ? "Media Allowed" : "Allow Media";
+            FullscreenEnableVideoButton.Visibility = canEnableVideo ? Visibility.Visible : Visibility.Collapsed;
+            FullscreenEnableVideoButton.IsEnabled = canEnableVideo && !_isVideoPlaybackEnabled;
+            FullscreenEnableVideoButton.Content = _isVideoPlaybackEnabled ? "Media Allowed" : "Allow Media";
+            FullscreenEnableVideoSeparator.Visibility = canEnableVideo ? Visibility.Visible : Visibility.Collapsed;
+            UpdateShowContentButtonText();
+            UpdateReaderModeButtonText();
+        }
+
+        private void ResetVideoPlaybackState()
+        {
+            if (!_isVideoPlaybackEnabled && (_browserSession == null || !_browserSession.IsMediaPlaybackEnabled))
+            {
+                return;
+            }
+
+            _isVideoPlaybackEnabled = false;
+            _browserSession?.SetMediaPlaybackEnabled(false);
+        }
+
+        private void FullscreenButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleContentFullscreen();
+        }
+
+        private void ToggleContentFullscreen()
+        {
+            SetContentFullscreen(!_isContentFullscreen);
+        }
+
+        private void SetContentFullscreen(bool isFullscreen)
+        {
+            if (_isContentFullscreen == isFullscreen)
+            {
+                return;
+            }
+
+            if (isFullscreen && !(_isShowingOriginalContent || _isReaderModeActive))
+            {
+                return;
+            }
+
+            _isContentFullscreen = isFullscreen;
+            HeaderBorder.Visibility = isFullscreen ? Visibility.Collapsed : Visibility.Visible;
+            HeaderRow.Height = isFullscreen ? new GridLength(0) : GridLength.Auto;
+
+            if (isFullscreen)
+            {
+                _windowStateBeforeFullscreen = WindowState;
+                _windowStyleBeforeFullscreen = WindowStyle;
+                _resizeModeBeforeFullscreen = ResizeMode;
+                _boundsBeforeFullscreen = new Rect(Left, Top, Width, Height);
+
+                WindowStyle = WindowStyle.None;
+                ResizeMode = ResizeMode.NoResize;
+                WindowState = WindowState.Maximized;
+            }
+            else
+            {
+                WindowState = WindowState.Normal;
+                WindowStyle = _windowStyleBeforeFullscreen;
+                ResizeMode = _resizeModeBeforeFullscreen;
+                Left = _boundsBeforeFullscreen.Left;
+                Top = _boundsBeforeFullscreen.Top;
+                Width = _boundsBeforeFullscreen.Width;
+                Height = _boundsBeforeFullscreen.Height;
+                WindowState = _windowStateBeforeFullscreen;
+            }
+
+            UpdateActionButtons();
+        }
+
+        private void UpdateShowContentButtonText()
+        {
+            if (_isOriginalContentLoading)
+            {
+                ShowContentButton.Content = "Loading Page...";
+                return;
+            }
+
+            ShowContentButton.Content = _isShowingOriginalContent && !_isReaderModeActive
+                ? "Article Summary"
+                : "Show Content";
         }
 
         private void UpdateReaderModeButtonText()

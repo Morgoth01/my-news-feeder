@@ -242,6 +242,17 @@ namespace MyNewsFeeder.Views
             ExecuteMainCommandForNotification(item, vm => vm.PinArticleCommand);
         }
 
+        private void ArchiveMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuItem menuItem ||
+                menuItem.CommandParameter is not ImportantNotificationItem item)
+            {
+                return;
+            }
+
+            ExecuteMainCommandForNotification(item, vm => vm.ArchiveArticleCommand);
+        }
+
         private void ClearMenuItem_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not MenuItem menuItem ||
@@ -253,12 +264,12 @@ namespace MyNewsFeeder.Views
             RemoveNotificationItem(item);
         }
 
-        private async Task OpenSelectedItemInWindowAsync()
+        private Task OpenSelectedItemInWindowAsync()
         {
             if (NotificationsListView.SelectedItem is not ImportantNotificationItem selected ||
                 string.IsNullOrWhiteSpace(selected.Link))
             {
-                return;
+                return Task.CompletedTask;
             }
 
             try
@@ -268,10 +279,6 @@ namespace MyNewsFeeder.Views
                 var articleTitle = string.IsNullOrWhiteSpace(selected.Title) ? "Article" : selected.Title.Trim();
                 var articleLink = selected.Link.Trim();
                 var articleHtml = BuildNotificationArticleHtml(selected, darkMode);
-                var sharedEnvironment = mainViewModel != null
-                    ? await mainViewModel.GetSharedWebViewEnvironmentAsync()
-                    : null;
-
                 if (mainViewModel != null)
                 {
                     var feedItem = FindFeedItemByLink(mainViewModel, articleLink);
@@ -288,7 +295,9 @@ namespace MyNewsFeeder.Views
                     articleHtml,
                     articleLink,
                     darkMode,
-                    sharedEnvironment)
+                    mainViewModel?.CreateBrowserSession(),
+                    mainViewModel?.AdBlockerEnabled == true,
+                    mainViewModel != null ? new Action<string>(mainViewModel.PromptOpenExternalLink) : null)
                 {
                     Owner = Application.Current?.MainWindow
                 };
@@ -298,6 +307,8 @@ namespace MyNewsFeeder.Views
             {
                 // Ignore article window launch errors.
             }
+
+            return Task.CompletedTask;
         }
 
         private static MainViewModel ResolveMainViewModel()

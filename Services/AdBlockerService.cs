@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -14,10 +15,34 @@ namespace MyNewsFeeder.Services
     /// </summary>
     public class AdBlockerService
     {
+        private static readonly string[] FastPatternIndicators =
+        {
+            "ad",
+            "ads",
+            "advert",
+            "banner",
+            "promo",
+            "sponsor",
+            "track",
+            "analytics",
+            "pixel",
+            "doubleclick",
+            "googlesyndication",
+            "googleadservices",
+            "pagead",
+            "taboola",
+            "outbrain",
+            "gclid=",
+            "utm_"
+        };
+
         private readonly HashSet<string> _blockedDomains;
         private readonly List<Regex> _blockedPatterns;
         private readonly HttpClient _httpClient;
         private bool _isInitialized = false;
+        private readonly ConcurrentDictionary<string, bool> _urlDecisionCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, bool> _blockedHostCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ConcurrentDictionary<string, bool> _allowedHostCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _allowedDomains = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             // Allow domains that are known to break when blocked.
@@ -86,6 +111,7 @@ namespace MyNewsFeeder.Services
             {
                 _blockedDomains.Add(domain);
             }
+            ResetDecisionCaches();
 
             // Essential URL patterns for immediate blocking
             var criticalPatterns = new[]
@@ -152,6 +178,7 @@ namespace MyNewsFeeder.Services
             {
                 _blockedDomains.Add(domain);
             }
+            ResetDecisionCaches();
 
             // Load comprehensive ad URL patterns
             var basicAdPatterns = new[]
@@ -202,6 +229,7 @@ namespace MyNewsFeeder.Services
                         if (!string.IsNullOrEmpty(domain) && domain.Contains('.'))
                         {
                             _blockedDomains.Add(domain);
+                            ResetDecisionCaches();
                         }
                     }
                 }
@@ -372,6 +400,7 @@ namespace MyNewsFeeder.Services
                         if (IsValidDomain(domain))
                         {
                             _blockedDomains.Add(domain);
+                            ResetDecisionCaches();
                         }
                     }
                     // Parse hosts file format (0.0.0.0 domain.com)
@@ -381,6 +410,7 @@ namespace MyNewsFeeder.Services
                         if (parts.Length >= 2 && IsValidDomain(parts[1]))
                         {
                             _blockedDomains.Add(parts[1]);
+                            ResetDecisionCaches();
                         }
                     }
                     // Parse URL patterns
@@ -423,10 +453,20 @@ namespace MyNewsFeeder.Services
         }
 
         // ENHANCED: Comprehensive URL blocking without diagnostics
-        public bool ShouldBlockUrl(string url)
+        public bool ShouldBlockUrl(string url, string documentUrl = null)
         {
             if (!_isInitialized || string.IsNullOrEmpty(url))
                 return false;
+
+            var documentHost = GetHost(documentUrl);
+            var cacheKey = string.IsNullOrWhiteSpace(documentHost)
+                ? url
+                : $"{documentHost}|{url}";
+
+            if (_urlDecisionCache.TryGetValue(cacheKey, out var cachedDecision))
+            {
+                return cachedDecision;
+            }
 
             try
             {
@@ -435,8 +475,18 @@ namespace MyNewsFeeder.Services
                 var fullUrl = url.ToLowerInvariant();
 
                 // Skip blocking if the host is explicitly allowed.
-                if (_allowedDomains.Contains(host) || _allowedDomains.Any(d => host.EndsWith("." + d)))
+                if (IsAllowedHost(host))
                 {
+                    RememberUrlDecision(cacheKey, false);
+                    return false;
+                }
+
+                if (!string.IsNullOrWhiteSpace(documentHost) &&
+                    string.Equals(host, documentHost, StringComparison.OrdinalIgnoreCase) &&
+                    !IsBlockedHost(host) &&
+                    !MayRequirePatternScan(fullUrl))
+                {
+                    RememberUrlDecision(cacheKey, false);
                     return false;
                 }
 
@@ -460,6 +510,7 @@ namespace MyNewsFeeder.Services
                 {
                     if (host == domain || host.EndsWith("." + domain))
                     {
+                        RememberUrlDecision(cacheKey, true);
                         return true;
                     }
                 }
@@ -485,23 +536,21 @@ namespace MyNewsFeeder.Services
                 {
                     if (fullUrl.Contains(pattern))
                     {
+                        RememberUrlDecision(cacheKey, true);
                         return true;
                     }
                 }
 
-                // Check exact domain match from filter lists
-                if (_blockedDomains.Contains(host))
+                if (IsBlockedHost(host))
                 {
+                    RememberUrlDecision(cacheKey, true);
                     return true;
                 }
 
-                // Check subdomain matches from filter lists
-                foreach (var blockedDomain in _blockedDomains)
+                if (!MayRequirePatternScan(fullUrl))
                 {
-                    if (host.EndsWith("." + blockedDomain))
-                    {
-                        return true;
-                    }
+                    RememberUrlDecision(cacheKey, false);
+                    return false;
                 }
 
                 // Check URL patterns from filter lists
@@ -509,16 +558,129 @@ namespace MyNewsFeeder.Services
                 {
                     if (pattern.IsMatch(fullUrl))
                     {
+                        RememberUrlDecision(cacheKey, true);
                         return true;
                     }
                 }
 
+                RememberUrlDecision(cacheKey, false);
                 return false;
             }
             catch (Exception)
             {
+                RememberUrlDecision(cacheKey, false);
                 return false;
             }
+        }
+
+        private static bool MayRequirePatternScan(string fullUrl)
+        {
+            if (string.IsNullOrWhiteSpace(fullUrl))
+            {
+                return false;
+            }
+
+            foreach (var indicator in FastPatternIndicators)
+            {
+                if (fullUrl.Contains(indicator, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsAllowedHost(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                return false;
+            }
+
+            return _allowedHostCache.GetOrAdd(host, static (key, state) => IsDomainOrParentListed(key, state), _allowedDomains);
+        }
+
+        private bool IsBlockedHost(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                return false;
+            }
+
+            return _blockedHostCache.GetOrAdd(host, static (key, state) => IsDomainOrParentListed(key, state), _blockedDomains);
+        }
+
+        private static bool IsDomainOrParentListed(string host, HashSet<string> domainSet)
+        {
+            if (string.IsNullOrWhiteSpace(host) || domainSet == null || domainSet.Count == 0)
+            {
+                return false;
+            }
+
+            if (domainSet.Contains(host))
+            {
+                return true;
+            }
+
+            var startIndex = 0;
+            while (startIndex >= 0 && startIndex < host.Length)
+            {
+                var dotIndex = host.IndexOf('.', startIndex);
+                if (dotIndex < 0 || dotIndex + 1 >= host.Length)
+                {
+                    break;
+                }
+
+                var suffix = host[(dotIndex + 1)..];
+                if (domainSet.Contains(suffix))
+                {
+                    return true;
+                }
+
+                startIndex = dotIndex + 1;
+            }
+
+            return false;
+        }
+
+        private void RememberUrlDecision(string cacheKey, bool blocked)
+        {
+            if (string.IsNullOrWhiteSpace(cacheKey))
+            {
+                return;
+            }
+
+            if (_urlDecisionCache.Count > 5000)
+            {
+                _urlDecisionCache.Clear();
+            }
+
+            _urlDecisionCache[cacheKey] = blocked;
+        }
+
+        private static string GetHost(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                return new Uri(url).Host.ToLowerInvariant();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private void ResetDecisionCaches()
+        {
+            _urlDecisionCache.Clear();
+            _blockedHostCache.Clear();
+            _allowedHostCache.Clear();
         }
 
         // Manual filter list update
@@ -565,6 +727,7 @@ namespace MyNewsFeeder.Services
             if (!string.IsNullOrWhiteSpace(domain))
             {
                 _allowedDomains.Add(domain.Trim().ToLowerInvariant());
+                ResetDecisionCaches();
             }
         }
 
@@ -573,6 +736,7 @@ namespace MyNewsFeeder.Services
             if (!string.IsNullOrWhiteSpace(domain))
             {
                 _allowedDomains.Remove(domain.Trim().ToLowerInvariant());
+                ResetDecisionCaches();
             }
         }
 
@@ -582,6 +746,7 @@ namespace MyNewsFeeder.Services
             if (!string.IsNullOrEmpty(domain))
             {
                 _blockedDomains.Add(domain.ToLowerInvariant());
+                ResetDecisionCaches();
             }
         }
 
@@ -590,6 +755,7 @@ namespace MyNewsFeeder.Services
             if (!string.IsNullOrEmpty(domain))
             {
                 _blockedDomains.Remove(domain.ToLowerInvariant());
+                ResetDecisionCaches();
             }
         }
 

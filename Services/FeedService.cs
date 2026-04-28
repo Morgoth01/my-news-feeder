@@ -60,10 +60,10 @@ namespace MyNewsFeeder.Services
                     return null;
                 }
 
-                using var response = await _httpClient.GetAsync(normalizedUrl);
+                using var response = await _httpClient.GetAsync(normalizedUrl).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
-                using var stream = await response.Content.ReadAsStreamAsync();
+                using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 using var xmlReader = XmlReader.Create(stream);
                 var syndicationFeed = SyndicationFeed.Load(xmlReader);
                 var title = syndicationFeed?.Title?.Text;
@@ -103,7 +103,7 @@ namespace MyNewsFeeder.Services
                     semaphore))
                 .ToList();
 
-            var results = await Task.WhenAll(tasks);
+            var results = await Task.WhenAll(tasks).ConfigureAwait(false);
 
             foreach (var result in results.OrderBy(r => r.Index))
             {
@@ -118,6 +118,37 @@ namespace MyNewsFeeder.Services
             return articles;
         }
 
+        public async Task<List<FeedItem>> FetchArticlesForFeedAsync(
+            Feed feed,
+            string keywordFilter,
+            int maxItems,
+            IReadOnlyCollection<string> advertisementKeywords = null)
+        {
+            if (feed == null)
+            {
+                return new List<FeedItem>();
+            }
+
+            _lastBlockedFeeds.Clear();
+            var normalizedAdvertisementKeywords = NormalizeAdvertisementKeywords(advertisementKeywords);
+            var hasAdvertisementKeywords = normalizedAdvertisementKeywords.Count > 0;
+
+            var result = await FetchSingleFeedAsync(
+                0,
+                feed,
+                keywordFilter,
+                maxItems,
+                hasAdvertisementKeywords,
+                normalizedAdvertisementKeywords).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(result.BlockedFeedName))
+            {
+                _lastBlockedFeeds.Add(result.BlockedFeedName);
+            }
+
+            return result.Items ?? new List<FeedItem>();
+        }
+
         private async Task<FeedFetchResult> FetchFeedWithConcurrencyAsync(
             int index,
             Feed feed,
@@ -127,7 +158,7 @@ namespace MyNewsFeeder.Services
             IReadOnlyList<string> normalizedAdvertisementKeywords,
             SemaphoreSlim semaphore)
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync().ConfigureAwait(false);
             try
             {
                 return await FetchSingleFeedAsync(
@@ -136,7 +167,7 @@ namespace MyNewsFeeder.Services
                     keywordFilter,
                     maxItems,
                     hasAdvertisementKeywords,
-                    normalizedAdvertisementKeywords);
+                    normalizedAdvertisementKeywords).ConfigureAwait(false);
             }
             finally
             {
@@ -175,10 +206,10 @@ namespace MyNewsFeeder.Services
 
             try
             {
-                using var response = await _httpClient.GetAsync(normalizedUrl, HttpCompletionOption.ResponseHeadersRead);
+                using var response = await _httpClient.GetAsync(normalizedUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
-                using var stream = await response.Content.ReadAsStreamAsync();
+                using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 using var xmlReader = XmlReader.Create(stream);
                 var syndicationFeed = SyndicationFeed.Load(xmlReader);
 

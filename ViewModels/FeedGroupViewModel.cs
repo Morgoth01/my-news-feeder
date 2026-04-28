@@ -23,6 +23,7 @@ namespace MyNewsFeeder.ViewModels
         private int _loadedItemsCount;
         private readonly LoadMoreItem _loadMoreMarker = new LoadMoreItem();
         private bool _hideUnreadIndicators;
+        private bool _isNavigationSelected;
         private int _batchUpdateDepth;
         private bool _pendingRefreshPagedItems;
         private bool _pendingResetLoadedCount;
@@ -126,6 +127,19 @@ namespace MyNewsFeeder.ViewModels
                     // Collapse -> expand should start from the paged view again.
                     _loadedItemsCount = 0;
                     RefreshPagedItems(resetLoadedCount: true);
+                }
+            }
+        }
+
+        public bool IsNavigationSelected
+        {
+            get => _isNavigationSelected;
+            set
+            {
+                if (_isNavigationSelected != value)
+                {
+                    _isNavigationSelected = value;
+                    OnPropertyChanged(nameof(IsNavigationSelected));
                 }
             }
         }

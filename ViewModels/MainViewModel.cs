@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Net;
 using System.Windows;
 using System.Windows.Threading;
+using System.Windows.Data;
 using System.Diagnostics;
 using HtmlAgilityPack;
 using MyNewsFeeder.Models;
@@ -24,6 +25,9 @@ namespace MyNewsFeeder.ViewModels
     {
         public event PropertyChangedEventHandler PropertyChanged;
         public event Action<string> SelectionRestoreRequested;
+        public event Action ArchiveItemsChanged;
+        public event Action ArticleLabelsChanged;
+        public event Action ArticleNotesChanged;
         public Func<double> RequestTreeScrollOffset;
         public event Action<double> ScrollOffsetRestoreRequested;
         public event Action<FeedItem> ScrollSelectionToTopRequested;
@@ -36,6 +40,7 @@ namespace MyNewsFeeder.ViewModels
         private readonly List<CategoryGroupViewModel> _allCategoryGroups = new List<CategoryGroupViewModel>();
         private List<FeedGroupViewModel> _pinnedSourceFeeds = new List<FeedGroupViewModel>();
         private List<FeedGroupViewModel> _readLaterSourceFeeds = new List<FeedGroupViewModel>();
+        private List<FeedGroupViewModel> _archivedSourceFeeds = new List<FeedGroupViewModel>();
         private List<Feed> _feeds;
         private AppSettings _settings;
         private string _selectedArticleText;
@@ -43,6 +48,7 @@ namespace MyNewsFeeder.ViewModels
         private string _selectedArticleHtml;
         private string _keyword;
         private bool _isBrowserVisible = false;
+        private bool _isContentFullscreen;
         private double _browserHeight = 400;
         private double _articleWebViewHeight = 400;
         private Microsoft.Web.WebView2.Wpf.WebView2 _articleWebView;
@@ -57,6 +63,7 @@ namespace MyNewsFeeder.ViewModels
         private HashSet<string> _readArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private HashSet<string> _pinnedArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private HashSet<string> _readLaterArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private HashSet<string> _archivedArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _suppressSelectionDuringRefresh;
         private double _lastTreeScrollOffset;
         private System.Windows.Threading.DispatcherTimer _autoRefreshTimer;
@@ -64,6 +71,7 @@ namespace MyNewsFeeder.ViewModels
         private string _copyLinkButtonText = "Copy Link";
         private ArticleSectionViewModel _pinnedSection;
         private ArticleSectionViewModel _readLaterSection;
+        private ArticleSectionViewModel _archivedSection;
         private ArticleSectionViewModel _myFeedsSection;
         private bool _sectionRefreshPending;
         private const int MaxExtraPerFeed = 50;
@@ -72,6 +80,10 @@ namespace MyNewsFeeder.ViewModels
         private FeedItem _currentSelectedItem;
         private string _lastMyFeedsSelectedLink;
         private bool _isLoading;
+        private bool _isBrowserPageLoading;
+        private bool _isBrowserTransitionVisible;
+        private string _pendingBrowserNavigationUrl;
+        private bool _pendingBrowserNavigationUseClear;
         private bool _suppressAutoScroll;
         private DateTime _nextAutoRefreshTime;
         private System.Windows.Threading.DispatcherTimer _autoRefreshCountdownTimer;
@@ -80,6 +92,7 @@ namespace MyNewsFeeder.ViewModels
         private bool _pendingDarkMode;
         private bool _pendingAutoUpdateCheck;
         private bool _autoUpdatePromptedThisSession;
+        private bool _initialRefreshRequested;
         private readonly SemaphoreSlim _refreshLock = new SemaphoreSlim(1, 1);
         private ArticleSectionViewModel _selectedSection;
         private string _treeFilterText;
@@ -109,9 +122,17 @@ namespace MyNewsFeeder.ViewModels
         private bool _hasImportantNotifications;
         private readonly HashSet<string> _knownArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _hasCompletedInitialRefresh;
+        private bool _hasShownEmbeddedBrowserWarmupHintThisSession;
         private DateTime _lastNotificationUtc = DateTime.MinValue;
+        private ArchiveWindow _archiveWindow;
+        private BrowserSession _embeddedBrowserSession;
+        private bool _isEmbeddedVideoPlaybackEnabled;
+        private string _selectedMainCategoryName;
+        private string _selectedMainFeedName;
+        private string _currentArticleListTitle = "Latest Articles";
         private static readonly TimeSpan NotificationCooldown = TimeSpan.FromSeconds(10);
         private const int MaxNotificationsPerRefresh = 3;
+        private const int DefaultArchiveAutoCleanupDays = 90;
 
         private static readonly HashSet<string> SelfClosingHtmlTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -163,11 +184,36 @@ namespace MyNewsFeeder.ViewModels
 
         public ObservableCollection<CategoryGroupViewModel> CategoryGroups { get; set; }
         public ObservableCollection<ArticleSectionViewModel> ArticleSections { get; set; }
+        public ObservableCollection<ArticleSectionViewModel> MainVisibleSections { get; } = new ObservableCollection<ArticleSectionViewModel>();
+        public ObservableCollection<FeedItem> CurrentArticleItems { get; } = new ObservableCollection<FeedItem>();
+        public ICollectionView CurrentArticleItemsView { get; }
+        public ArticleSectionViewModel PinnedSection => _pinnedSection;
+        public ArticleSectionViewModel ReadLaterSection => _readLaterSection;
+        public ArticleSectionViewModel ArchivedSection => _archivedSection;
+        public string CurrentArticleListTitle
+        {
+            get => _currentArticleListTitle;
+            private set
+            {
+                if (_currentArticleListTitle != value)
+                {
+                    _currentArticleListTitle = value;
+                    OnPropertyChanged(nameof(CurrentArticleListTitle));
+                }
+            }
+        }
         public ArticleSectionViewModel SelectedSection
         {
             get => _selectedSection;
             set
             {
+                if (value?.OpensInWindow == true)
+                {
+                    ShowLibraryWindow(LibrarySectionMode.Archive);
+                    OnPropertyChanged(nameof(SelectedSection));
+                    return;
+                }
+
                 if (_selectedSection != value)
                 {
                     // If leaving My Feeds, remember the current article.
@@ -177,6 +223,8 @@ namespace MyNewsFeeder.ViewModels
                     }
 
                     _selectedSection = value;
+                    _selectedMainCategoryName = null;
+                    _selectedMainFeedName = null;
                     OnPropertyChanged(nameof(SelectedSection));
                     OnPropertyChanged(nameof(VisibleSections));
                     RestoreSectionFilterText(_selectedSection);
@@ -189,6 +237,8 @@ namespace MyNewsFeeder.ViewModels
                             TryRestoreMyFeedsSelection();
                         }
                     }
+
+                    RefreshCurrentArticleList();
                 }
             }
         }
@@ -200,7 +250,7 @@ namespace MyNewsFeeder.ViewModels
                 {
                     return new[] { _selectedSection };
                 }
-                return ArticleSections;
+                return ArticleSections?.Where(section => section?.OpensInWindow != true) ?? Enumerable.Empty<ArticleSectionViewModel>();
             }
         }
         public ICommand CopyLinkCommand { get; }
@@ -208,8 +258,18 @@ namespace MyNewsFeeder.ViewModels
         public ICommand MarkUnreadCommand { get; }
         public ICommand PinArticleCommand { get; }
         public ICommand ReadLaterArticleCommand { get; }
+        public ICommand ArchiveArticleCommand { get; }
+        public ICommand ArchiveSelectedArticleCommand { get; }
+        public ICommand OpenArchiveWindowCommand { get; }
+        public ICommand OpenFeedAllWindowCommand { get; }
+        public ICommand OpenFeedAllWindowForFeedCommand { get; }
+        public ICommand OpenLibraryWindowCommand { get; }
+        public ICommand OpenReadLaterWindowCommand { get; }
         public ICommand ArticleClickCommand { get; }
         public ICommand OpenArticleInWindowCommand { get; }
+        public ICommand SelectMainCategoryCommand { get; }
+        public ICommand SelectMainFeedCommand { get; }
+        public ICommand SelectMainAllArticlesCommand { get; }
         public ICommand PinSelectedArticleCommand { get; }
         public ICommand ReadLaterSelectedArticleCommand { get; }
         public ICommand MarkSelectedArticleUnreadCommand { get; }
@@ -218,6 +278,7 @@ namespace MyNewsFeeder.ViewModels
         public ICommand ShowImportantNotificationsCommand { get; }
         public ICommand NavigateSelectionCommand { get; }
         public ICommand NavigateFeedCommand { get; }
+        public ICommand ToggleContentFullscreenCommand { get; }
 
         public bool HasImportantNotifications
         {
@@ -247,10 +308,29 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
-        private bool IsBackgroundRefreshMode => _settings?.AutoRefresh == true && _settings.LiveRefresh;
+        private bool IsBackgroundRefreshMode => _hasCompletedInitialRefresh && _settings?.AutoRefresh == true && _settings.LiveRefresh;
 
         public bool IsNotLoading => !_isLoading || IsBackgroundRefreshMode;
         public bool ShowLoadingOverlay => _isLoading && !IsBackgroundRefreshMode;
+        public bool IsBrowserPageLoading
+        {
+            get => _isBrowserPageLoading;
+            set
+            {
+                if (_isBrowserPageLoading != value)
+                {
+                    _isBrowserPageLoading = value;
+                    OnPropertyChanged(nameof(IsBrowserPageLoading));
+                    OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+                }
+            }
+        }
+
+        public bool ShowBrowserLoadingOverlay => _isBrowserTransitionVisible && IsBrowserVisible;
+
+        public bool IsEmbeddedVideoButtonVisible => IsBrowserVisible && !_isReaderModeActive;
+
+        public string EnableVideoButtonText => _isEmbeddedVideoPlaybackEnabled ? "Media Allowed" : "Allow Media";
 
         public bool SuppressAutoScroll
         {
@@ -285,6 +365,11 @@ namespace MyNewsFeeder.ViewModels
             get => _selectedArticleText;
             set
             {
+                if (string.Equals(_selectedArticleText, value, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
                 _selectedArticleText = value;
                 OnPropertyChanged(nameof(SelectedArticleText));
             }
@@ -295,8 +380,20 @@ namespace MyNewsFeeder.ViewModels
             get => _selectedArticleLink;
             set
             {
+                if (string.Equals(_selectedArticleLink, value, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(value) && _isContentFullscreen)
+                {
+                    SetContentFullscreen(false);
+                }
+
                 _selectedArticleLink = value;
                 OnPropertyChanged(nameof(SelectedArticleLink));
+                (ToggleContentFullscreenCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (EnableEmbeddedVideoCommand as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
 
@@ -305,6 +402,11 @@ namespace MyNewsFeeder.ViewModels
             get => _selectedArticleHtml;
             set
             {
+                if (string.Equals(_selectedArticleHtml, value, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
                 _selectedArticleHtml = value;
                 OnPropertyChanged(nameof(SelectedArticleHtml));
                 UpdateArticleWebView();
@@ -326,9 +428,35 @@ namespace MyNewsFeeder.ViewModels
             get => _isBrowserVisible;
             set
             {
+                if (!value && _isContentFullscreen)
+                {
+                    SetContentFullscreen(false);
+                }
+
                 _isBrowserVisible = value;
                 OnPropertyChanged(nameof(IsBrowserVisible));
                 OnPropertyChanged(nameof(ShowContentButtonText));
+                OnPropertyChanged(nameof(IsEmbeddedVideoButtonVisible));
+                (ToggleContentFullscreenCommand as RelayCommand)?.RaiseCanExecuteChanged();
+                (EnableEmbeddedVideoCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+
+        public bool IsContentFullscreen
+        {
+            get => _isContentFullscreen;
+            private set
+            {
+                if (_isContentFullscreen == value)
+                {
+                    return;
+                }
+
+                _isContentFullscreen = value;
+                OnPropertyChanged(nameof(IsContentFullscreen));
+                OnPropertyChanged(nameof(ContentFullscreenButtonText));
+                OnPropertyChanged(nameof(ContentFullscreenToolTip));
+                (ToggleContentFullscreenCommand as RelayCommand)?.RaiseCanExecuteChanged();
             }
         }
 
@@ -402,6 +530,12 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
+        public string ContentFullscreenButtonText => IsContentFullscreen ? "Exit Fullscreen" : "Fullscreen";
+
+        public string ContentFullscreenToolTip => IsContentFullscreen
+            ? "Exit fullscreen (Esc or F11)"
+            : "Open content in fullscreen (F11)";
+
         public string ReaderModeButtonText
         {
             get
@@ -444,14 +578,163 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
+        private List<ArticleLabelDefinition> ResolveArticleLabelsForLink(string key)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(key))
+            {
+                return new List<ArticleLabelDefinition>();
+            }
+
+            var definitions = _settings.ArticleLabels ?? new List<ArticleLabelDefinition>();
+            var assignments = _settings.ArticleLabelAssignments ?? new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            if (!assignments.TryGetValue(key.Trim(), out var names) || names == null || names.Count == 0)
+            {
+                return new List<ArticleLabelDefinition>();
+            }
+
+            return names
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => definitions.FirstOrDefault(def => string.Equals(def?.Name?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase)))
+                .Where(def => def != null)
+                .GroupBy(def => def.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First().Clone())
+                .OrderBy(def => def.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        private void ApplyStoredLabelsToItem(FeedItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            var key = item.Link?.Trim();
+            item.SetLabels(string.IsNullOrWhiteSpace(key)
+                ? Array.Empty<ArticleLabelDefinition>()
+                : ResolveArticleLabelsForLink(key));
+        }
+
+        private void ApplyStoredLabelsToLink(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            var resolved = ResolveArticleLabelsForLink(key);
+            foreach (var item in EnumerateAllTrackedItems().Where(item =>
+                         string.Equals(item.Link?.Trim(), key.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                item.SetLabels(resolved);
+            }
+        }
+
+        private void ApplyStoredLabelsToAllKnownItems()
+        {
+            foreach (var item in EnumerateAllTrackedItems())
+            {
+                ApplyStoredLabelsToItem(item);
+            }
+        }
+
+        private string ResolveArticleNoteForLink(string key)
+        {
+            if (_settings?.ArticleNoteAssignments == null || string.IsNullOrWhiteSpace(key))
+            {
+                return string.Empty;
+            }
+
+            return _settings.ArticleNoteAssignments.TryGetValue(key.Trim(), out var note)
+                ? note ?? string.Empty
+                : string.Empty;
+        }
+
+        private void ApplyStoredNoteToItem(FeedItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            var key = item.Link?.Trim();
+            item.Note = string.IsNullOrWhiteSpace(key)
+                ? string.Empty
+                : ResolveArticleNoteForLink(key);
+        }
+
+        private void ApplyStoredNoteToLink(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            var note = ResolveArticleNoteForLink(key);
+            foreach (var item in EnumerateAllTrackedItems().Where(item =>
+                         string.Equals(item.Link?.Trim(), key.Trim(), StringComparison.OrdinalIgnoreCase)))
+            {
+                item.Note = note;
+            }
+        }
+
+        private void ApplyStoredNotesToAllKnownItems()
+        {
+            foreach (var item in EnumerateAllTrackedItems())
+            {
+                ApplyStoredNoteToItem(item);
+            }
+        }
+
+        private IEnumerable<FeedItem> EnumerateAllTrackedItems()
+        {
+            var seen = new HashSet<FeedItem>();
+
+            IEnumerable<FeedItem> EnumerateSection(ArticleSectionViewModel section)
+            {
+                foreach (var item in GetSectionItemsShallow(section))
+                {
+                    yield return item;
+                }
+            }
+
+            foreach (var item in EnumerateSection(_pinnedSection)
+                .Concat(EnumerateSection(_readLaterSection))
+                .Concat(EnumerateSection(_archivedSection))
+                .Concat(EnumerateSection(_myFeedsSection))
+                .Concat(_settings?.PinnedArticleSnapshots ?? Enumerable.Empty<FeedItem>())
+                .Concat(_settings?.ReadLaterArticleSnapshots ?? Enumerable.Empty<FeedItem>())
+                .Concat(_settings?.ArchivedArticleSnapshots ?? Enumerable.Empty<FeedItem>()))
+            {
+                if (item != null && seen.Add(item))
+                {
+                    yield return item;
+                }
+            }
+        }
+
+        private void OnArchiveItemsChanged()
+        {
+            try
+            {
+                ArchiveItemsChanged?.Invoke();
+            }
+            catch
+            {
+                // Ignore archive window refresh failures; archive data remains valid.
+            }
+        }
+
         private void PersistPinnedAndSavedLists()
         {
             try
             {
                 _settings.PinnedArticleLinks = new HashSet<string>(_pinnedArticleLinks, StringComparer.OrdinalIgnoreCase);
                 _settings.ReadLaterArticleLinks = new HashSet<string>(_readLaterArticleLinks, StringComparer.OrdinalIgnoreCase);
+                _settings.ArchivedArticleLinks = new HashSet<string>(_archivedArticleLinks, StringComparer.OrdinalIgnoreCase);
                 _settings.PinnedArticleSnapshots = new List<FeedItem>(_settings.PinnedArticleSnapshots ?? new List<FeedItem>());
                 _settings.ReadLaterArticleSnapshots = new List<FeedItem>(_settings.ReadLaterArticleSnapshots ?? new List<FeedItem>());
+                _settings.ArchivedArticleSnapshots = new List<FeedItem>(_settings.ArchivedArticleSnapshots ?? new List<FeedItem>());
                 SaveSettingsPreservingImportantNotifications();
             }
             catch (Exception)
@@ -537,6 +820,8 @@ namespace MyNewsFeeder.ViewModels
         {
             ApplyTheme();
             _browserService.SetDarkMode(_settings.DarkMode);
+            _embeddedBrowserSession?.SetDarkMode(_settings.DarkMode);
+            InvalidateAllArticlePreviewCaches();
             ApplyArticleWebViewTheme();
             RefreshCurrentArticleHtml();
         }
@@ -548,7 +833,31 @@ namespace MyNewsFeeder.ViewModels
                 return;
             }
 
-            _browserService.NavigateWithClear(SelectedArticleLink);
+            ScheduleBrowserNavigation(SelectedArticleLink, useClearNavigation: false);
+        }
+
+        private bool CanEnableEmbeddedVideoPlayback()
+        {
+            return IsBrowserVisible &&
+                   !_isReaderModeActive &&
+                   !_isEmbeddedVideoPlaybackEnabled &&
+                   !string.IsNullOrWhiteSpace(SelectedArticleLink);
+        }
+
+        private async Task EnableEmbeddedVideoPlaybackAsync()
+        {
+            if (!CanEnableEmbeddedVideoPlayback())
+            {
+                return;
+            }
+
+            _isEmbeddedVideoPlaybackEnabled = true;
+            _embeddedBrowserSession?.SetMediaPlaybackEnabled(true);
+            OnPropertyChanged(nameof(EnableVideoButtonText));
+            (EnableEmbeddedVideoCommand as RelayCommand)?.RaiseCanExecuteChanged();
+
+            NavigateCurrentArticleInBrowser();
+            await Task.CompletedTask;
         }
 
         public void SetAutoUpdatePreference(bool enabled)
@@ -572,6 +881,27 @@ namespace MyNewsFeeder.ViewModels
 
             _sharedEnvironment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
             return _sharedEnvironment;
+        }
+
+        public Task PrimeEmbeddedBrowserAsync()
+        {
+            return _embeddedBrowserSession?.PrimeAsync() ?? Task.CompletedTask;
+        }
+
+        public BrowserSession CreateBrowserSession(Microsoft.Web.WebView2.Wpf.WebView2 webView = null)
+        {
+            return _browserService.CreateSession(webView);
+        }
+
+        public void StartInitialRefresh()
+        {
+            if (_initialRefreshRequested)
+            {
+                return;
+            }
+
+            _initialRefreshRequested = true;
+            _ = RefreshFeedsAsync();
         }
 
         public bool AutoRefresh
@@ -658,6 +988,7 @@ namespace MyNewsFeeder.ViewModels
                 SaveSettingsPreservingImportantNotifications();
 
                 _browserService.SetAdBlockerEnabled(value);
+                _embeddedBrowserSession?.SetAdBlockerEnabled(value);
             }
         }
         public bool AdvertisementFilterEnabled
@@ -765,6 +1096,7 @@ namespace MyNewsFeeder.ViewModels
                 OnPropertyChanged(nameof(ShowContentButtonText));
 
                 _browserService.SetDarkMode(_settings.DarkMode);
+                _embeddedBrowserSession?.SetDarkMode(_settings.DarkMode);
 
                 if (!string.IsNullOrEmpty(SelectedArticleHtml))
                 {
@@ -871,6 +1203,7 @@ namespace MyNewsFeeder.ViewModels
         public ICommand BrowserBackCommand { get; }
         public ICommand BrowserForwardCommand { get; }
         public ICommand BrowserReloadCommand { get; }
+        public ICommand EnableEmbeddedVideoCommand { get; }
         public ICommand AutoAdjustHeightCommand { get; }
         public ICommand SaveSettingsCommand { get; }
         public ICommand ResetSettingsCommand { get; }
@@ -923,6 +1256,8 @@ namespace MyNewsFeeder.ViewModels
                 _readArticleLinks = new HashSet<string>(_settings.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
                 _pinnedArticleLinks = new HashSet<string>(_settings.PinnedArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
                 _readLaterArticleLinks = new HashSet<string>(_settings.ReadLaterArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+                _archivedArticleLinks = new HashSet<string>(_settings.ArchivedArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+                ApplyArchiveAutoCleanupSilently();
             }
             catch (Exception)
             {
@@ -957,6 +1292,7 @@ namespace MyNewsFeeder.ViewModels
 
             FilterCategories = new ObservableCollection<SelectableFilterItem>();
             FilterFeeds = new ObservableCollection<SelectableFilterItem>();
+            CurrentArticleItemsView = CollectionViewSource.GetDefaultView(CurrentArticleItems);
             FilterCategories.CollectionChanged += (_, __) => ScheduleFilterApply();
             FilterFeeds.CollectionChanged += (_, __) => ScheduleFilterApply();
 
@@ -991,6 +1327,14 @@ namespace MyNewsFeeder.ViewModels
                 IsExpanded = _settings.SectionExpandedStates.TryGetValue("Read Later", out var readLaterExpanded) ? readLaterExpanded : true,
                 HideUnreadIndicators = true
             };
+            _archivedSection = new ArticleSectionViewModel
+            {
+                Name = "Archive",
+                IconKind = "ArchiveOutline",
+                IsExpanded = _settings.SectionExpandedStates.TryGetValue("Archive", out var archiveExpanded) ? archiveExpanded : true,
+                HideUnreadIndicators = true,
+                OpensInWindow = true
+            };
             _myFeedsSection = new ArticleSectionViewModel
             {
                 Name = "My Feeds",
@@ -1000,12 +1344,16 @@ namespace MyNewsFeeder.ViewModels
             };
             ArticleSections.Add(_pinnedSection);
             ArticleSections.Add(_readLaterSection);
+            ArticleSections.Add(_archivedSection);
             ArticleSections.Add(_myFeedsSection);
+            MainVisibleSections.Add(_myFeedsSection);
             _pinnedSection.PropertyChanged += SectionOnPropertyChanged;
             _readLaterSection.PropertyChanged += SectionOnPropertyChanged;
+            _archivedSection.PropertyChanged += SectionOnPropertyChanged;
             _myFeedsSection.PropertyChanged += SectionOnPropertyChanged;
             _sectionNeedsFilterApply[_pinnedSection] = true;
             _sectionNeedsFilterApply[_readLaterSection] = true;
+            _sectionNeedsFilterApply[_archivedSection] = true;
             _sectionNeedsFilterApply[_myFeedsSection] = true;
             SelectedSection = _myFeedsSection;
             Keyword = _settings.KeywordFilter ?? string.Empty;
@@ -1049,12 +1397,16 @@ namespace MyNewsFeeder.ViewModels
             RefreshCommand = new RelayCommand(async _ => await RefreshFeedsAsync());
             ManageFeedsCommand = new RelayCommand(_ => OpenFeedManager());
             ShowContentCommand = new RelayCommand(_ => ToggleBrowserContent());
+            ToggleContentFullscreenCommand = new RelayCommand(_ => ToggleContentFullscreen(),
+                                                              _ => CanToggleContentFullscreen());
             ToggleReaderModeCommand = new RelayCommand(async _ => await ToggleReaderModeAsync(), _ => CanToggleReaderMode());
             AdBlockerSettingsCommand = new RelayCommand(async _ => await ShowAdBlockerSettingsAsync());
-            BrowserBackCommand = new RelayCommand(_ => _browserService.GoBack());
-            BrowserForwardCommand = new RelayCommand(_ => _browserService.GoForward());
+            BrowserBackCommand = new RelayCommand(_ => _embeddedBrowserSession?.GoBack());
+            BrowserForwardCommand = new RelayCommand(_ => _embeddedBrowserSession?.GoForward());
             BrowserReloadCommand = new RelayCommand(_ => NavigateCurrentArticleInBrowser(),
                                                     _ => !string.IsNullOrWhiteSpace(SelectedArticleLink));
+            EnableEmbeddedVideoCommand = new RelayCommand(async _ => await EnableEmbeddedVideoPlaybackAsync(),
+                                                          _ => CanEnableEmbeddedVideoPlayback());
             AutoAdjustHeightCommand = new RelayCommand(async _ => await AdjustArticleHeightAsync());
             SaveSettingsCommand = new RelayCommand(_ => SaveFeedSettings());
             ResetSettingsCommand = new RelayCommand(_ => ResetFeedSettings());
@@ -1065,6 +1417,13 @@ namespace MyNewsFeeder.ViewModels
             {
                 if (param is ArticleSectionViewModel section)
                 {
+                    if (section.OpensInWindow)
+                    {
+                        ShowLibraryWindow(LibrarySectionMode.Archive);
+                        OnPropertyChanged(nameof(SelectedSection));
+                        return;
+                    }
+
                     SelectedSection = section;
                 }
             });
@@ -1080,8 +1439,18 @@ namespace MyNewsFeeder.ViewModels
             MarkUnreadCommand = new RelayCommand(param => MarkAsUnread(param as FeedItem));
             PinArticleCommand = new RelayCommand(param => PinArticle(param as FeedItem));
             ReadLaterArticleCommand = new RelayCommand(param => AddToReadLater(param as FeedItem));
+            ArchiveArticleCommand = new RelayCommand(param => ArchiveArticle(param as FeedItem));
+            ArchiveSelectedArticleCommand = new RelayCommand(_ => ArchiveSelectedArticle(), _ => _currentSelectedItem != null);
+            OpenArchiveWindowCommand = new RelayCommand(_ => ShowLibraryWindow(LibrarySectionMode.Archive));
+            OpenLibraryWindowCommand = new RelayCommand(_ => ShowLibraryWindow(LibrarySectionMode.Pinned));
+            OpenReadLaterWindowCommand = new RelayCommand(_ => ShowLibraryWindow(LibrarySectionMode.ReadLater));
+            OpenFeedAllWindowCommand = new RelayCommand(param => ShowFeedAllWindow(param as FeedGroupViewModel), param => param is FeedGroupViewModel);
+            OpenFeedAllWindowForFeedCommand = new RelayCommand(param => ShowFeedAllWindow(param as Feed), param => param is Feed feed && !string.IsNullOrWhiteSpace(feed.Url));
             ArticleClickCommand = new RelayCommand(param => OnArticleSelected(param as FeedItem), param => param is FeedItem);
             OpenArticleInWindowCommand = new RelayCommand(param => _ = OpenArticleInWindowAsync(param as FeedItem), param => param is FeedItem);
+            SelectMainCategoryCommand = new RelayCommand(param => SelectMainCategory(param as CategoryGroupViewModel), param => param is CategoryGroupViewModel);
+            SelectMainFeedCommand = new RelayCommand(param => SelectMainFeed(param as FeedGroupViewModel), param => param is FeedGroupViewModel);
+            SelectMainAllArticlesCommand = new RelayCommand(_ => SelectMainAllArticles());
             PinSelectedArticleCommand = new RelayCommand(_ => PinSelectedArticle(), _ => _currentSelectedItem != null);
             ReadLaterSelectedArticleCommand = new RelayCommand(_ => AddSelectedArticleToReadLater(), _ => _currentSelectedItem != null);
             MarkSelectedArticleUnreadCommand = new RelayCommand(_ => MarkSelectedArticleUnread(), _ => _currentSelectedItem != null);
@@ -1092,7 +1461,6 @@ namespace MyNewsFeeder.ViewModels
             NavigateFeedCommand = new RelayCommand(param => MoveSelectionByFeed(param), _ => true);
 
             ApplyActiveDarkMode();
-            _ = RefreshFeedsAsync();
 
             _browserService.SetAdBlockerEnabled(_settings.AdBlockerEnabled);
 
@@ -1117,18 +1485,96 @@ namespace MyNewsFeeder.ViewModels
         public void SetWebView(Microsoft.Web.WebView2.Wpf.WebView2 webView)
         {
             _linkWebView = webView;
-
-            _browserService.SetWebView(webView);
+            _embeddedBrowserSession ??= _browserService.CreateSession();
+            _embeddedBrowserSession.SetDarkMode(_settings.DarkMode);
+            _embeddedBrowserSession.SetAdBlockerEnabled(_settings.AdBlockerEnabled);
+            _embeddedBrowserSession.SetMediaPlaybackEnabled(_isEmbeddedVideoPlaybackEnabled);
+            _embeddedBrowserSession.SetWebView(webView);
 
             if (_linkWebView != null)
             {
+                if (_linkWebView.CoreWebView2 != null)
+                {
+                    _linkWebView.CoreWebView2.DOMContentLoaded -= LinkWebView_DOMContentLoaded;
+                    _linkWebView.CoreWebView2.ContentLoading -= LinkWebView_ContentLoading;
+                    _linkWebView.CoreWebView2.NavigationStarting -= LinkWebView_NavigationStarting;
+                    _linkWebView.CoreWebView2.NavigationCompleted -= LinkWebView_NavigationCompleted;
+                    _linkWebView.CoreWebView2.DOMContentLoaded += LinkWebView_DOMContentLoaded;
+                    _linkWebView.CoreWebView2.ContentLoading += LinkWebView_ContentLoading;
+                    _linkWebView.CoreWebView2.NavigationStarting += LinkWebView_NavigationStarting;
+                    _linkWebView.CoreWebView2.NavigationCompleted += LinkWebView_NavigationCompleted;
+                    return;
+                }
+
                 _linkWebView.CoreWebView2InitializationCompleted += (s, e) =>
                 {
                     if (e.IsSuccess)
                     {
-                        _browserService.SetAdBlockerEnabled(_settings.AdBlockerEnabled);
+                        _embeddedBrowserSession?.SetDarkMode(_settings.DarkMode);
+                        _embeddedBrowserSession?.SetAdBlockerEnabled(_settings.AdBlockerEnabled);
+                        _linkWebView.CoreWebView2.DOMContentLoaded -= LinkWebView_DOMContentLoaded;
+                        _linkWebView.CoreWebView2.ContentLoading -= LinkWebView_ContentLoading;
+                        _linkWebView.CoreWebView2.NavigationStarting -= LinkWebView_NavigationStarting;
+                        _linkWebView.CoreWebView2.NavigationCompleted -= LinkWebView_NavigationCompleted;
+                        _linkWebView.CoreWebView2.DOMContentLoaded += LinkWebView_DOMContentLoaded;
+                        _linkWebView.CoreWebView2.ContentLoading += LinkWebView_ContentLoading;
+                        _linkWebView.CoreWebView2.NavigationStarting += LinkWebView_NavigationStarting;
+                        _linkWebView.CoreWebView2.NavigationCompleted += LinkWebView_NavigationCompleted;
                     }
                 };
+            }
+        }
+
+        private void LinkWebView_NavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(e.Uri) ||
+                e.Uri.StartsWith("about:blank", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _isBrowserTransitionVisible = true;
+            IsBrowserPageLoading = true;
+            OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+        }
+
+        private void LinkWebView_ContentLoading(object sender, CoreWebView2ContentLoadingEventArgs e)
+        {
+        }
+
+        private void LinkWebView_DOMContentLoaded(object sender, CoreWebView2DOMContentLoadedEventArgs e)
+        {
+            if (_isBrowserTransitionVisible)
+            {
+                _isBrowserTransitionVisible = false;
+                OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+            }
+        }
+
+        private void LinkWebView_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            IsBrowserPageLoading = false;
+            if (!e.IsSuccess && _isBrowserTransitionVisible)
+            {
+                _isBrowserTransitionVisible = false;
+                OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_pendingBrowserNavigationUrl))
+            {
+                var pendingUrl = _pendingBrowserNavigationUrl;
+                var pendingUseClear = _pendingBrowserNavigationUseClear;
+                _pendingBrowserNavigationUrl = null;
+                _pendingBrowserNavigationUseClear = false;
+
+                var dispatcher = Application.Current?.Dispatcher;
+                if (dispatcher == null)
+                {
+                    ScheduleBrowserNavigation(pendingUrl, pendingUseClear);
+                    return;
+                }
+
+                dispatcher.BeginInvoke(new Action(() => ScheduleBrowserNavigation(pendingUrl, pendingUseClear)), DispatcherPriority.Background);
             }
         }
 
@@ -1225,6 +1671,13 @@ namespace MyNewsFeeder.ViewModels
 
             _isReaderModeActive = value;
             OnPropertyChanged(nameof(ReaderModeButtonText));
+            OnPropertyChanged(nameof(IsEmbeddedVideoButtonVisible));
+            (EnableEmbeddedVideoCommand as RelayCommand)?.RaiseCanExecuteChanged();
+
+            if (value)
+            {
+                ResetEmbeddedVideoPlayback();
+            }
         }
 
         private void SetReaderModeLoading(bool value)
@@ -1246,8 +1699,22 @@ namespace MyNewsFeeder.ViewModels
                 return;
             }
 
-            SelectedArticleHtml = CreateArticleHtml(_currentSelectedItem);
-            SelectedArticleText = BuildArticlePlainText(_currentSelectedItem.Title, _currentSelectedItem.Description);
+            SelectedArticleHtml = GetOrCreateArticleSummaryHtml(_currentSelectedItem);
+            SelectedArticleText = GetOrCreateArticlePlainText(_currentSelectedItem);
+            ResetEmbeddedVideoPlayback();
+        }
+
+        private void ResetEmbeddedVideoPlayback()
+        {
+            if (!_isEmbeddedVideoPlaybackEnabled && (_embeddedBrowserSession == null || !_embeddedBrowserSession.IsMediaPlaybackEnabled))
+            {
+                return;
+            }
+
+            _isEmbeddedVideoPlaybackEnabled = false;
+            _embeddedBrowserSession?.SetMediaPlaybackEnabled(false);
+            OnPropertyChanged(nameof(EnableVideoButtonText));
+            (EnableEmbeddedVideoCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
         private async Task ToggleReaderModeAsync()
@@ -1306,7 +1773,9 @@ namespace MyNewsFeeder.ViewModels
                     PublicationDate = selectedItem.PublicationDate,
                     IsRead = selectedItem.IsRead,
                     IsPinned = selectedItem.IsPinned,
-                    IsReadLater = selectedItem.IsReadLater
+                    IsReadLater = selectedItem.IsReadLater,
+                    IsArchived = selectedItem.IsArchived,
+                    ArchivedAt = selectedItem.ArchivedAt
                 };
 
                 SelectedArticleHtml = CreateArticleHtml(readerItem);
@@ -1363,9 +1832,9 @@ namespace MyNewsFeeder.ViewModels
 
             if (!preserveCurrentViewState)
             {
-                var htmlContent = CreateArticleHtml(feedItem);
-                SelectedArticleHtml = htmlContent;
-                SelectedArticleText = BuildArticlePlainText(feedItem.Title, feedItem.Description);
+                ResetEmbeddedVideoPlayback();
+                SelectedArticleHtml = GetOrCreateArticleSummaryHtml(feedItem);
+                SelectedArticleText = GetOrCreateArticlePlainText(feedItem);
                 SelectedArticleLink = normalizedLink;
                 SetReaderModeActive(false);
                 (ToggleReaderModeCommand as RelayCommand)?.RaiseCanExecuteChanged();
@@ -1401,7 +1870,7 @@ namespace MyNewsFeeder.ViewModels
                 {
                     if (!string.IsNullOrEmpty(SelectedArticleLink))
                     {
-                        _browserService.NavigateWithClear(SelectedArticleLink);
+                        ScheduleBrowserNavigation(SelectedArticleLink, useClearNavigation: false);
                     }
                 }
                 catch (Exception)
@@ -1416,7 +1885,7 @@ namespace MyNewsFeeder.ViewModels
                 {
                     try
                     {
-                        _browserService.NavigateWithClear(SelectedArticleLink);
+                        ScheduleBrowserNavigation(SelectedArticleLink, useClearNavigation: false);
                     }
                     catch (Exception)
                     {
@@ -1425,6 +1894,7 @@ namespace MyNewsFeeder.ViewModels
                 }
                 else
                 {
+                    ResetEmbeddedVideoPlayback();
                     ClearBrowserContent();
                     IsBrowserVisible = false;
                 }
@@ -1432,11 +1902,11 @@ namespace MyNewsFeeder.ViewModels
 
         }
 
-        private async Task OpenArticleInWindowAsync(FeedItem feedItem)
+        private Task OpenArticleInWindowAsync(FeedItem feedItem)
         {
             if (feedItem == null)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             try
@@ -1448,7 +1918,9 @@ namespace MyNewsFeeder.ViewModels
                     SelectedArticleHtml,
                     SelectedArticleLink,
                     DarkMode,
-                    await GetSharedWebViewEnvironmentAsync())
+                    CreateBrowserSession(),
+                    AdBlockerEnabled,
+                    new Action<string>(PromptOpenExternalLink))
                 {
                     Owner = Application.Current?.MainWindow
                 };
@@ -1459,6 +1931,8 @@ namespace MyNewsFeeder.ViewModels
             {
                 SnackbarMessageQueue?.Enqueue("Could not open article in a separate window.");
             }
+
+            return Task.CompletedTask;
         }
 
         private void PinSelectedArticle()
@@ -1489,6 +1963,16 @@ namespace MyNewsFeeder.ViewModels
             }
 
             MarkAsUnread(_currentSelectedItem);
+        }
+
+        private void ArchiveSelectedArticle()
+        {
+            if (_currentSelectedItem == null)
+            {
+                return;
+            }
+
+            ArchiveArticle(_currentSelectedItem);
         }
 
         private async Task OpenSelectedArticleInWindowAsync()
@@ -1523,6 +2007,982 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
+        public ArchiveViewPreferences GetArchiveViewPreferences()
+        {
+            return _settings?.ArchiveViewPreferences?.Clone() ?? new ArchiveViewPreferences();
+        }
+
+        public FeedAllWindowPreferences GetFeedAllWindowPreferences()
+        {
+            return _settings?.FeedAllWindowPreferences?.Clone() ?? new FeedAllWindowPreferences();
+        }
+
+        public FeedManagerWindowPreferences GetFeedManagerWindowPreferences()
+        {
+            return _settings?.FeedManagerWindowPreferences?.Clone() ?? new FeedManagerWindowPreferences();
+        }
+
+        public IReadOnlyList<ArticleLabelDefinition> GetArticleLabels()
+        {
+            return (_settings?.ArticleLabels ?? new List<ArticleLabelDefinition>())
+                .Where(label => label != null && !string.IsNullOrWhiteSpace(label.Name))
+                .Select(label => label.Clone())
+                .OrderBy(label => label.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        public IReadOnlyList<SavedLabelColorDefinition> GetSavedLabelColors()
+        {
+            var savedDefinitions = (_settings?.SavedLabelColorDefinitions ?? new List<SavedLabelColorDefinition>())
+                .Where(color => color != null && !string.IsNullOrWhiteSpace(color.Name) && !string.IsNullOrWhiteSpace(color.ColorHex))
+                .Select(color => color.Clone());
+
+            var legacyDefinitions = (_settings?.SavedLabelColors ?? new List<string>())
+                .Where(color => !string.IsNullOrWhiteSpace(color))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(color => new SavedLabelColorDefinition
+                {
+                    Name = color.Trim(),
+                    ColorHex = color.Trim()
+                });
+
+            return savedDefinitions
+                .Concat(legacyDefinitions)
+                .GroupBy(color => color.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(color => color.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        public string GetArticleNote(FeedItem item)
+        {
+            var key = item?.Link?.Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return string.Empty;
+            }
+
+            return ResolveArticleNoteForLink(key);
+        }
+
+        public IReadOnlyList<ArchiveSavedView> GetArchiveSavedViews()
+        {
+            return (_settings?.ArchiveSavedViews ?? new List<ArchiveSavedView>())
+                .Where(view => view != null && !string.IsNullOrWhiteSpace(view.Name))
+                .Select(view => view.Clone())
+                .OrderBy(view => view.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        public ArchiveSavedView GetArchiveSavedView(string name)
+        {
+            if (_settings?.ArchiveSavedViews == null || string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            return _settings.ArchiveSavedViews
+                .FirstOrDefault(view => string.Equals(view?.Name?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase))
+                ?.Clone();
+        }
+
+        public void SaveArchiveViewPreferences(ArchiveViewPreferences preferences)
+        {
+            if (_settings == null || preferences == null)
+            {
+                return;
+            }
+
+            _settings.ArchiveViewPreferences = preferences.Clone();
+            SaveSettingsPreservingImportantNotifications();
+        }
+
+        public void SaveFeedAllWindowPreferences(FeedAllWindowPreferences preferences)
+        {
+            if (_settings == null || preferences == null)
+            {
+                return;
+            }
+
+            _settings.FeedAllWindowPreferences = preferences.Clone();
+            SaveSettingsPreservingImportantNotifications();
+        }
+
+        public void SaveFeedManagerWindowPreferences(FeedManagerWindowPreferences preferences)
+        {
+            if (_settings == null || preferences == null)
+            {
+                return;
+            }
+
+            _settings.FeedManagerWindowPreferences = preferences.Clone();
+            SaveSettingsPreservingImportantNotifications();
+        }
+
+        public async Task<List<FeedItem>> FetchAvailableArticlesForFeedAsync(string feedName, int maxItems = 500)
+        {
+            if (string.IsNullOrWhiteSpace(feedName))
+            {
+                return new List<FeedItem>();
+            }
+
+            var feed = _feeds?.FirstOrDefault(f =>
+                f?.IsEnabled == true &&
+                string.Equals(f.Name?.Trim(), feedName.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (feed == null)
+            {
+                return new List<FeedItem>();
+            }
+
+            var advertisementKeywords = _settings.AdvertisementFilterEnabled
+                ? GetAdvertisementKeywordsForFiltering()
+                : new List<string>();
+
+            var items = await _feedService.FetchArticlesForFeedAsync(
+                feed,
+                keywordFilter: null,
+                maxItems: Math.Max(1, maxItems),
+                advertisementKeywords: advertisementKeywords.Count > 0 ? advertisementKeywords : null).ConfigureAwait(false);
+
+            var deduplicated = DeduplicateLinear(items)
+                .OrderByDescending(item => item?.PublicationDate ?? DateTime.MinValue)
+                .ToList();
+
+            foreach (var item in deduplicated)
+            {
+                ApplyStoredStateToExternalItem(item);
+            }
+
+            return deduplicated;
+        }
+
+        public List<string> GetAdvertisementKeywordsSnapshot()
+        {
+            return _settings?.AdvertisementFilterEnabled == true
+                ? GetAdvertisementKeywordsForFiltering()
+                : new List<string>();
+        }
+
+        public string CreateArticleHtmlForPreview(FeedItem item)
+        {
+            return item == null ? string.Empty : CreateArticleHtml(item);
+        }
+
+        public void MarkArticleAsReadFromExternalView(FeedItem item)
+        {
+            if (item == null || item.IsRead)
+            {
+                return;
+            }
+
+            item.IsRead = true;
+            var key = item.Link?.Trim();
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                _readArticleLinks.Add(key);
+                foreach (var trackedItem in EnumerateAllTrackedItems().Where(tracked =>
+                             string.Equals(tracked.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    trackedItem.IsRead = true;
+                }
+                PersistReadState();
+            }
+        }
+
+        public void ApplyStoredStateToExternalViewItem(FeedItem item)
+        {
+            ApplyStoredStateToExternalItem(item);
+        }
+
+        public void SaveArticleLabel(string name, string colorHex)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            _settings.ArticleLabels ??= new List<ArticleLabelDefinition>();
+            var normalizedName = name.Trim();
+            var normalizedColor = string.IsNullOrWhiteSpace(colorHex) ? "#7C3AED" : colorHex.Trim();
+            var existing = _settings.ArticleLabels
+                .FirstOrDefault(label => string.Equals(label?.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (existing == null)
+            {
+                _settings.ArticleLabels.Add(new ArticleLabelDefinition
+                {
+                    Name = normalizedName,
+                    ColorHex = normalizedColor
+                });
+            }
+            else
+            {
+                existing.Name = normalizedName;
+                existing.ColorHex = normalizedColor;
+            }
+
+            ApplyStoredLabelsToAllKnownItems();
+            SaveSettingsPreservingImportantNotifications();
+            ArticleLabelsChanged?.Invoke();
+            OnArchiveItemsChanged();
+        }
+
+        public void SaveCustomLabelColor(string name, string colorHex)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(colorHex))
+            {
+                return;
+            }
+
+            _settings.SavedLabelColorDefinitions ??= new List<SavedLabelColorDefinition>();
+            _settings.SavedLabelColors ??= new List<string>();
+
+            var normalizedName = name.Trim();
+            var normalizedColor = colorHex.Trim();
+            var existing = _settings.SavedLabelColorDefinitions
+                .FirstOrDefault(color => string.Equals(color?.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (existing == null)
+            {
+                _settings.SavedLabelColorDefinitions.Add(new SavedLabelColorDefinition
+                {
+                    Name = normalizedName,
+                    ColorHex = normalizedColor
+                });
+            }
+            else
+            {
+                existing.Name = normalizedName;
+                existing.ColorHex = normalizedColor;
+            }
+
+            _settings.SavedLabelColors.RemoveAll(color => string.Equals(color?.Trim(), normalizedColor, StringComparison.OrdinalIgnoreCase));
+            SaveSettingsPreservingImportantNotifications();
+            ArticleLabelsChanged?.Invoke();
+        }
+
+        public bool DeleteCustomLabelColor(string name)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            _settings.SavedLabelColorDefinitions ??= new List<SavedLabelColorDefinition>();
+            var normalizedName = name.Trim();
+            var removed = _settings.SavedLabelColorDefinitions.RemoveAll(color =>
+                string.Equals(color?.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+            if (removed <= 0)
+            {
+                return false;
+            }
+
+            SaveSettingsPreservingImportantNotifications();
+            ArticleLabelsChanged?.Invoke();
+            return true;
+        }
+
+        public void RenameArticleLabel(string oldName, string newName, string colorHex)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(newName))
+            {
+                return;
+            }
+
+            var normalizedOldName = oldName?.Trim();
+            var normalizedNewName = newName.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedOldName) ||
+                string.Equals(normalizedOldName, normalizedNewName, StringComparison.OrdinalIgnoreCase))
+            {
+                SaveArticleLabel(normalizedNewName, colorHex);
+                return;
+            }
+
+            _settings.ArticleLabels ??= new List<ArticleLabelDefinition>();
+            _settings.ArticleLabelAssignments ??= new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var key in _settings.ArticleLabelAssignments.Keys.ToList())
+            {
+                var nextValues = (_settings.ArticleLabelAssignments[key] ?? new List<string>())
+                    .Select(value => string.Equals(value?.Trim(), normalizedOldName, StringComparison.OrdinalIgnoreCase)
+                        ? normalizedNewName
+                        : value?.Trim())
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+                _settings.ArticleLabelAssignments[key] = nextValues;
+            }
+
+            _settings.ArticleLabels.RemoveAll(label =>
+                string.Equals(label?.Name?.Trim(), normalizedOldName, StringComparison.OrdinalIgnoreCase));
+            SaveArticleLabel(normalizedNewName, colorHex);
+        }
+
+        public bool DeleteArticleLabel(string name)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            var normalizedName = name.Trim();
+            var removedLabel = _settings.ArticleLabels?.RemoveAll(
+                label => string.Equals(label?.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase)) ?? 0;
+            var assignmentsChanged = false;
+
+            if (_settings.ArticleLabelAssignments != null)
+            {
+                foreach (var key in _settings.ArticleLabelAssignments.Keys.ToList())
+                {
+                    var currentValues = _settings.ArticleLabelAssignments[key] ?? new List<string>();
+                    var nextValues = currentValues
+                        .Where(value => !string.Equals(value?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    if (nextValues.Count == currentValues.Count)
+                    {
+                        continue;
+                    }
+
+                    assignmentsChanged = true;
+                    if (nextValues.Count == 0)
+                    {
+                        _settings.ArticleLabelAssignments.Remove(key);
+                    }
+                    else
+                    {
+                        _settings.ArticleLabelAssignments[key] = nextValues;
+                    }
+                }
+            }
+
+            if (removedLabel <= 0 && !assignmentsChanged)
+            {
+                return false;
+            }
+
+            ApplyStoredLabelsToAllKnownItems();
+            SaveSettingsPreservingImportantNotifications();
+            ArticleLabelsChanged?.Invoke();
+            OnArchiveItemsChanged();
+            return true;
+        }
+
+        public void SetArticleLabels(IEnumerable<FeedItem> items, IEnumerable<string> labelNames)
+        {
+            if (_settings == null)
+            {
+                return;
+            }
+
+            var normalizedLabels = (labelNames ?? Enumerable.Empty<string>())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var keys = (items ?? Enumerable.Empty<FeedItem>())
+                .Select(item => item?.Link?.Trim())
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (keys.Count == 0)
+            {
+                return;
+            }
+
+            _settings.ArticleLabelAssignments ??= new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var key in keys)
+            {
+                if (normalizedLabels.Count == 0)
+                {
+                    _settings.ArticleLabelAssignments.Remove(key);
+                }
+                else
+                {
+                    _settings.ArticleLabelAssignments[key] = new List<string>(normalizedLabels);
+                }
+
+                ApplyStoredLabelsToLink(key);
+            }
+
+            SaveSettingsPreservingImportantNotifications();
+            ArticleLabelsChanged?.Invoke();
+            OnArchiveItemsChanged();
+        }
+
+        public void ToggleArticleLabel(IEnumerable<FeedItem> items, string labelName)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(labelName))
+            {
+                return;
+            }
+
+            var normalizedLabel = labelName.Trim();
+            var materializedItems = (items ?? Enumerable.Empty<FeedItem>())
+                .Where(item => item != null)
+                .Distinct()
+                .ToList();
+            if (materializedItems.Count == 0)
+            {
+                return;
+            }
+
+            _settings.ArticleLabelAssignments ??= new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            var shouldRemove = materializedItems.All(item =>
+                GetArticleLabelNames(item).Any(existing => string.Equals(existing, normalizedLabel, StringComparison.OrdinalIgnoreCase)));
+
+            foreach (var item in materializedItems)
+            {
+                var key = item.Link?.Trim();
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                var nextLabels = GetArticleLabelNames(item)
+                    .Where(existing => !shouldRemove || !string.Equals(existing, normalizedLabel, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (!shouldRemove && !nextLabels.Any(existing => string.Equals(existing, normalizedLabel, StringComparison.OrdinalIgnoreCase)))
+                {
+                    nextLabels.Add(normalizedLabel);
+                }
+
+                if (nextLabels.Count == 0)
+                {
+                    _settings.ArticleLabelAssignments.Remove(key);
+                }
+                else
+                {
+                    _settings.ArticleLabelAssignments[key] = nextLabels
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
+                        .ToList();
+                }
+
+                ApplyStoredLabelsToLink(key);
+            }
+
+            SaveSettingsPreservingImportantNotifications();
+            ArticleLabelsChanged?.Invoke();
+            OnArchiveItemsChanged();
+        }
+
+        public IReadOnlyList<string> GetArticleLabelNames(FeedItem item)
+        {
+            var key = item?.Link?.Trim();
+            if (_settings?.ArticleLabelAssignments == null || string.IsNullOrWhiteSpace(key))
+            {
+                return Array.Empty<string>();
+            }
+
+            return _settings.ArticleLabelAssignments.TryGetValue(key, out var names)
+                ? names.Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList()
+                : Array.Empty<string>();
+        }
+
+        public void SetArticleNote(FeedItem item, string note)
+        {
+            if (_settings == null || item == null)
+            {
+                return;
+            }
+
+            var key = item.Link?.Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            var normalizedNote = note?.Trim() ?? string.Empty;
+            _settings.ArticleNoteAssignments ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(normalizedNote))
+            {
+                _settings.ArticleNoteAssignments.Remove(key);
+            }
+            else
+            {
+                _settings.ArticleNoteAssignments[key] = normalizedNote;
+            }
+
+            ApplyStoredNoteToLink(key);
+            SaveSettingsPreservingImportantNotifications();
+            ArticleNotesChanged?.Invoke();
+            OnArchiveItemsChanged();
+        }
+
+        public void SaveArchiveSavedView(string name, ArchiveViewPreferences preferences)
+        {
+            if (_settings == null || preferences == null || string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            _settings.ArchiveSavedViews ??= new List<ArchiveSavedView>();
+            var normalizedName = name.Trim();
+            var savedViewPreferences = preferences.Clone();
+            savedViewPreferences.WindowState = "maximized";
+            savedViewPreferences.WindowWidth = null;
+            savedViewPreferences.WindowHeight = null;
+            savedViewPreferences.WindowLeft = null;
+            savedViewPreferences.WindowTop = null;
+            var existing = _settings.ArchiveSavedViews
+                .FirstOrDefault(view => string.Equals(view?.Name?.Trim(), normalizedName, StringComparison.OrdinalIgnoreCase));
+
+            if (existing == null)
+            {
+                _settings.ArchiveSavedViews.Add(new ArchiveSavedView
+                {
+                    Name = normalizedName,
+                    Preferences = savedViewPreferences
+                });
+            }
+            else
+            {
+                existing.Name = normalizedName;
+                existing.Preferences = savedViewPreferences;
+            }
+
+            SaveSettingsPreservingImportantNotifications();
+        }
+
+        public bool DeleteArchiveSavedView(string name)
+        {
+            if (_settings?.ArchiveSavedViews == null || string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            var removed = _settings.ArchiveSavedViews.RemoveAll(
+                view => string.Equals(view?.Name?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (removed <= 0)
+            {
+                return false;
+            }
+
+            SaveSettingsPreservingImportantNotifications();
+            return true;
+        }
+
+        public string GetNormalizedArticleLink(FeedItem item)
+        {
+            return NormalizeExternalLink(item?.Link);
+        }
+
+        public bool TryOpenArticleExternally(FeedItem item)
+        {
+            var normalizedLink = NormalizeExternalLink(item?.Link);
+            if (string.IsNullOrWhiteSpace(normalizedLink))
+            {
+                return false;
+            }
+
+            return _browserService.TryOpenExternalLink(normalizedLink);
+        }
+
+        public void PromptOpenExternalLink(string url)
+        {
+            TryPromptOpenExternal(url);
+        }
+
+        public bool GetArchiveAutoCleanupEnabled()
+        {
+            return _settings?.ArchiveAutoCleanupEnabled == true;
+        }
+
+        public int GetArchiveAutoCleanupDays()
+        {
+            return NormalizeArchiveAutoCleanupDays(_settings?.ArchiveAutoCleanupDays ?? DefaultArchiveAutoCleanupDays);
+        }
+
+        public void SaveArchiveAutoCleanupSettings(bool enabled, int days)
+        {
+            if (_settings == null)
+            {
+                return;
+            }
+
+            _settings.ArchiveAutoCleanupEnabled = enabled;
+            _settings.ArchiveAutoCleanupDays = NormalizeArchiveAutoCleanupDays(days);
+            SaveSettingsPreservingImportantNotifications();
+        }
+
+        private void ApplyStoredStateToExternalItem(FeedItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            ApplyStoredLabelsToItem(item);
+            ApplyStoredNoteToItem(item);
+
+            var key = item.Link?.Trim();
+            item.IsRead = !string.IsNullOrWhiteSpace(key) && _readArticleLinks.Contains(key);
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                item.IsPinned = false;
+                item.IsReadLater = false;
+                item.IsArchived = false;
+                item.ArchivedAt = null;
+                return;
+            }
+
+            var archivedAt = (_settings?.ArchivedArticleSnapshots ?? new List<FeedItem>())
+                .Where(snapshot => string.Equals(snapshot?.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(snapshot => snapshot?.ArchivedAt ?? DateTime.MinValue)
+                .Select(snapshot => snapshot?.ArchivedAt)
+                .FirstOrDefault();
+
+            if (_archivedArticleLinks.Contains(key))
+            {
+                item.IsArchived = true;
+                item.IsPinned = false;
+                item.IsReadLater = false;
+                item.ArchivedAt = archivedAt ?? item.ArchivedAt ?? ResolveArchiveRetentionDate(item) ?? DateTime.Now;
+                return;
+            }
+
+            if (_pinnedArticleLinks.Contains(key))
+            {
+                item.IsPinned = true;
+                item.IsReadLater = false;
+                item.IsArchived = false;
+                item.ArchivedAt = null;
+                return;
+            }
+
+            if (_readLaterArticleLinks.Contains(key))
+            {
+                item.IsReadLater = true;
+                item.IsPinned = false;
+                item.IsArchived = false;
+                item.ArchivedAt = null;
+                return;
+            }
+
+            item.IsPinned = false;
+            item.IsReadLater = false;
+            item.IsArchived = false;
+            item.ArchivedAt = null;
+        }
+
+        public int ApplyArchiveAutoCleanupPolicy()
+        {
+            var removedCount = DeleteArchivedKeys(GetArchivedKeysOlderThanConfiguredRetention(requireEnabled: false), refreshUi: true);
+            if (removedCount > 0)
+            {
+                SnackbarMessageQueue?.Enqueue($"Archive cleanup deleted {removedCount} archived article{(removedCount == 1 ? string.Empty : "s")}.");
+            }
+
+            return removedCount;
+        }
+
+        private void ShowLibraryWindow(LibrarySectionMode initialMode)
+        {
+            try
+            {
+                if (_archiveWindow == null || !_archiveWindow.IsLoaded)
+                {
+                    var archivePreferences = GetArchiveViewPreferences();
+                    _archiveWindow = new ArchiveWindow(initialMode)
+                    {
+                        Owner = Application.Current?.MainWindow,
+                        DataContext = this
+                    };
+                    _archiveWindow.PrepareInitialWindowPlacement(archivePreferences);
+                    _archiveWindow.Closed += ArchiveWindowOnClosed;
+                    _archiveWindow.Show();
+                    return;
+                }
+
+                if (_archiveWindow.WindowState == WindowState.Minimized)
+                {
+                    _archiveWindow.WindowState = WindowState.Normal;
+                }
+
+                _archiveWindow.SwitchToMode(initialMode);
+                _archiveWindow.Activate();
+            }
+            catch (Exception)
+            {
+                SnackbarMessageQueue?.Enqueue("Could not open library window.");
+            }
+        }
+
+        private void ShowFeedAllWindow(FeedGroupViewModel feedGroup)
+        {
+            if (feedGroup == null || string.IsNullOrWhiteSpace(feedGroup.Name))
+            {
+                return;
+            }
+
+            try
+            {
+                var feed = _feeds?.FirstOrDefault(f =>
+                    f?.IsEnabled == true &&
+                    string.Equals(f.Name?.Trim(), feedGroup.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (feed == null)
+                {
+                    SnackbarMessageQueue?.Enqueue("Could not find the selected feed.");
+                    return;
+                }
+
+                ShowFeedAllWindow(feed);
+            }
+            catch (Exception)
+            {
+                SnackbarMessageQueue?.Enqueue("Could not open feed window.");
+            }
+        }
+
+        private void ShowFeedAllWindow(Feed feed)
+        {
+            if (feed == null || string.IsNullOrWhiteSpace(feed.Url))
+            {
+                return;
+            }
+
+            try
+            {
+                var feedSnapshot = CloneFeedSnapshot(feed);
+                var window = new FeedAllWindow(this, feedSnapshot)
+                {
+                    Owner = Application.Current?.MainWindow
+                };
+                window.PrepareInitialWindowPlacement(GetFeedAllWindowPreferences());
+                window.Show();
+            }
+            catch (Exception)
+            {
+                SnackbarMessageQueue?.Enqueue("Could not open feed window.");
+            }
+        }
+
+        public IReadOnlyList<Feed> GetEnabledFeedsForShowAll()
+        {
+            return (_feeds ?? new List<Feed>())
+                .Where(feed =>
+                    feed?.IsEnabled == true &&
+                    !string.IsNullOrWhiteSpace(feed.Name) &&
+                    !string.IsNullOrWhiteSpace(feed.Url))
+                .OrderBy(feed => string.IsNullOrWhiteSpace(feed.Category) ? "Default" : feed.Category, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(feed => feed.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(CloneFeedSnapshot)
+                .ToList();
+        }
+
+        private static Feed CloneFeedSnapshot(Feed feed)
+        {
+            if (feed == null)
+            {
+                return null;
+            }
+
+            return new Feed
+            {
+                Name = feed.Name,
+                Url = feed.Url,
+                Category = feed.Category,
+                IsEnabled = feed.IsEnabled,
+                IsImportant = feed.IsImportant
+            };
+        }
+
+        private int NormalizeArchiveAutoCleanupDays(int days)
+        {
+            return Math.Max(1, Math.Min(days, 3650));
+        }
+
+        private static DateTime? ResolveArchiveRetentionDate(FeedItem item)
+        {
+            if (item?.ArchivedAt.HasValue == true)
+            {
+                return item.ArchivedAt.Value;
+            }
+
+            if (item != null && item.PublicationDate > DateTime.MinValue)
+            {
+                return item.PublicationDate;
+            }
+
+            return null;
+        }
+
+        private Dictionary<string, DateTime> BuildArchivedRetentionDateLookup()
+        {
+            var lookup = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+
+            void ConsiderItem(FeedItem item)
+            {
+                var key = item?.Link?.Trim();
+                var retentionDate = ResolveArchiveRetentionDate(item);
+                if (string.IsNullOrWhiteSpace(key) || !retentionDate.HasValue)
+                {
+                    return;
+                }
+
+                if (lookup.TryGetValue(key, out var existing))
+                {
+                    if (retentionDate.Value < existing)
+                    {
+                        lookup[key] = retentionDate.Value;
+                    }
+
+                    return;
+                }
+
+                lookup[key] = retentionDate.Value;
+            }
+
+            foreach (var category in _archivedSection?.Items?.OfType<CategoryGroupViewModel>() ?? Enumerable.Empty<CategoryGroupViewModel>())
+            {
+                foreach (var feed in category.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                {
+                    foreach (var item in feed.Items ?? Enumerable.Empty<FeedItem>())
+                    {
+                        ConsiderItem(item);
+                    }
+                }
+            }
+
+            foreach (var feed in _archivedSection?.Items?.OfType<FeedGroupViewModel>() ?? Enumerable.Empty<FeedGroupViewModel>())
+            {
+                foreach (var item in feed.Items ?? Enumerable.Empty<FeedItem>())
+                {
+                    ConsiderItem(item);
+                }
+            }
+
+            foreach (var snapshot in _settings?.ArchivedArticleSnapshots ?? Enumerable.Empty<FeedItem>())
+            {
+                ConsiderItem(snapshot);
+            }
+
+            return lookup;
+        }
+
+        private List<string> GetArchivedKeysOlderThanConfiguredRetention(bool requireEnabled = true)
+        {
+            if (_settings == null)
+            {
+                return new List<string>();
+            }
+
+            if (requireEnabled && _settings.ArchiveAutoCleanupEnabled != true)
+            {
+                return new List<string>();
+            }
+
+            var retentionDays = NormalizeArchiveAutoCleanupDays(_settings.ArchiveAutoCleanupDays);
+            var cutoff = DateTime.Now.Date.AddDays(-retentionDays);
+            return BuildArchivedRetentionDateLookup()
+                .Where(entry => entry.Value.Date <= cutoff)
+                .Select(entry => entry.Key)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private Dictionary<string, FeedItem> BuildArchivedItemLookup()
+        {
+            var lookup = new Dictionary<string, FeedItem>(StringComparer.OrdinalIgnoreCase);
+
+            void AddItem(FeedItem item)
+            {
+                var key = item?.Link?.Trim();
+                if (string.IsNullOrWhiteSpace(key) || lookup.ContainsKey(key))
+                {
+                    return;
+                }
+
+                lookup[key] = item;
+            }
+
+            foreach (var category in _archivedSection?.Items?.OfType<CategoryGroupViewModel>() ?? Enumerable.Empty<CategoryGroupViewModel>())
+            {
+                foreach (var feed in category.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                {
+                    foreach (var item in feed.Items ?? Enumerable.Empty<FeedItem>())
+                    {
+                        AddItem(item);
+                    }
+                }
+            }
+
+            foreach (var feed in _archivedSection?.Items?.OfType<FeedGroupViewModel>() ?? Enumerable.Empty<FeedGroupViewModel>())
+            {
+                foreach (var item in feed.Items ?? Enumerable.Empty<FeedItem>())
+                {
+                    AddItem(item);
+                }
+            }
+
+            foreach (var snapshot in _settings?.ArchivedArticleSnapshots ?? Enumerable.Empty<FeedItem>())
+            {
+                AddItem(snapshot);
+            }
+
+            return lookup;
+        }
+
+        private int DeleteArchivedKeys(IEnumerable<string> keys, bool refreshUi)
+        {
+            _settings.ArchivedArticleSnapshots ??= new List<FeedItem>();
+            var normalizedKeys = new HashSet<string>(
+                keys?.Where(key => !string.IsNullOrWhiteSpace(key)).Select(key => key.Trim()) ?? Enumerable.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            normalizedKeys.IntersectWith(_archivedArticleLinks);
+            if (normalizedKeys.Count == 0)
+            {
+                return 0;
+            }
+
+            var archivedItems = BuildArchivedItemLookup();
+            SuppressAutoScroll = true;
+
+            foreach (var key in normalizedKeys)
+            {
+                _archivedArticleLinks.Remove(key);
+                _settings.ArchivedArticleSnapshots.RemoveAll(item => string.Equals(item.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+
+                if (archivedItems.TryGetValue(key, out var item))
+                {
+                    item.IsArchived = false;
+                    item.IsPinned = false;
+                    item.IsReadLater = false;
+                    item.ArchivedAt = null;
+                    item.IsSelected = false;
+                }
+
+                RemoveArticleFromSectionFeeds(_archivedSection, key);
+            }
+
+            PersistPinnedAndSavedLists();
+
+            SuppressAutoScroll = false;
+            return normalizedKeys.Count;
+        }
+
+        private void ApplyArchiveAutoCleanupSilently()
+        {
+            DeleteArchivedKeys(GetArchivedKeysOlderThanConfiguredRetention(requireEnabled: true), refreshUi: false);
+        }
+
+        private void ArchiveWindowOnClosed(object sender, EventArgs e)
+        {
+            if (_archiveWindow == null)
+            {
+                return;
+            }
+
+            _archiveWindow.Closed -= ArchiveWindowOnClosed;
+            _archiveWindow = null;
+        }
+
         private void OnRecentImportantItemCountChanged(int count)
         {
             HasImportantNotifications = count > 0;
@@ -1533,10 +2993,12 @@ namespace MyNewsFeeder.ViewModels
         {
             (PinSelectedArticleCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ReadLaterSelectedArticleCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ArchiveSelectedArticleCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (MarkSelectedArticleUnreadCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (OpenSelectedArticleInWindowCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (CopyLinkCommand as RelayCommand)?.RaiseCanExecuteChanged();
             (ToggleReaderModeCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            (ToggleContentFullscreenCommand as RelayCommand)?.RaiseCanExecuteChanged();
         }
 
         private List<FeedItem> BuildVisibleArticleList(ArticleSectionViewModel section)
@@ -1689,16 +3151,7 @@ namespace MyNewsFeeder.ViewModels
                 return;
             }
 
-            // Determine the section to navigate within
-            var targetSection = FindSectionForItem(_currentSelectedItem);
-            if (targetSection == null)
-            {
-                targetSection = ArticleSections.FirstOrDefault(s =>
-                    s.Items.OfType<CategoryGroupViewModel>().Any(c => c.Feeds.Any(f => f.Items.Count > 0)) ||
-                    s.Items.OfType<FeedGroupViewModel>().Any(f => f.Items.Count > 0));
-            }
-
-            var visibleItems = BuildVisibleArticleList(targetSection);
+            var visibleItems = CurrentArticleItems.ToList();
             if (visibleItems.Count == 0)
             {
                 return;
@@ -1737,26 +3190,25 @@ namespace MyNewsFeeder.ViewModels
                 return;
             }
 
-            var targetSection = FindSectionForItem(_currentSelectedItem);
-            if (targetSection == null)
-            {
-                targetSection = ArticleSections.FirstOrDefault(s =>
-                    s.Items.OfType<CategoryGroupViewModel>().Any(c => c.Feeds.Any(f => f.Items.Count > 0)) ||
-                    s.Items.OfType<FeedGroupViewModel>().Any(f => f.Items.Count > 0));
-            }
-
-            var visibleFeeds = BuildVisibleFeedList(targetSection);
+            var visibleFeeds = CategoryGroups
+                .SelectMany(category => category.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                .Where(feed => (feed.Items?.Count ?? 0) > 0)
+                .ToList();
             if (visibleFeeds.Count == 0)
             {
                 return;
             }
 
             var currentFeedIndex = -1;
-            if (_currentSelectedItem != null)
+            if (!string.IsNullOrWhiteSpace(_selectedMainFeedName))
             {
                 currentFeedIndex = visibleFeeds.FindIndex(feed =>
-                    feed.Items.Contains(_currentSelectedItem) ||
-                    feed.PagedItems.OfType<FeedItem>().Any(item => ReferenceEquals(item, _currentSelectedItem)));
+                    string.Equals(feed.Name, _selectedMainFeedName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (currentFeedIndex < 0 && _currentSelectedItem != null)
+            {
+                currentFeedIndex = visibleFeeds.FindIndex(feed => feed.Items.Contains(_currentSelectedItem));
             }
 
             int targetFeedIndex;
@@ -1776,15 +3228,11 @@ namespace MyNewsFeeder.ViewModels
             }
 
             var targetFeed = visibleFeeds[targetFeedIndex];
-            var targetItem = targetFeed.PagedItems.OfType<FeedItem>().FirstOrDefault() ??
-                             targetFeed.Items.FirstOrDefault();
-            if (targetItem == null)
+            SelectMainFeed(targetFeed);
+            if (_currentSelectedItem != null)
             {
-                return;
+                ScrollSelectionToTopRequested?.Invoke(_currentSelectedItem);
             }
-
-            OnArticleSelected(targetItem);
-            ScrollSelectionToTopRequested?.Invoke(targetItem);
         }
 
         private List<FeedGroupViewModel> BuildVisibleFeedList(ArticleSectionViewModel section)
@@ -1830,7 +3278,9 @@ namespace MyNewsFeeder.ViewModels
         {
             try
             {
-                _browserService.NavigateToBlank();
+                SetContentFullscreen(false);
+                ResetEmbeddedVideoPlayback();
+                _embeddedBrowserSession?.NavigateToPlaceholder();
                 IsBrowserVisible = false;
             }
             catch (Exception)
@@ -2060,6 +3510,7 @@ namespace MyNewsFeeder.ViewModels
                 DataContext = feedManagerViewModel,
                 Owner = Application.Current.MainWindow
             };
+            feedManagerWindow.PrepareInitialWindowPlacement(GetFeedManagerWindowPreferences());
             feedManagerWindow.ShowDialog();
 
             if (feedManagerViewModel.WasClosedBySave)
@@ -2115,37 +3566,148 @@ namespace MyNewsFeeder.ViewModels
         {
             if (!IsBrowserVisible)
             {
-                if (!string.IsNullOrEmpty(SelectedArticleLink))
+                if (!TryShowBrowserContent(useClearNavigation: false))
                 {
-                    IsBrowserVisible = true;
-                    BrowserHeight = 400;
-
-                    try
-                    {
-                        _browserService.Navigate(SelectedArticleLink);
-                    }
-                    catch (Exception)
-                    {
-                    }
-                }
-                else
-                {
-                    System.Windows.MessageBox.Show("No article selected or no link available.",
-                        "Information", System.Windows.MessageBoxButton.OK,
-                        System.Windows.MessageBoxImage.Information);
+                    return;
                 }
             }
             else
             {
+                if (IsContentFullscreen)
+                {
+                    SetContentFullscreen(false);
+                }
+
                 if (!IsShowContentAlwaysOn)
                 {
                     IsBrowserVisible = false;
-                    _browserService.NavigateToBlank();
+                    _embeddedBrowserSession?.NavigateToBlank();
                 }
                 else
                 {
                 }
             }
+        }
+
+        private bool CanToggleContentFullscreen()
+        {
+            return IsContentFullscreen || IsBrowserVisible || !string.IsNullOrWhiteSpace(SelectedArticleLink);
+        }
+
+        private void ToggleContentFullscreen()
+        {
+            if (IsContentFullscreen)
+            {
+                SetContentFullscreen(false);
+                return;
+            }
+
+            if (!TryShowBrowserContent(useClearNavigation: true))
+            {
+                return;
+            }
+
+            SetContentFullscreen(true);
+        }
+
+        public void ExitContentFullscreen()
+        {
+            SetContentFullscreen(false);
+        }
+
+        private void SetContentFullscreen(bool isFullscreen)
+        {
+            IsContentFullscreen = isFullscreen;
+        }
+
+        private bool TryShowBrowserContent(bool useClearNavigation)
+        {
+            if (string.IsNullOrWhiteSpace(SelectedArticleLink))
+            {
+                System.Windows.MessageBox.Show("No article selected or no link available.",
+                    "Information", System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+                return false;
+            }
+
+            _isBrowserTransitionVisible = true;
+            OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+            IsBrowserVisible = true;
+            BrowserHeight = Math.Max(BrowserHeight, 400);
+            ScheduleBrowserNavigation(SelectedArticleLink, useClearNavigation);
+
+            return true;
+        }
+
+        private async void ScheduleBrowserNavigation(string url, bool useClearNavigation)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return;
+            }
+
+            if (IsBrowserPageLoading)
+            {
+                _pendingBrowserNavigationUrl = url;
+                _pendingBrowserNavigationUseClear = useClearNavigation;
+                return;
+            }
+
+            NotifyEmbeddedBrowserWarmupHintOnce();
+            IsBrowserPageLoading = true;
+            await ExecuteBrowserNavigationAsync(url, useClearNavigation);
+        }
+
+        private async Task ExecuteBrowserNavigationAsync(string url, bool useClearNavigation)
+        {
+            try
+            {
+                var browserSession = _embeddedBrowserSession;
+                if (browserSession == null)
+                {
+                    IsBrowserPageLoading = false;
+                    _isBrowserTransitionVisible = false;
+                    OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+                    return;
+                }
+
+                browserSession.SetDarkMode(_settings.DarkMode);
+                browserSession.SetAdBlockerEnabled(_settings.AdBlockerEnabled);
+                browserSession.SetMediaPlaybackEnabled(_isEmbeddedVideoPlaybackEnabled);
+
+                if (useClearNavigation)
+                {
+                    browserSession.NavigateToBlank();
+                    await Task.Delay(120);
+                }
+
+                var navigated = await browserSession.NavigateFastAsync(url);
+                if (!navigated)
+                {
+                    IsBrowserPageLoading = false;
+                    _isBrowserTransitionVisible = false;
+                    OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+                }
+            }
+            catch (Exception)
+            {
+                IsBrowserPageLoading = false;
+                _isBrowserTransitionVisible = false;
+                OnPropertyChanged(nameof(ShowBrowserLoadingOverlay));
+                // Ignore navigation failures; users can retry from the browser toolbar.
+            }
+        }
+
+        public bool NotifyEmbeddedBrowserWarmupHintOnce()
+        {
+            if (_hasShownEmbeddedBrowserWarmupHintThisSession)
+            {
+                return false;
+            }
+
+            _hasShownEmbeddedBrowserWarmupHintThisSession = true;
+            SnackbarMessageQueue?.Enqueue("The first Show Content load after app start can take longer. After that, pages usually open faster.");
+            return true;
         }
 
         private async Task ShowAdBlockerSettingsAsync()
@@ -2247,7 +3809,7 @@ namespace MyNewsFeeder.ViewModels
 
         public void ClearBrowserOnStartup()
         {
-            _browserService.NavigateToBlank();
+            _embeddedBrowserSession?.NavigateToBlank();
         }
 
         private void SectionOnPropertyChanged(object sender, PropertyChangedEventArgs e)
@@ -2371,6 +3933,7 @@ namespace MyNewsFeeder.ViewModels
                     SyncMyFeedsSection();
                     _pinnedSection?.UpdateUnreadCount();
                     _readLaterSection?.UpdateUnreadCount();
+                    _archivedSection?.UpdateUnreadCount();
                 }
                 finally
                 {
@@ -2400,8 +3963,10 @@ namespace MyNewsFeeder.ViewModels
         private void UpdateSectionsImmediate()
         {
             SyncMyFeedsSection();
+            RefreshCurrentArticleList();
             _pinnedSection?.UpdateUnreadCount();
             _readLaterSection?.UpdateUnreadCount();
+            _archivedSection?.UpdateUnreadCount();
         }
 
         private void RefreshSectionsDeferred(double offsetToRestore)
@@ -2610,6 +4175,20 @@ namespace MyNewsFeeder.ViewModels
                     })
                     .ToList();
             }
+            else if (section == _archivedSection)
+            {
+                _archivedSourceFeeds = groupedItems
+                    .Select(kvp => new FeedGroupViewModel
+                    {
+                        Name = kvp.Key,
+                        Category = ResolveCategoryNameForFeed(kvp.Key),
+                        IsExpanded = feedStates.TryGetValue(kvp.Key, out var feedExpanded) ? feedExpanded : true,
+                        HideUnreadIndicators = section.HideUnreadIndicators,
+                        Items = new ObservableCollection<FeedItem>(kvp.Value)
+                    })
+                    .ToList();
+                OnArchiveItemsChanged();
+            }
         }
 
         private string ResolveCategoryNameForFeed(string feedName)
@@ -2663,6 +4242,10 @@ namespace MyNewsFeeder.ViewModels
             section.UpdateUnreadCount();
 
             RemoveItemFromCache(section, key);
+            if (section == _archivedSection)
+            {
+                OnArchiveItemsChanged();
+            }
         }
 
         private void RemoveArticleFromAllCollections(string key)
@@ -2689,16 +4272,21 @@ namespace MyNewsFeeder.ViewModels
 
             RemoveArticleFromSectionFeeds(_pinnedSection, key);
             RemoveArticleFromSectionFeeds(_readLaterSection, key);
+            RemoveArticleFromSectionFeeds(_archivedSection, key);
         }
 
         private void AddItemToCache(ArticleSectionViewModel section, string feedName, string categoryName, FeedItem item)
         {
-            if (section != _pinnedSection && section != _readLaterSection)
+            if (section != _pinnedSection && section != _readLaterSection && section != _archivedSection)
             {
                 return;
             }
 
-            var cache = section == _pinnedSection ? _pinnedSourceFeeds : _readLaterSourceFeeds;
+            var cache = section == _pinnedSection
+                ? _pinnedSourceFeeds
+                : section == _readLaterSection
+                    ? _readLaterSourceFeeds
+                    : _archivedSourceFeeds;
             var feedVm = cache.FirstOrDefault(f => string.Equals(f.Name, feedName, StringComparison.OrdinalIgnoreCase));
             if (feedVm == null)
             {
@@ -2727,12 +4315,16 @@ namespace MyNewsFeeder.ViewModels
 
         private void RemoveItemFromCache(ArticleSectionViewModel section, string key)
         {
-            if (section != _pinnedSection && section != _readLaterSection)
+            if (section != _pinnedSection && section != _readLaterSection && section != _archivedSection)
             {
                 return;
             }
 
-            var cache = section == _pinnedSection ? _pinnedSourceFeeds : _readLaterSourceFeeds;
+            var cache = section == _pinnedSection
+                ? _pinnedSourceFeeds
+                : section == _readLaterSection
+                    ? _readLaterSourceFeeds
+                    : _archivedSourceFeeds;
             foreach (var feed in cache.ToList())
             {
                 var match = feed.Items.FirstOrDefault(i =>
@@ -2815,6 +4407,10 @@ namespace MyNewsFeeder.ViewModels
             section.UpdateUnreadCount();
 
             AddItemToCache(section, feedName, categoryName, item);
+            if (section == _archivedSection)
+            {
+                OnArchiveItemsChanged();
+            }
         }
 
         private static FeedItem CloneSnapshot(FeedItem item)
@@ -2829,7 +4425,9 @@ namespace MyNewsFeeder.ViewModels
                 PublicationDate = item.PublicationDate,
                 IsRead = item.IsRead,
                 IsPinned = item.IsPinned,
-                IsReadLater = item.IsReadLater
+                IsReadLater = item.IsReadLater,
+                IsArchived = item.IsArchived,
+                ArchivedAt = item.ArchivedAt
             };
         }
 
@@ -2889,10 +4487,13 @@ namespace MyNewsFeeder.ViewModels
             {
                 _pinnedArticleLinks.Remove(key);
                 _settings.PinnedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+                _settings.ArchivedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
                 PersistPinnedAndSavedLists();
 
                 item.IsPinned = false;
                 item.IsReadLater = false;
+                item.IsArchived = false;
+                item.ArchivedAt = null;
                 RemoveArticleFromSectionFeeds(_pinnedSection, key);
                 AddArticleBackToCategories(item);
                 RefreshSectionsDeferred(_lastInlineMoveOffset);
@@ -2906,13 +4507,17 @@ namespace MyNewsFeeder.ViewModels
 
             _pinnedArticleLinks.Add(key);
             _readLaterArticleLinks.Remove(key);
+            _archivedArticleLinks.Remove(key);
             _settings.ReadLaterArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
             _settings.PinnedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+            _settings.ArchivedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
             _settings.PinnedArticleSnapshots.Add(CloneSnapshot(item));
             PersistPinnedAndSavedLists();
 
             item.IsPinned = true;
             item.IsReadLater = false;
+            item.IsArchived = false;
+            item.ArchivedAt = null;
             RemoveArticleFromAllCollections(key);
             AddArticleToSection(_pinnedSection, item);
             RefreshSectionsDeferred(_lastInlineMoveOffset);
@@ -2948,6 +4553,8 @@ namespace MyNewsFeeder.ViewModels
                 PersistPinnedAndSavedLists();
 
                 item.IsReadLater = false;
+                item.IsArchived = false;
+                item.ArchivedAt = null;
                 RemoveArticleFromSectionFeeds(_readLaterSection, key);
                 AddArticleBackToCategories(item);
                 RefreshSectionsDeferred(_lastInlineMoveOffset);
@@ -2961,15 +4568,81 @@ namespace MyNewsFeeder.ViewModels
 
             _readLaterArticleLinks.Add(key);
             _pinnedArticleLinks.Remove(key);
+            _archivedArticleLinks.Remove(key);
             _settings.PinnedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
             _settings.ReadLaterArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+            _settings.ArchivedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
             _settings.ReadLaterArticleSnapshots.Add(CloneSnapshot(item));
             PersistPinnedAndSavedLists();
 
             item.IsReadLater = true;
             item.IsPinned = false;
+            item.IsArchived = false;
+            item.ArchivedAt = null;
             RemoveArticleFromAllCollections(key);
             AddArticleToSection(_readLaterSection, item);
+            RefreshSectionsDeferred(_lastInlineMoveOffset);
+            item.IsSelected = false;
+            if (neighbor != null)
+            {
+                OnArticleSelected(neighbor, enableAutoScroll: false);
+            }
+            SuppressAutoScroll = false;
+        }
+
+        private void ArchiveArticle(FeedItem item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+
+            var key = item.Link?.Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            SuppressAutoScroll = true;
+            var sourceSection = FindSectionForItem(item);
+            var neighbor = GetNeighborForSelection(item, sourceSection);
+            _lastInlineMoveOffset = RequestTreeScrollOffset?.Invoke() ?? -1;
+            if (_archivedArticleLinks.Contains(key))
+            {
+                _archivedArticleLinks.Remove(key);
+                _settings.ArchivedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+                PersistPinnedAndSavedLists();
+
+                item.IsArchived = false;
+                item.IsPinned = false;
+                item.IsReadLater = false;
+                item.ArchivedAt = null;
+                RemoveArticleFromSectionFeeds(_archivedSection, key);
+                AddArticleBackToCategories(item);
+                RefreshSectionsDeferred(_lastInlineMoveOffset);
+                if (neighbor != null)
+                {
+                    OnArticleSelected(neighbor, enableAutoScroll: false);
+                }
+                SuppressAutoScroll = false;
+                return;
+            }
+
+            item.ArchivedAt = DateTime.Now;
+            _archivedArticleLinks.Add(key);
+            _pinnedArticleLinks.Remove(key);
+            _readLaterArticleLinks.Remove(key);
+            _settings.PinnedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+            _settings.ReadLaterArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+            _settings.ArchivedArticleSnapshots.RemoveAll(f => string.Equals(f.Link?.Trim(), key, StringComparison.OrdinalIgnoreCase));
+            _settings.ArchivedArticleSnapshots.Add(CloneSnapshot(item));
+            PersistPinnedAndSavedLists();
+
+            item.IsArchived = true;
+            item.IsPinned = false;
+            item.IsReadLater = false;
+            RemoveArticleFromAllCollections(key);
+            AddArticleToSection(_archivedSection, item);
             RefreshSectionsDeferred(_lastInlineMoveOffset);
             item.IsSelected = false;
             if (neighbor != null)
@@ -3478,13 +5151,17 @@ namespace MyNewsFeeder.ViewModels
             }
 
             IsLoading = true;
+            var completeInitialRefreshAfterLoad = !_hasCompletedInitialRefresh;
             string linkToRestore = null;
             string refreshSummaryMessage = null;
             List<FeedItem> notificationCandidates = null;
+            List<FeedItem> notificationSourceItems = null;
             var duplicateItemsRemoved = 0;
             var refreshTimer = Stopwatch.StartNew();
             try
             {
+                await Application.Current.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
+
                 // Capture current scroll offset (view will provide it)
                 _lastTreeScrollOffset = RequestTreeScrollOffset?.Invoke() ?? 0;
 
@@ -3494,6 +5171,7 @@ namespace MyNewsFeeder.ViewModels
             CategoryGroups.Clear();
             UpdateFeedSection(_pinnedSection, new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase));
             UpdateFeedSection(_readLaterSection, new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase));
+            UpdateFeedSection(_archivedSection, new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase));
             SyncMyFeedsSection();
             _allCategoryGroups.Clear();
             FilterCategories.Clear();
@@ -3510,7 +5188,11 @@ namespace MyNewsFeeder.ViewModels
                 var previousReadStates = _readArticleLinks;
 
                 var advertisementKeywords = _settings.AdvertisementFilterEnabled ? GetAdvertisementKeywordsForFiltering() : new List<string>();
-                var extraPerFeed = Math.Min(MaxExtraPerFeed, GetSectionMaxPerFeed(_pinnedSection) + GetSectionMaxPerFeed(_readLaterSection));
+                var extraPerFeed = Math.Min(
+                    MaxExtraPerFeed,
+                    GetSectionMaxPerFeed(_pinnedSection) +
+                    GetSectionMaxPerFeed(_readLaterSection) +
+                    GetSectionMaxPerFeed(_archivedSection));
                 var advertisementBuffer = (_settings.AdvertisementFilterEnabled && advertisementKeywords.Count > 0)
                     ? Math.Min(MaxExtraPerFeed, MaxFeeds) // over-fetch to replace filtered ads
                     : 0;
@@ -3523,6 +5205,19 @@ namespace MyNewsFeeder.ViewModels
                     Keyword,
                     targetPerFeed,
                     advertisementKeywords.Count > 0 ? advertisementKeywords : null);
+
+                // The main-window keyword search must not influence "important keyword"
+                // notifications. When a search filter is active, notifications are evaluated
+                // from a second unfiltered feed snapshot.
+                if (_settings.EnableNotifications && !string.IsNullOrWhiteSpace(Keyword))
+                {
+                    notificationSourceItems = await _feedService.FetchArticlesAsync(
+                        _feeds,
+                        keywordFilter: null,
+                        maxItems: targetPerFeed,
+                        advertisementKeywords: advertisementKeywords.Count > 0 ? advertisementKeywords : null);
+                }
+
                 var totalEnabledFeeds = _feeds.Count(f => f.IsEnabled);
                 var totalFetchedItems = items.Count;
                 var failedFeeds = items
@@ -3548,6 +5243,12 @@ namespace MyNewsFeeder.ViewModels
                 if (_settings.AdvertisementFilterEnabled && advertisementKeywords.Count > 0)
                 {
                     items = items.Where(item => !item.IsAdvertisement).ToList();
+                    if (notificationSourceItems != null)
+                    {
+                        notificationSourceItems = notificationSourceItems
+                            .Where(item => !item.IsAdvertisement)
+                            .ToList();
+                    }
                 }
 
                 var itemsBeforeDedupe = items;
@@ -3562,6 +5263,15 @@ namespace MyNewsFeeder.ViewModels
                     itemsBeforeDedupe,
                     perFeedQuota: targetPerFeed,
                     preferredFeedOrder: preferredFeedOrder);
+
+                if (notificationSourceItems != null)
+                {
+                    notificationSourceItems = RemoveCrossFeedDuplicates(
+                        notificationSourceItems,
+                        perFeedQuota: targetPerFeed,
+                        preferredFeedOrder: preferredFeedOrder);
+                }
+
                 var articlesAfterDedupe = items.Count(item => !IsTechnicalFeedEntry(item));
                 duplicateItemsRemoved = Math.Max(0, articlesBeforeDedupe - articlesAfterDedupe);
 
@@ -3581,6 +5291,16 @@ namespace MyNewsFeeder.ViewModels
 
                 var pinnedLookup = new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase);
                 var readLaterLookup = new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase);
+                var archivedLookup = new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase);
+                ApplyArchiveAutoCleanupSilently();
+                var archivedTimestamps = (_settings.ArchivedArticleSnapshots ?? new List<FeedItem>())
+                    .Where(s => !string.IsNullOrWhiteSpace(s?.Link))
+                    .GroupBy(s => s.Link.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.OrderByDescending(s => s.ArchivedAt ?? DateTime.MinValue)
+                              .FirstOrDefault()?.ArchivedAt,
+                        StringComparer.OrdinalIgnoreCase);
 
                 // Rehydrate saved pinned/read-later snapshots that may no longer be in the feed responses.
                 void AddSnapshotIfMissing(List<FeedItem> source, Dictionary<string, List<FeedItem>> targetLookup)
@@ -3605,6 +5325,9 @@ namespace MyNewsFeeder.ViewModels
 
                         snap.IsPinned = targetLookup == pinnedLookup;
                         snap.IsReadLater = targetLookup == readLaterLookup;
+                        snap.IsArchived = targetLookup == archivedLookup;
+                        ApplyStoredLabelsToItem(snap);
+                        ApplyStoredNoteToItem(snap);
                         AddToLookup(targetLookup, snap);
                     }
                 }
@@ -3614,12 +5337,28 @@ namespace MyNewsFeeder.ViewModels
                 foreach (var item in items)
                 {
                     var key = item.Link?.Trim();
+                    ApplyStoredLabelsToItem(item);
+                    ApplyStoredNoteToItem(item);
                     if (!string.IsNullOrWhiteSpace(key))
                     {
+                        if (_archivedArticleLinks.Contains(key))
+                        {
+                            item.IsArchived = true;
+                            item.IsPinned = false;
+                            item.IsReadLater = false;
+                            item.ArchivedAt = archivedTimestamps.TryGetValue(key, out var archivedAt)
+                                ? archivedAt
+                                : item.ArchivedAt ?? ResolveArchiveRetentionDate(item) ?? DateTime.Now;
+                            AddToLookup(archivedLookup, item);
+                            continue;
+                        }
+
                         if (_pinnedArticleLinks.Contains(key))
                         {
                             item.IsPinned = true;
                             item.IsReadLater = false;
+                            item.IsArchived = false;
+                            item.ArchivedAt = null;
                             AddToLookup(pinnedLookup, item);
                             continue;
                         }
@@ -3628,6 +5367,8 @@ namespace MyNewsFeeder.ViewModels
                         {
                             item.IsReadLater = true;
                             item.IsPinned = false;
+                            item.IsArchived = false;
+                            item.ArchivedAt = null;
                             AddToLookup(readLaterLookup, item);
                             continue;
                         }
@@ -3635,11 +5376,14 @@ namespace MyNewsFeeder.ViewModels
 
                     item.IsPinned = false;
                     item.IsReadLater = false;
+                    item.IsArchived = false;
+                    item.ArchivedAt = null;
                     regularItems.Add(item);
                 }
 
                 AddSnapshotIfMissing(_settings.PinnedArticleSnapshots, pinnedLookup);
                 AddSnapshotIfMissing(_settings.ReadLaterArticleSnapshots, readLaterLookup);
+                AddSnapshotIfMissing(_settings.ArchivedArticleSnapshots, archivedLookup);
 
                 items = regularItems;
 
@@ -3651,12 +5395,24 @@ namespace MyNewsFeeder.ViewModels
                         .Take(MaxFeeds))
                     .ToList();
 
-                // Important notifications are based only on the currently visible My Feeds list.
+                if (notificationSourceItems != null)
+                {
+                    notificationSourceItems = notificationSourceItems
+                        .GroupBy(i => string.IsNullOrWhiteSpace(i.FeedName) ? "Feed" : i.FeedName)
+                        .SelectMany(g => g
+                            .OrderByDescending(it => it.PublicationDate)
+                            .Take(MaxFeeds))
+                        .ToList();
+                }
+
+                // Important notifications ignore the main-window search keyword and only use
+                // Important Feeds / Important Keywords from Settings.
                 var visibleItems = items.ToList();
+                var notificationItems = notificationSourceItems ?? visibleItems;
                 var importantKeywords = GetImportantKeywordsForNotifications();
                 notificationCandidates = RemoveCrossFeedDuplicates(
-                    GetNewImportantItemsForNotifications(visibleItems, importantKeywords));
-                UpdateKnownArticleLinks(visibleItems);
+                    GetNewImportantItemsForNotifications(notificationItems, importantKeywords));
+                UpdateKnownArticleLinks(notificationItems);
 
                 // Group items by category
                 var categorizedItems = items
@@ -3667,7 +5423,9 @@ namespace MyNewsFeeder.ViewModels
                         {
                             return true;
                         }
-                        return !_pinnedArticleLinks.Contains(link) && !_readLaterArticleLinks.Contains(link);
+                        return !_pinnedArticleLinks.Contains(link) &&
+                               !_readLaterArticleLinks.Contains(link) &&
+                               !_archivedArticleLinks.Contains(link);
                     })
                     .GroupBy(item =>
                 {
@@ -3681,10 +5439,12 @@ namespace MyNewsFeeder.ViewModels
 
                 var previousSelectedLink = SelectedArticleLink?.Trim();
                 _suppressSelectionDuringRefresh = true;
+                await Application.Current.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
 
                 // Update categories in-place
-                foreach (var categoryName in desiredCategoryOrder)
+                for (int categoryIndex = 0; categoryIndex < desiredCategoryOrder.Count; categoryIndex++)
                 {
+                    var categoryName = desiredCategoryOrder[categoryIndex];
                     if (!categorizedItems.TryGetValue(categoryName, out var categoryItems))
                     {
                         continue;
@@ -3742,6 +5502,11 @@ namespace MyNewsFeeder.ViewModels
 
                         UpdateItemsInPlace(feedVm, feedGroup.ToList(), previousReadStates);
                     }
+
+                    if ((categoryIndex + 1) % 2 == 0)
+                    {
+                        await Application.Current.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+                    }
                 }
 
                 // Remove categories that no longer have items
@@ -3767,6 +5532,7 @@ namespace MyNewsFeeder.ViewModels
                 OnPropertyChanged(nameof(CurrentFeedSettingsDisplay));
                 UpdateFeedSection(_pinnedSection, pinnedLookup);
                 UpdateFeedSection(_readLaterSection, readLaterLookup);
+                UpdateFeedSection(_archivedSection, archivedLookup);
                 SyncMyFeedsSection();
                 SelectedSection ??= _myFeedsSection;
 
@@ -3778,7 +5544,6 @@ namespace MyNewsFeeder.ViewModels
                 RebuildFilterListsForSection(_selectedSection ?? _myFeedsSection, scheduleFilterApply: false);
                 ApplyTreeFilter();
 
-                _hasCompletedInitialRefresh = true;
                 TryNotifyImportantItems(notificationCandidates);
 
                 refreshTimer.Stop();
@@ -3820,6 +5585,17 @@ namespace MyNewsFeeder.ViewModels
                                 string.Equals(item.Link.Trim(), previousSelectedLink.Trim(), StringComparison.OrdinalIgnoreCase));
                     }
 
+                    if (match == null && _archivedSection != null)
+                    {
+                        match = _archivedSection.Items
+                            .OfType<CategoryGroupViewModel>()
+                            .SelectMany(cg => cg.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                            .SelectMany(fg => fg.Items ?? Enumerable.Empty<FeedItem>())
+                            .FirstOrDefault(item =>
+                                !string.IsNullOrWhiteSpace(item.Link) &&
+                                string.Equals(item.Link.Trim(), previousSelectedLink.Trim(), StringComparison.OrdinalIgnoreCase));
+                    }
+
                     if (match != null)
                     {
                         SelectedArticleLink = NormalizeExternalLink(match.Link);
@@ -3842,6 +5618,12 @@ namespace MyNewsFeeder.ViewModels
             {
                 refreshTimer.Stop();
                 IsLoading = false;
+                if (completeInitialRefreshAfterLoad)
+                {
+                    _hasCompletedInitialRefresh = true;
+                    OnPropertyChanged(nameof(IsNotLoading));
+                    OnPropertyChanged(nameof(ShowLoadingOverlay));
+                }
                 _suppressSelectionDuringRefresh = false;
                 if (!string.IsNullOrWhiteSpace(linkToRestore))
                 {
@@ -4182,6 +5964,7 @@ namespace MyNewsFeeder.ViewModels
                 SyncCollectionInPlace(CategoryGroups, sourceCategories);
                 SyncCollectionInPlace(_myFeedsSection.Items, sourceCategories.Cast<object>().ToList());
                 _myFeedsSection.UpdateUnreadCount();
+                RefreshCurrentArticleList();
                 EnsureSelectionWithinCurrentSection();
                 _sectionNeedsFilterApply[_myFeedsSection] = false;
                 return;
@@ -4248,6 +6031,7 @@ namespace MyNewsFeeder.ViewModels
                 var desiredItems = filteredCategories.Cast<object>().ToList();
                 SyncCollectionInPlace(targetSection.Items, desiredItems);
                 _selectedSection?.UpdateUnreadCount();
+                RefreshCurrentArticleList();
                 EnsureSelectionWithinCurrentSection();
                 _sectionNeedsFilterApply[targetSection] = false;
                 return;
@@ -4353,6 +6137,7 @@ namespace MyNewsFeeder.ViewModels
                 }
                 _selectedSection?.UpdateUnreadCount();
             }
+            RefreshCurrentArticleList();
             EnsureSelectionWithinCurrentSection();
 
             var keySection = _selectedSection ?? _myFeedsSection;
@@ -4370,11 +6155,13 @@ namespace MyNewsFeeder.ViewModels
 
         private List<CategoryGroupViewModel> GetSourceCategoriesForSection(ArticleSectionViewModel section)
         {
-            if (section == _pinnedSection || section == _readLaterSection)
+            if (section == _pinnedSection || section == _readLaterSection || section == _archivedSection)
             {
                 var cached = section == _pinnedSection
                     ? _pinnedSourceFeeds
-                    : _readLaterSourceFeeds;
+                    : section == _readLaterSection
+                        ? _readLaterSourceFeeds
+                        : _archivedSourceFeeds;
 
                 var feeds = (cached != null && cached.Count > 0)
                     ? cached.ToList()
@@ -4403,7 +6190,7 @@ namespace MyNewsFeeder.ViewModels
         private void EnsureSelectionWithinCurrentSection()
         {
             var section = _selectedSection ?? _myFeedsSection;
-            var visibleItems = BuildVisibleArticleList(section);
+            var visibleItems = CurrentArticleItems.ToList();
 
             if (visibleItems.Count == 0)
             {
@@ -4413,18 +6200,188 @@ namespace MyNewsFeeder.ViewModels
 
             if (section == _myFeedsSection)
             {
-                // For My Feeds: do not auto-select the first item; only keep current if valid.
+                // For My Feeds: keep the current selection if it is still valid,
+                // otherwise fall back to the first visible article in the list.
                 if (_currentSelectedItem != null && visibleItems.Contains(_currentSelectedItem))
                 {
                     return;
                 }
-                // Leave unselected; TryRestoreMyFeedsSelection runs on section change.
+
+                OnArticleSelected(visibleItems[0], enableAutoScroll: false);
                 return;
             }
 
             if (_currentSelectedItem == null || !visibleItems.Contains(_currentSelectedItem))
             {
                 OnArticleSelected(visibleItems[0], enableAutoScroll: false);
+            }
+        }
+
+        private void SelectMainAllArticles()
+        {
+            _selectedMainCategoryName = null;
+            _selectedMainFeedName = null;
+            RefreshCurrentArticleList();
+        }
+
+        private void SelectMainCategory(CategoryGroupViewModel category)
+        {
+            if (category == null)
+            {
+                return;
+            }
+
+            _selectedMainCategoryName = category.Name;
+            _selectedMainFeedName = null;
+            RefreshCurrentArticleList();
+        }
+
+        private void SelectMainFeed(FeedGroupViewModel feed)
+        {
+            if (feed == null)
+            {
+                return;
+            }
+
+            _selectedMainCategoryName = feed.Category;
+            _selectedMainFeedName = feed.Name;
+            RefreshCurrentArticleList();
+        }
+
+        private void RefreshCurrentArticleList()
+        {
+            var items = BuildMainArticleListForCurrentScope();
+            SyncCollectionInPlace(CurrentArticleItems, items);
+            UpdateNavigationSelectionState();
+            UpdateCurrentArticleListTitle();
+
+            using (CurrentArticleItemsView.DeferRefresh())
+            {
+                CurrentArticleItemsView.GroupDescriptions.Clear();
+                if (string.IsNullOrWhiteSpace(_selectedMainFeedName))
+                {
+                    CurrentArticleItemsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(FeedItem.FeedName)));
+                }
+            }
+
+            if (_currentSelectedItem != null && CurrentArticleItems.Contains(_currentSelectedItem))
+            {
+                return;
+            }
+
+            if (CurrentArticleItems.Count > 0)
+            {
+                OnArticleSelected(CurrentArticleItems[0], enableAutoScroll: false);
+            }
+            else
+            {
+                ClearArticleSelection();
+            }
+        }
+
+        private List<FeedItem> BuildMainArticleListForCurrentScope()
+        {
+            if (!string.IsNullOrWhiteSpace(_selectedMainFeedName))
+            {
+                var selectedFeed = CategoryGroups
+                    .SelectMany(category => category.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                    .FirstOrDefault(feed => string.Equals(feed.Name, _selectedMainFeedName, StringComparison.OrdinalIgnoreCase));
+
+                return BuildOrderedMainListForFeed(selectedFeed, selectedFeed?.Category);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_selectedMainCategoryName))
+            {
+                var selectedCategory = CategoryGroups
+                    .FirstOrDefault(category => string.Equals(category.Name, _selectedMainCategoryName, StringComparison.OrdinalIgnoreCase));
+
+                if (selectedCategory == null)
+                {
+                    return new List<FeedItem>();
+                }
+
+                return BuildOrderedMainListForFeeds(
+                    selectedCategory.Feeds ?? Enumerable.Empty<FeedGroupViewModel>(),
+                    fallbackCategoryName: selectedCategory.Name);
+            }
+
+            var orderedItems = new List<FeedItem>();
+            foreach (var category in CategoryGroups)
+            {
+                orderedItems.AddRange(BuildOrderedMainListForFeeds(
+                    category.Feeds ?? Enumerable.Empty<FeedGroupViewModel>(),
+                    fallbackCategoryName: category.Name));
+            }
+
+            return orderedItems;
+        }
+
+        private List<FeedItem> BuildOrderedMainListForFeeds(IEnumerable<FeedGroupViewModel> feeds, string fallbackCategoryName)
+        {
+            var orderedItems = new List<FeedItem>();
+            foreach (var feed in feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+            {
+                orderedItems.AddRange(BuildOrderedMainListForFeed(feed, fallbackCategoryName));
+            }
+
+            return orderedItems;
+        }
+
+        private List<FeedItem> BuildOrderedMainListForFeed(FeedGroupViewModel feed, string fallbackCategoryName)
+        {
+            if (feed?.Items == null)
+            {
+                return new List<FeedItem>();
+            }
+
+            var categoryName = string.IsNullOrWhiteSpace(feed.Category)
+                ? fallbackCategoryName ?? "Default"
+                : feed.Category;
+
+            var orderedItems = feed.Items
+                .OrderByDescending(item => item.PublicationDate)
+                .ThenBy(item => item.Title)
+                .ToList();
+
+            foreach (var item in orderedItems)
+            {
+                item.CategoryName = categoryName;
+            }
+
+            return orderedItems;
+        }
+
+        private void UpdateNavigationSelectionState()
+        {
+            foreach (var category in CategoryGroups)
+            {
+                category.IsNavigationSelected =
+                    !string.IsNullOrWhiteSpace(_selectedMainCategoryName) &&
+                    string.Equals(category.Name, _selectedMainCategoryName, StringComparison.OrdinalIgnoreCase) &&
+                    string.IsNullOrWhiteSpace(_selectedMainFeedName);
+
+                foreach (var feed in category.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                {
+                    feed.IsNavigationSelected =
+                        !string.IsNullOrWhiteSpace(_selectedMainFeedName) &&
+                        string.Equals(feed.Name, _selectedMainFeedName, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+
+        private void UpdateCurrentArticleListTitle()
+        {
+            if (!string.IsNullOrWhiteSpace(_selectedMainFeedName))
+            {
+                CurrentArticleListTitle = _selectedMainFeedName;
+            }
+            else if (!string.IsNullOrWhiteSpace(_selectedMainCategoryName))
+            {
+                CurrentArticleListTitle = _selectedMainCategoryName;
+            }
+            else
+            {
+                CurrentArticleListTitle = "Latest Articles";
             }
         }
 
@@ -4482,7 +6439,7 @@ namespace MyNewsFeeder.ViewModels
         {
             var source = GetSourceCategoriesForSection(section ?? _myFeedsSection);
 
-            var sectionFeeds = (section == _pinnedSection || section == _readLaterSection)
+            var sectionFeeds = (section == _pinnedSection || section == _readLaterSection || section == _archivedSection)
                 ? source
                     .SelectMany(c => c.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
                     .Select(f => f.Name)
@@ -4593,6 +6550,8 @@ namespace MyNewsFeeder.ViewModels
                     target.FeedUrl = incoming.FeedUrl;
                     target.IsPinned = incoming.IsPinned;
                     target.IsReadLater = incoming.IsReadLater;
+                    target.IsArchived = incoming.IsArchived;
+                    target.ArchivedAt = incoming.ArchivedAt;
                     target.IsRead = incoming.IsRead;
                 }
                 else
@@ -5140,6 +7099,46 @@ namespace MyNewsFeeder.ViewModels
             }
 
             return $"{title}\n\n{collapsed}";
+        }
+
+        private string GetOrCreateArticleSummaryHtml(FeedItem feedItem)
+        {
+            if (feedItem == null)
+            {
+                return string.Empty;
+            }
+
+            if (string.IsNullOrEmpty(feedItem.CachedArticleSummaryHtml))
+            {
+                feedItem.CachedArticleSummaryHtml = CreateArticleHtml(feedItem);
+            }
+
+            return feedItem.CachedArticleSummaryHtml;
+        }
+
+        private string GetOrCreateArticlePlainText(FeedItem feedItem)
+        {
+            if (feedItem == null)
+            {
+                return string.Empty;
+            }
+
+            if (string.IsNullOrEmpty(feedItem.CachedArticlePlainText))
+            {
+                feedItem.CachedArticlePlainText = BuildArticlePlainText(feedItem.Title, feedItem.Description);
+            }
+
+            return feedItem.CachedArticlePlainText;
+        }
+
+        private void InvalidateAllArticlePreviewCaches()
+        {
+            foreach (var item in CategoryGroups
+                         .SelectMany(category => category.Feeds ?? Enumerable.Empty<FeedGroupViewModel>())
+                         .SelectMany(feed => feed.Items ?? Enumerable.Empty<FeedItem>()))
+            {
+                item?.InvalidateArticlePreviewCache();
+            }
         }
 
         private string SanitizeHtml(string html)

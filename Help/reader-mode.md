@@ -1,12 +1,22 @@
-# Reader Mode
+# Reading Articles
+
+This topic covers both Reader Mode and the integrated article browser.
+
+## Reader Mode
+
+- Select an article.
+- Click `Reader Mode` (or use the shortcut).
+- Click again to return to feed summary view.
 
 Reader Mode tries to extract clean article text for better readability.
 
-## How to use
+## Integrated browser and fullscreen
 
-- Select an article.
-- Click **Reader Mode** (or use the shortcut).
-- Click again to return to feed summary view.
+- Click `Show Content` to open the original article inside the app.
+- If a site uses a custom embedded video player, click `Allow Media` to relax media blocking for that page only. This does not enable autoplay.
+- In the content toolbar, click `Fullscreen` or press `F11` to focus only on the embedded browser.
+- The same `F11` fullscreen shortcut is also available in `Library`, `Show All`, and the separate article window when article content is open.
+- Press `Esc`, click `Exit Fullscreen`, or press `F11` again to leave fullscreen.
 
 ## Notes
 
@@ -15,4 +25,4 @@ Reader Mode tries to extract clean article text for better readability.
 
 ## Full documentation
 
-- [See full documentation on GitHub Wiki](https://github.com/Morgoth01/my-news-feeder/wiki#7-reading-articles)
+- [See full documentation on GitHub Wiki](https://github.com/Morgoth01/my-news-feeder/wiki/My-News-Feeder-3.1.0#7-reading-articles)

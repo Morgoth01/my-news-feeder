@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
 using MyNewsFeeder.Models;
 using MyNewsFeeder.ViewModels;
 
@@ -24,11 +25,20 @@ namespace MyNewsFeeder.Views
         private bool _categoryIsDragging = false;
         private Point _feedStartPoint;
         private bool _feedIsDragging = false;
+        private bool _isApplyingWindowPlacement;
+        private bool _hasInitialWindowPlacementApplied;
+        private bool _hasRevealedInitialFrame;
+        private WindowState _lastNonMinimizedWindowState = WindowState.Normal;
 
         public FeedManagerWindow()
         {
             InitializeComponent();
             SourceInitialized += (_, __) => EnableDarkTitleBar();
+            ContentRendered += FeedManagerWindow_ContentRendered;
+            Closed += FeedManagerWindow_Closed;
+            LocationChanged += FeedManagerWindow_PlacementChanged;
+            SizeChanged += FeedManagerWindow_PlacementChanged;
+            StateChanged += FeedManagerWindow_StateChanged;
         }
 
         private void EnableDarkTitleBar()
@@ -39,6 +49,137 @@ namespace MyNewsFeeder.Views
             {
                 DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
             }
+        }
+
+        public void PrepareInitialWindowPlacement(FeedManagerWindowPreferences preferences)
+        {
+            preferences ??= new FeedManagerWindowPreferences();
+            if (!IsLoaded)
+            {
+                Opacity = 0;
+            }
+
+            ApplyWindowPlacement(preferences);
+            _hasInitialWindowPlacementApplied = true;
+        }
+
+        private void FeedManagerWindow_ContentRendered(object sender, EventArgs e)
+        {
+            if (_hasRevealedInitialFrame)
+            {
+                return;
+            }
+
+            _hasRevealedInitialFrame = true;
+
+            var fadeIn = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(90),
+                FillBehavior = FillBehavior.Stop
+            };
+
+            fadeIn.Completed += (_, __) => Opacity = 1;
+            BeginAnimation(OpacityProperty, fadeIn, HandoffBehavior.SnapshotAndReplace);
+        }
+
+        private void FeedManagerWindow_Closed(object sender, EventArgs e)
+        {
+            SaveWindowPreferences();
+        }
+
+        private void FeedManagerWindow_PlacementChanged(object sender, EventArgs e)
+        {
+            if (!IsLoaded || _isApplyingWindowPlacement)
+            {
+                return;
+            }
+
+            SaveWindowPreferences();
+        }
+
+        private void FeedManagerWindow_StateChanged(object sender, EventArgs e)
+        {
+            if (WindowState != WindowState.Minimized)
+            {
+                _lastNonMinimizedWindowState = WindowState;
+            }
+
+            FeedManagerWindow_PlacementChanged(sender, e);
+        }
+
+        private void ApplyWindowPlacement(FeedManagerWindowPreferences preferences)
+        {
+            preferences ??= new FeedManagerWindowPreferences();
+            _isApplyingWindowPlacement = true;
+
+            try
+            {
+                if (preferences.WindowWidth.HasValue && preferences.WindowWidth.Value > 0)
+                {
+                    Width = Math.Max(MinWidth, preferences.WindowWidth.Value);
+                }
+
+                if (preferences.WindowHeight.HasValue && preferences.WindowHeight.Value > 0)
+                {
+                    Height = Math.Max(MinHeight, preferences.WindowHeight.Value);
+                }
+
+                if (preferences.WindowLeft.HasValue)
+                {
+                    Left = preferences.WindowLeft.Value;
+                }
+
+                if (preferences.WindowTop.HasValue)
+                {
+                    Top = preferences.WindowTop.Value;
+                }
+
+                var targetState = NormalizePreferredWindowState(preferences.WindowState);
+                WindowState = targetState;
+                if (targetState != WindowState.Minimized)
+                {
+                    _lastNonMinimizedWindowState = targetState;
+                }
+            }
+            finally
+            {
+                _isApplyingWindowPlacement = false;
+            }
+        }
+
+        private FeedManagerWindowPreferences CaptureCurrentWindowPreferences()
+        {
+            var preferredWindowState = WindowState == WindowState.Minimized ? _lastNonMinimizedWindowState : WindowState;
+            var placementBounds = preferredWindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+
+            return new FeedManagerWindowPreferences
+            {
+                WindowState = preferredWindowState == WindowState.Maximized ? "maximized" : "normal",
+                WindowWidth = placementBounds.Width > 0 ? placementBounds.Width : null,
+                WindowHeight = placementBounds.Height > 0 ? placementBounds.Height : null,
+                WindowLeft = placementBounds.Width > 0 ? placementBounds.Left : null,
+                WindowTop = placementBounds.Height > 0 ? placementBounds.Top : null
+            };
+        }
+
+        private void SaveWindowPreferences()
+        {
+            if (!_hasInitialWindowPlacementApplied)
+            {
+                return;
+            }
+
+            var mainViewModel = (Owner as FrameworkElement)?.DataContext as MainViewModel;
+            mainViewModel?.SaveFeedManagerWindowPreferences(CaptureCurrentWindowPreferences());
+        }
+
+        private static WindowState NormalizePreferredWindowState(string value)
+        {
+            return string.Equals(value, "maximized", StringComparison.OrdinalIgnoreCase)
+                ? WindowState.Maximized
+                : WindowState.Normal;
         }
 
         private void DragHandle_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

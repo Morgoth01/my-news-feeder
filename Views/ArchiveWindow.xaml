@@ -1,0 +1,1576 @@
+<Window x:Class="MyNewsFeeder.Views.ArchiveWindow"
+        x:Name="ArchiveWindowRoot"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:MyNewsFeeder.Converters"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Archive"
+        Height="820"
+        Width="1380"
+        MinHeight="640"
+        MinWidth="1120"
+        WindowStartupLocation="CenterOwner"
+        Opacity="0"
+        PreviewKeyDown="ArchiveWindow_PreviewKeyDown"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        TextElement.FontWeight="Regular"
+        TextElement.FontSize="13"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="Auto"
+        FontFamily="{DynamicResource MaterialDesignFont}">
+    <Window.Resources>
+        <conv:HtmlToPlainTextConverter x:Key="HtmlToPlainTextConverter"/>
+
+        <Style x:Key="ArticleContextMenuStyle" TargetType="ContextMenu">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="MinWidth" Value="160"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{DynamicResource MaterialDesignPaper}"
+                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="4"
+                                SnapsToDevicePixels="True">
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ArticleMenuItemStyle" TargetType="MenuItem">
+            <Style.Resources>
+                <Style TargetType="materialDesign:PackIcon">
+                    <Setter Property="Foreground"
+                            Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=MenuItem}}"/>
+                </Style>
+            </Style.Resources>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Icon" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Outer"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                BorderThickness="0"
+                                SnapsToDevicePixels="True">
+                            <Grid Margin="4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0"
+                                                  ContentSource="Icon"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,6,0"/>
+                                <ContentPresenter Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="Outer" Property="Background" Value="#33272727"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsChecked" Value="True"/>
+                                    <Condition Property="IsHighlighted" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ArticleSubmenuMenuItemStyle"
+               TargetType="MenuItem">
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Icon" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Outer"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                BorderThickness="0"
+                                SnapsToDevicePixels="True">
+                            <Grid Margin="4,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Grid.Column="0"
+                                                  ContentSource="Icon"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,6,0"/>
+                                <ContentPresenter Grid.Column="1"
+                                                  ContentSource="Header"
+                                                  VerticalAlignment="Center"/>
+                                <materialDesign:PackIcon x:Name="SubmenuArrow"
+                                                         Grid.Column="2"
+                                                         Kind="ChevronRight"
+                                                         Width="16"
+                                                         Height="16"
+                                                         Margin="10,0,0,0"
+                                                         VerticalAlignment="Center"
+                                                         Foreground="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <Popup x:Name="PART_Popup"
+                                       AllowsTransparency="True"
+                                       Focusable="False"
+                                       IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}"
+                                       Placement="Right"
+                                       PopupAnimation="Fade"
+                                       HorizontalOffset="4">
+                                    <Border Background="{DynamicResource MaterialDesignPaper}"
+                                            BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="4"
+                                            SnapsToDevicePixels="True">
+                                        <StackPanel IsItemsHost="True"
+                                                    KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                            </Trigger>
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="Outer" Property="Background" Value="#33272727"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSubmenuOpen" Value="True"/>
+                                    <Condition Property="IsHighlighted" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                            </MultiTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
+                            </Trigger>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ArchiveActionButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+            <Setter Property="Padding" Value="18,8"/>
+            <Setter Property="MinHeight" Value="38"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="#FFFFFFFF"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                             Value="True">
+                    <Setter Property="Foreground" Value="#F7F2FF"/>
+                    <Setter Property="BorderBrush" Value="#C7A6FF"/>
+                    <Setter Property="Background" Value="#4D4D4D"/>
+                </DataTrigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                    <Setter Property="Background" Value="#F4F4F4"/>
+                </Trigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsEnabled, RelativeSource={RelativeSource Self}}"
+                                   Value="False"/>
+                        <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                                   Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="#9D9D9D"/>
+                    <Setter Property="BorderBrush" Value="#686868"/>
+                    <Setter Property="Background" Value="#3F3F3F"/>
+                </MultiDataTrigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F5EEFF"/>
+                </Trigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}"
+                                   Value="True"/>
+                        <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                                   Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="#5A5A5A"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ArchivePrimaryButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+            <Setter Property="Padding" Value="18,8"/>
+            <Setter Property="MinHeight" Value="38"/>
+            <Setter Property="MinWidth" Value="104"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style x:Key="ArchiveCompactActionButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource ArchiveActionButtonStyle}">
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+
+        <Style x:Key="ArchiveMenuTriggerButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MaterialDesignFlatButton}">
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                             Value="True">
+                    <Setter Property="Foreground" Value="#F7F2FF"/>
+                </DataTrigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1A000000"/>
+                </Trigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}"
+                                   Value="True"/>
+                        <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                                   Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="#26FFFFFF"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ArchiveQuickFilterToggleStyle"
+               TargetType="ToggleButton"
+               BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+            <Setter Property="Background" Value="#FFFFFFFF"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                             Value="True">
+                    <Setter Property="Foreground" Value="#F7F2FF"/>
+                    <Setter Property="BorderBrush" Value="#C7A6FF"/>
+                    <Setter Property="Background" Value="#4D4D4D"/>
+                </DataTrigger>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F5EEFF"/>
+                </Trigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsChecked, RelativeSource={RelativeSource Self}}" Value="True"/>
+                        <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
+                        <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="#5A5A5A"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <DataTemplate x:Key="ArchiveLabelChipTemplate">
+            <Border Margin="0,0,6,6"
+                    Padding="9,3"
+                    CornerRadius="12"
+                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                    BorderThickness="1"
+                    Background="{Binding ColorHex}">
+                <TextBlock Text="{Binding Name}"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           Foreground="White"/>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ArchiveLabelChipListTemplate">
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Labels}"
+                              ItemTemplate="{StaticResource ArchiveLabelChipTemplate}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ArchiveSelectionCellTemplate">
+            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Focusable="False"
+                      PreviewMouseLeftButtonDown="SelectionCheckBox_PreviewMouseLeftButtonDown"
+                      Checked="SelectionCheckBox_Changed"
+                      Unchecked="SelectionCheckBox_Changed"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ArchiveReadStatusTemplate">
+            <TextBlock Text="✓"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource PrimaryHueMidBrush}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility"
+                                Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsRead}"
+                                         Value="True">
+                                <Setter Property="Visibility"
+                                        Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </DataTemplate>
+
+        <ContextMenu x:Key="ArchiveRowContextMenu"
+                     Style="{StaticResource ArticleContextMenuStyle}"
+                     Opened="ArticleRowContextMenu_Opened">
+            <MenuItem Header="Open Article"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextOpenArticleCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Unarchive"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextUnarchiveSelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="Open Link(s)"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextOpenLinksSelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <Separator/>
+            <MenuItem Header="Pin"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextPinSelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Read Later"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextReadLaterSelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem x:Name="ContextArchiveMenuItem"
+                      Header="Archive"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextArchiveSelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Mark as Unread"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextMarkUnreadSelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+            <MenuItem Header="Labels"
+                      Style="{StaticResource ArticleSubmenuMenuItemStyle}"
+                      Tag="labels-root"/>
+            <Separator/>
+            <MenuItem Header="Copy Link"
+                      Style="{StaticResource ArticleMenuItemStyle}"
+                      Command="{Binding PlacementTarget.Tag.ContextCopyLinksSelectionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext.Item, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+        </ContextMenu>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel x:Name="HeaderPanel"
+                    Grid.Row="0"
+                    Margin="0,0,0,16">
+            <TextBlock x:Name="LibraryTitleTextBlock"
+                       Text="Library"
+                       Style="{StaticResource MaterialDesignHeadline5TextBlock}"/>
+            <TextBlock x:Name="LibrarySubtitleTextBlock"
+                       Text="Browse and work through your saved articles. Switch between Pinned, Read Later, and Archive."
+                       Margin="0,4,0,0"
+                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0"
+                      VerticalAlignment="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <ToggleButton x:Name="PinnedModeButton"
+                                  Grid.Column="0"
+                                  Content="Pinned"
+                                  Click="LibraryModeButton_Click"
+                                  Style="{StaticResource ArchiveQuickFilterToggleStyle}"
+                                  Width="94"
+                                  Height="38"
+                                  FontSize="11.5"
+                                  VerticalAlignment="Top"
+                                  Margin="0,0,8,0"/>
+                    <ToggleButton x:Name="ReadLaterModeButton"
+                                  Grid.Column="1"
+                                  Content="Read Later"
+                                  Click="LibraryModeButton_Click"
+                                  Style="{StaticResource ArchiveQuickFilterToggleStyle}"
+                                  Width="94"
+                                  Height="38"
+                                  FontSize="11.5"
+                                  VerticalAlignment="Top"
+                                  Margin="0,0,8,0"/>
+                    <ToggleButton x:Name="ArchiveModeButton"
+                                  Grid.Column="2"
+                                  Content="Archive"
+                                  Click="LibraryModeButton_Click"
+                                  Style="{StaticResource ArchiveQuickFilterToggleStyle}"
+                                  Width="94"
+                                  Height="38"
+                                  FontSize="11.5"
+                                  VerticalAlignment="Top"/>
+                </Grid>
+
+                <WrapPanel Grid.Column="2"
+                           VerticalAlignment="Center">
+                    <ComboBox x:Name="SavedViewComboBox"
+                              Width="250"
+                              Margin="0,0,10,0"
+                              IsEditable="True"
+                              SelectionChanged="SavedViewComboBox_SelectionChanged"
+                              materialDesign:HintAssist.Hint="Saved view name"
+                              Style="{StaticResource MaterialDesignComboBox}"/>
+                    <Button x:Name="SavedViewActionsButton"
+                            Content="Options"
+                            ToolTip="Saved view actions"
+                            Style="{StaticResource ArchiveMenuTriggerButtonStyle}"
+                            Click="DotsMenuButton_Click">
+                        <Button.ContextMenu>
+                            <ContextMenu x:Name="SavedViewActionsContextMenu"
+                                         Style="{StaticResource ArticleContextMenuStyle}">
+                                <MenuItem Header="Save Current View"
+                                          Style="{StaticResource ArticleMenuItemStyle}"
+                                          Click="SaveCurrentViewButton_Click"/>
+                                <MenuItem Header="Delete View"
+                                          Style="{StaticResource ArticleMenuItemStyle}"
+                                          Click="DeleteSavedViewButton_Click"/>
+                                <MenuItem Header="Manage Labels"
+                                          Style="{StaticResource ArticleMenuItemStyle}"
+                                          Click="ManageLabelsButton_Click"/>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
+                </WrapPanel>
+            </Grid>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250"/>
+                <ColumnDefinition Width="10"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="PreviewSplitterColumnDefinition"
+                                  Width="10"/>
+                <ColumnDefinition x:Name="PreviewColumnDefinition"
+                                  Width="380"/>
+            </Grid.ColumnDefinitions>
+
+            <GroupBox x:Name="OverviewGroupBox"
+                      Grid.Column="0"
+                      Header="Overview"
+                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Margin="0,0,5,0">
+                <StackPanel Margin="14">
+                    <Border Padding="10"
+                            Background="{DynamicResource MaterialDesignCardBackground}"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <StackPanel>
+                            <TextBlock x:Name="PrimaryCountLabelTextBlock"
+                                       Text="Archived items"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            <TextBlock x:Name="ArchivedCountTextBlock"
+                                       Text="0"
+                                       FontSize="28"
+                                       FontWeight="Bold"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,10,0,0"
+                            Padding="10"
+                            Background="{DynamicResource MaterialDesignCardBackground}"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <StackPanel>
+                            <TextBlock Text="Visible after filters"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            <TextBlock x:Name="VisibleCountTextBlock"
+                                       Text="0"
+                                       FontSize="24"
+                                       FontWeight="SemiBold"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,10,0,0"
+                            Padding="10"
+                            Background="{DynamicResource MaterialDesignCardBackground}"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <StackPanel>
+                            <TextBlock Text="Selected"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            <TextBlock x:Name="SelectedCountTextBlock"
+                                       Text="0"
+                                       FontSize="24"
+                                       FontWeight="SemiBold"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border x:Name="RetentionPanelBorder"
+                            Margin="0,14,0,0"
+                            Padding="12"
+                            Background="{DynamicResource MaterialDesignCardBackground}"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <StackPanel>
+                            <TextBlock Text="Retention"
+                                       FontWeight="SemiBold"/>
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <CheckBox x:Name="AutoCleanupEnabledCheckBox"
+                                          Grid.Column="0"
+                                          VerticalAlignment="Top"
+                                          Checked="CleanupControl_Changed"
+                                          Unchecked="CleanupControl_Changed"/>
+                                <TextBlock Grid.Column="1"
+                                           Margin="8,1,0,0"
+                                           Text="Enable automatic archive cleanup"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+                            <ComboBox x:Name="CleanupDaysComboBox"
+                                      Margin="0,10,0,0"
+                                      SelectionChanged="CleanupControl_Changed"
+                                      DisplayMemberPath="Label"
+                                      Style="{StaticResource MaterialDesignComboBox}"/>
+                            <TextBlock Margin="0,8,0,0"
+                                       Text="Older archived items are automatically deleted according to the selected retention period."
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            <WrapPanel Margin="0,12,0,0">
+                                <Button x:Name="ApplyCleanupButton"
+                                        Content="Apply Cleanup Now"
+                                        Click="ApplyCleanupButton_Click"
+                                        Style="{StaticResource ArchiveActionButtonStyle}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </GroupBox>
+
+            <GridSplitter Grid.Column="1"
+                          Width="10"
+                          HorizontalAlignment="Stretch"
+                          Background="Transparent"
+                          ResizeBehavior="PreviousAndNext"
+                          ResizeDirection="Columns"/>
+
+            <GroupBox x:Name="ItemsGroupBox"
+                      Grid.Column="2"
+                      Header="Archived Articles"
+                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Margin="5,0,5,0">
+                <Grid Margin="14">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0"
+                               Margin="0,0,0,10"
+                               LastChildFill="False">
+                        <TextBlock Text=""
+                                   VerticalAlignment="Center"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                        <WrapPanel DockPanel.Dock="Right">
+                            <Button x:Name="ToggleConfigurationPanelButton"
+                                    Content="Hide Controls"
+                                    Click="ToggleConfigurationPanelButton_Click"
+                                    Style="{StaticResource ArchiveCompactActionButtonStyle}"
+                                    Margin="10,0,8,0"/>
+                            <Button x:Name="TogglePreviewButton"
+                                    Content="Hide Preview"
+                                    Click="TogglePreviewButton_Click"
+                                    Style="{StaticResource ArchiveCompactActionButtonStyle}"/>
+                        </WrapPanel>
+                    </DockPanel>
+
+                    <Border x:Name="ConfigurationPanelBorder"
+                            Grid.Row="1"
+                            Background="{DynamicResource MaterialDesignCardBackground}"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12"
+                            Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Find And Filter"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            <WrapPanel Margin="0,8,0,0">
+                                <ComboBox x:Name="GroupByComboBox"
+                                          Width="160"
+                                          Margin="0,0,10,10"
+                                          SelectionChanged="FilterControl_Changed"
+                                          DisplayMemberPath="Label"
+                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                <TextBox x:Name="SearchTextBox"
+                                         Width="220"
+                                         Margin="0,0,10,10"
+                                         TextChanged="FilterControl_Changed"
+                                         materialDesign:HintAssist.Hint="Search title, note, feed, link"/>
+                                <ComboBox x:Name="CategoryFilterComboBox"
+                                          Width="160"
+                                          Margin="0,0,10,10"
+                                          SelectionChanged="FilterControl_Changed"
+                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                <ComboBox x:Name="FeedFilterComboBox"
+                                          Width="170"
+                                          Margin="0,0,10,10"
+                                          SelectionChanged="FilterControl_Changed"
+                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                <ComboBox x:Name="LabelFilterComboBox"
+                                          Width="160"
+                                          Margin="0,0,10,10"
+                                          SelectionChanged="FilterControl_Changed"
+                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                <ComboBox x:Name="ReadStateComboBox"
+                                          Width="130"
+                                          Margin="0,0,10,10"
+                                          SelectionChanged="FilterControl_Changed"
+                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                <DatePicker x:Name="ArchivedFromDatePicker"
+                                            Width="150"
+                                            Margin="0,0,10,10"
+                                            SelectedDateChanged="FilterControl_Changed"/>
+                                <DatePicker x:Name="ArchivedToDatePicker"
+                                            Width="150"
+                                            Margin="0,0,10,10"
+                                            SelectedDateChanged="FilterControl_Changed"/>
+                            </WrapPanel>
+
+                            <TextBlock Text="Quick Filters"
+                                       Margin="0,4,0,0"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            <WrapPanel Margin="0,8,0,0">
+                                <ToggleButton Content="Unread"
+                                              Click="QuickUnreadToggleButton_Click"
+                                              IsChecked="{Binding IsQuickUnreadActive, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                              Style="{StaticResource ArchiveQuickFilterToggleStyle}"/>
+                                <ToggleButton Content="Has Labels"
+                                              Click="QuickHasLabelsToggleButton_Click"
+                                              IsChecked="{Binding IsQuickHasLabelsActive, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                              Style="{StaticResource ArchiveQuickFilterToggleStyle}"/>
+                                <ToggleButton Content="Last 7 Days"
+                                              Click="QuickLast7DaysToggleButton_Click"
+                                              IsChecked="{Binding IsQuickLast7DaysActive, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                              Style="{StaticResource ArchiveQuickFilterToggleStyle}"/>
+                                <ToggleButton Content="Last 30 Days"
+                                              Click="QuickLast30DaysToggleButton_Click"
+                                              IsChecked="{Binding IsQuickLast30DaysActive, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                              Style="{StaticResource ArchiveQuickFilterToggleStyle}"/>
+                            </WrapPanel>
+
+                            <TextBlock Text="Sort And Actions"
+                                       Margin="0,4,0,0"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                            <WrapPanel Margin="0,8,0,0">
+                                <materialDesign:PopupBox x:Name="ColumnVisibilityPopup"
+                                                         StaysOpen="True"
+                                                         PlacementMode="BottomAndAlignLeftEdges"
+                                                         Margin="0,0,10,10"
+                                                         Opened="ColumnVisibilityPopup_Opened"
+                                                         Closed="ColumnVisibilityPopup_Closed"
+                                                         VerticalAlignment="Center">
+                                    <materialDesign:PopupBox.ToggleContent>
+                                        <Border Width="40"
+                                                Height="36"
+                                                Padding="0"
+                                                Background="{DynamicResource MaterialDesignCardBackground}"
+                                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                BorderThickness="1"
+                                                CornerRadius="8">
+                                            <materialDesign:PackIcon Kind="ViewColumnOutline"
+                                                                     Width="18"
+                                                                     Height="18"
+                                                                     HorizontalAlignment="Center"
+                                                                     VerticalAlignment="Center">
+                                                <materialDesign:PackIcon.Style>
+                                                    <Style TargetType="materialDesign:PackIcon">
+                                                        <Setter Property="Foreground"
+                                                                Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                         Value="True">
+                                                                <Setter Property="Foreground"
+                                                                        Value="#FFF5F5F5"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </materialDesign:PackIcon.Style>
+                                            </materialDesign:PackIcon>
+                                        </Border>
+                                    </materialDesign:PopupBox.ToggleContent>
+                                    <Border MinWidth="180"
+                                            Padding="12"
+                                            Background="{DynamicResource MaterialDesignPaper}"
+                                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                            BorderThickness="1"
+                                            CornerRadius="10">
+                                        <StackPanel>
+                                            <TextBlock Text="Columns"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,0,0,10"/>
+                                            <CheckBox x:Name="ArchivedColumnCheckBox"
+                                                      Content="Archived"
+                                                      Margin="0,0,0,6"
+                                                      Click="ArchivedColumnCheckBox_Click"/>
+                                            <CheckBox x:Name="PublishedColumnCheckBox"
+                                                      Content="Published"
+                                                      Margin="0,0,0,6"
+                                                      Click="ArchivedColumnCheckBox_Click"/>
+                                            <CheckBox x:Name="CategoryColumnCheckBox"
+                                                      Content="Category"
+                                                      Margin="0,0,0,6"
+                                                      Click="ArchivedColumnCheckBox_Click"/>
+                                            <CheckBox x:Name="FeedColumnCheckBox"
+                                                      Content="Feed"
+                                                      Margin="0,0,0,6"
+                                                      Click="ArchivedColumnCheckBox_Click"/>
+                                            <CheckBox x:Name="LabelsColumnCheckBox"
+                                                      Content="Labels"
+                                                      Margin="0,0,0,6"
+                                                      Click="ArchivedColumnCheckBox_Click"/>
+                                            <CheckBox x:Name="TitleColumnCheckBox"
+                                                      Content="Title"
+                                                      Click="ArchivedColumnCheckBox_Click"/>
+                                            <WrapPanel Margin="0,12,0,0">
+                                                <Button Content="Save"
+                                                        Click="SaveColumnVisibilityButton_Click"
+                                                        Style="{StaticResource ArchivePrimaryButtonStyle}"
+                                                        Margin="0,0,8,0"/>
+                                                <Button Content="Cancel"
+                                                        Click="CancelColumnVisibilityButton_Click"
+                                                        Style="{StaticResource ArchiveActionButtonStyle}"/>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </materialDesign:PopupBox>
+                                <ComboBox x:Name="SortFieldComboBox"
+                                          Width="180"
+                                          Margin="0,0,10,10"
+                                          SelectionChanged="FilterControl_Changed"
+                                          DisplayMemberPath="Label"
+                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                <ComboBox x:Name="SortDirectionComboBox"
+                                          Width="140"
+                                          Margin="0,0,10,10"
+                                          SelectionChanged="FilterControl_Changed"
+                                          DisplayMemberPath="Label"
+                                          Style="{StaticResource MaterialDesignComboBox}"/>
+                                <Button Content="Clear Filters"
+                                        Click="ClearFiltersButton_Click"
+                                        Style="{StaticResource ArchiveActionButtonStyle}"
+                                        Margin="0,0,10,10"/>
+                                <Button x:Name="MoreActionsButton"
+                                        Content="More"
+                                        Margin="0,0,10,10"
+                                        ToolTip="More actions"
+                                        Style="{StaticResource ArchiveMenuTriggerButtonStyle}"
+                                        Click="DotsMenuButton_Click">
+                                    <Button.ContextMenu>
+                                        <ContextMenu x:Name="MoreActionsContextMenu"
+                                                     Style="{StaticResource ArticleContextMenuStyle}"
+                                                     Opened="MoreActionsContextMenu_Opened">
+                                            <MenuItem x:Name="MoreSelectAllMenuItem"
+                                                      Header="Select All"
+                                                      Style="{StaticResource ArticleMenuItemStyle}"
+                                                      Click="SelectVisibleButton_Click"/>
+                                            <MenuItem x:Name="MoreClearSelectionMenuItem"
+                                                      Header="Clear Selection"
+                                                      Style="{StaticResource ArticleMenuItemStyle}"
+                                                      Click="ClearSelectionButton_Click"/>
+                                            <Separator/>
+                                            <MenuItem x:Name="MoreUnarchiveMenuItem"
+                                                      Header="Unarchive"
+                                                      Style="{StaticResource ArticleMenuItemStyle}"
+                                                      Click="UnarchiveAllButton_Click"/>
+                                            <Separator/>
+                                            <MenuItem Header="Export Scope"
+                                                      Style="{StaticResource ArticleMenuItemStyle}">
+                                                <MenuItem x:Name="ExportScopeAllMenuItem"
+                                                          Header="All archived"
+                                                          IsCheckable="True"
+                                                          Style="{StaticResource ArticleMenuItemStyle}"
+                                                          Click="ExportScopeMenuItem_Click"
+                                                          Tag="all"/>
+                                                <MenuItem x:Name="ExportScopeFilteredMenuItem"
+                                                          Header="Filtered"
+                                                          IsCheckable="True"
+                                                          Style="{StaticResource ArticleMenuItemStyle}"
+                                                          Click="ExportScopeMenuItem_Click"
+                                                          Tag="filtered"/>
+                                                <MenuItem x:Name="ExportScopeSelectedMenuItem"
+                                                          Header="Selected"
+                                                          IsCheckable="True"
+                                                          Style="{StaticResource ArticleMenuItemStyle}"
+                                                          Click="ExportScopeMenuItem_Click"
+                                                          Tag="selected"/>
+                                            </MenuItem>
+                                            <MenuItem x:Name="MoreExportCsvMenuItem"
+                                                      Header="Export CSV"
+                                                      Style="{StaticResource ArticleMenuItemStyle}"
+                                                      Click="ExportCsvButton_Click"/>
+                                            <MenuItem x:Name="MoreExportJsonMenuItem"
+                                                      Header="Export JSON"
+                                                      Style="{StaticResource ArticleMenuItemStyle}"
+                                                      Click="ExportJsonButton_Click"/>
+                                        </ContextMenu>
+                                    </Button.ContextMenu>
+                                </Button>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid Grid.Row="2">
+                        <DataGrid x:Name="ArchiveDataGrid"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Extended"
+                                  SelectionUnit="FullRow"
+                                  MouseDoubleClick="ArchiveDataGrid_MouseDoubleClick"
+                                  SelectionChanged="ArchiveDataGrid_SelectionChanged"
+                                  ColumnReordered="ArchiveDataGrid_ColumnReordered"
+                                  Sorting="ArchiveDataGrid_Sorting"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  materialDesign:DataGridAssist.CellPadding="13 8 8 8"
+                                  materialDesign:DataGridAssist.ColumnHeaderPadding="8"
+                                  Style="{StaticResource MaterialDesignDataGrid}">
+                            <DataGrid.GroupStyle>
+                                <GroupStyle>
+                                    <GroupStyle.ContainerStyle>
+                                        <Style TargetType="{x:Type GroupItem}">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="{x:Type GroupItem}">
+                                                        <Expander IsExpanded="True"
+                                                                  Margin="0,0,0,8">
+                                                            <Expander.Header>
+                                                                <Border Background="{DynamicResource MaterialDesignCardBackground}"
+                                                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                                        BorderThickness="1"
+                                                                        CornerRadius="8"
+                                                                        Padding="10,8"
+                                                                        Tag="{x:Reference ArchiveWindowRoot}">
+                                                                    <Border.ContextMenu>
+                                                                        <ContextMenu Style="{StaticResource ArticleContextMenuStyle}"
+                                                                                     Opened="GroupContextMenu_Opened">
+                                                                            <MenuItem Header="Select group"
+                                                                                      Style="{StaticResource ArticleMenuItemStyle}"
+                                                                                      Command="{Binding PlacementTarget.Tag.SelectGroupCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                                                        </ContextMenu>
+                                                                    </Border.ContextMenu>
+                                                                    <DockPanel LastChildFill="True"
+                                                                               ToolTip="Right-click for group actions">
+                                                                        <TextBlock Text="{Binding ItemCount, StringFormat={}{0} items}"
+                                                                                   DockPanel.Dock="Right"
+                                                                                   Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                                                                   FontWeight="SemiBold"/>
+                                                                        <TextBlock Text="{Binding Name}"
+                                                                                   FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource MaterialDesignBody}"/>
+                                                                    </DockPanel>
+                                                                </Border>
+                                                            </Expander.Header>
+                                                            <ItemsPresenter/>
+                                                        </Expander>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </GroupStyle.ContainerStyle>
+                                </GroupStyle>
+                            </DataGrid.GroupStyle>
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                    <Setter Property="Tag"
+                                            Value="{x:Reference ArchiveWindowRoot}"/>
+                                    <Setter Property="ContextMenu"
+                                            Value="{StaticResource ArchiveRowContextMenu}"/>
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn x:Name="SelectColumn"
+                                                        Header=""
+                                                        Width="42"
+                                                        CanUserSort="False"
+                                                        CanUserReorder="False"
+                                                        CellTemplate="{StaticResource ArchiveSelectionCellTemplate}"/>
+                                <DataGridTemplateColumn x:Name="ReadColumn"
+                                                        Header="Read"
+                                                        Width="52"
+                                                        CanUserSort="False"
+                                                        CanUserReorder="False"
+                                                        CellTemplate="{StaticResource ArchiveReadStatusTemplate}"/>
+                                <DataGridTextColumn x:Name="ArchivedColumn"
+                                                    Header="Archived"
+                                                    Binding="{Binding ArchivedAt, StringFormat={}{0:yyyy-MM-dd HH:mm}}"
+                                                    Width="135"/>
+                                <DataGridTextColumn x:Name="PublishedColumn"
+                                                    Header="Published"
+                                                    Binding="{Binding PublicationDate, StringFormat={}{0:yyyy-MM-dd HH:mm}}"
+                                                    Width="135"/>
+                                <DataGridTextColumn x:Name="CategoryColumn"
+                                                    Header="Category"
+                                                    Binding="{Binding Category}"
+                                                    Width="125"/>
+                                <DataGridTextColumn x:Name="FeedColumn"
+                                                    Header="Feed"
+                                                    Binding="{Binding FeedName}"
+                                                    Width="155"/>
+                                <DataGridTemplateColumn x:Name="LabelsColumn"
+                                                        Header="Labels"
+                                                        Width="170"
+                                                        SortMemberPath="LabelsText"
+                                                        CellTemplate="{StaticResource ArchiveLabelChipListTemplate}"/>
+                                <DataGridTextColumn x:Name="TitleColumn"
+                                                    Header="Title"
+                                                    Binding="{Binding Title}"
+                                                    Width="320"
+                                                    MinWidth="220"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Border x:Name="EmptyStateBorder"
+                                Background="{DynamicResource MaterialDesignCardBackground}"
+                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="26,18"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Visibility="Collapsed">
+                            <StackPanel HorizontalAlignment="Center">
+                                <materialDesign:PackIcon Kind="ArchiveOutline"
+                                                         Width="34"
+                                                         Height="34"
+                                                         Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                         HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="EmptyStateTitleTextBlock"
+                                       Text="No archived articles match the current filters."
+                                           Margin="0,12,0,4"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="EmptyStateBodyTextBlock"
+                                           Text="Adjust the filters or archive more articles."
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           HorizontalAlignment="Center"/>
+                                <Button Content="Clear Filters"
+                                        Click="ClearFiltersButton_Click"
+                                        Style="{StaticResource ArchiveActionButtonStyle}"
+                                        Margin="0,14,0,0"
+                                        HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </GroupBox>
+
+            <GridSplitter x:Name="PreviewGridSplitter"
+                          Grid.Column="3"
+                          Width="10"
+                          HorizontalAlignment="Stretch"
+                          Background="Transparent"
+                          ResizeBehavior="PreviousAndNext"
+                          ResizeDirection="Columns"/>
+
+            <GroupBox x:Name="PreviewGroupBox"
+                      Grid.Column="4"
+                      Header="Preview"
+                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Margin="5,0,0,0">
+                <Grid Margin="14">
+                    <Border x:Name="PreviewEmptyStateBorder"
+                            Background="{DynamicResource MaterialDesignCardBackground}"
+                            BorderBrush="{DynamicResource MaterialDesignDivider}"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="26,18">
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="TextBoxSearchOutline"
+                                                     Width="34"
+                                                     Height="34"
+                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                                     HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="PreviewEmptyTitleTextBlock"
+                                       Text="Select an archived article"
+                                       Margin="0,12,0,4"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="PreviewEmptyBodyTextBlock"
+                                       Text="The right panel keeps a quick preview while the list stays grouped and filterable."
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid x:Name="SelectionSummaryGrid"
+                          Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0">
+                            <TextBlock x:Name="SelectionSummaryTitleTextBlock"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="SelectionSummarySubtitleTextBlock"
+                                       Margin="0,8,0,0"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <Border Grid.Row="1"
+                                Margin="0,14,0,14"
+                                Padding="12"
+                                Background="{DynamicResource MaterialDesignCardBackground}"
+                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Archived range"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                    <TextBlock x:Name="SelectionSummaryRangeTextBlock"
+                                               Margin="0,4,0,0"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Feeds"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                    <TextBlock x:Name="SelectionSummaryFeedsCountTextBlock"
+                                               Margin="0,4,0,0"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="2"
+                                      VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="Labels in selection"
+                                           FontWeight="SemiBold"/>
+                                <Border Margin="0,8,0,14"
+                                        Padding="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <TextBlock x:Name="SelectionSummaryLabelsTextBlock"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MaterialDesignBody}"/>
+                                </Border>
+
+                                <TextBlock Text="Categories"
+                                           FontWeight="SemiBold"/>
+                                <Border Margin="0,8,0,14"
+                                        Padding="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <TextBlock x:Name="SelectionSummaryCategoriesTextBlock"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MaterialDesignBody}"/>
+                                </Border>
+
+                                <TextBlock Text="Feeds in selection"
+                                           FontWeight="SemiBold"/>
+                                <Border Margin="0,8,0,14"
+                                        Padding="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <TextBlock x:Name="SelectionSummaryFeedsTextBlock"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MaterialDesignBody}"/>
+                                </Border>
+
+                                <TextBlock Text="Batch actions"
+                                           FontWeight="SemiBold"/>
+                                <Border Margin="0,8,0,0"
+                                        Padding="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                <TextBlock x:Name="SelectionSummaryActionsTextBlock"
+                                           Text="Use the context menu on a selected article to pin, move to Read Later, unarchive, open links, or copy links for the whole selection."
+                                           TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="PreviewContentGrid"
+                          Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0">
+                            <TextBlock Text="{Binding SelectedArchiveEntry.Title, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"/>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Border Margin="0,0,8,8"
+                                        Padding="10,4"
+                                        CornerRadius="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1">
+                                    <TextBlock Text="{Binding SelectedArchiveEntry.FeedName, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay, TargetNullValue=Unknown feed}"
+                                               FontWeight="SemiBold"/>
+                                </Border>
+                                <Border Margin="0,0,8,8"
+                                        Padding="10,4"
+                                        CornerRadius="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1">
+                                    <TextBlock Text="{Binding SelectedArchiveEntry.Category, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay, TargetNullValue=Default}"
+                                               FontWeight="SemiBold"/>
+                                </Border>
+                            </WrapPanel>
+                        </StackPanel>
+
+                        <Border Grid.Row="1"
+                                Margin="0,14,0,10"
+                                Padding="12"
+                                Background="{DynamicResource MaterialDesignCardBackground}"
+                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="PreviewPrimaryMetaLabelTextBlock"
+                                               Text="Archived"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                    <TextBlock x:Name="PreviewPrimaryMetaValueTextBlock"
+                                               Text="{Binding SelectedArchiveEntry.ArchivedAt, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay, StringFormat={}{0:yyyy-MM-dd HH:mm}, TargetNullValue=-}"
+                                               Margin="0,4,0,0"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Published"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                    <TextBlock Text="{Binding SelectedArchiveEntry.PublicationDate, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay, StringFormat={}{0:yyyy-MM-dd HH:mm}, TargetNullValue=-}"
+                                               Margin="0,4,0,0"
+                                               FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="2"
+                                Margin="0,0,0,12"
+                                Padding="12"
+                                Background="{DynamicResource MaterialDesignCardBackground}"
+                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <StackPanel>
+                                <TextBlock Text="Labels"
+                                           FontWeight="SemiBold"/>
+                                <ItemsControl Margin="0,10,0,0"
+                                              ItemsSource="{Binding SelectedArchiveEntry.Labels, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
+                                              ItemTemplate="{StaticResource ArchiveLabelChipTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid Grid.Row="3">
+                            <ScrollViewer x:Name="PreviewDetailsScrollViewer"
+                                          VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                <TextBlock Text="Notes"
+                                           FontWeight="SemiBold"/>
+                                <Border Margin="0,8,0,14"
+                                        Padding="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <TextBox x:Name="SelectedNoteTextBox"
+                                             Text="{Binding SelectedArchiveEntry.Note, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay, TargetNullValue=''}"
+                                             TextChanged="SelectedNoteTextBox_TextChanged"
+                                             LostFocus="SelectedNoteTextBox_LostFocus"
+                                             AcceptsReturn="True"
+                                             MinHeight="110"
+                                             TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto"
+                                             Style="{StaticResource MaterialDesignOutlinedTextBox}"/>
+                                </Border>
+
+                                <TextBlock Text="Description"
+                                           FontWeight="SemiBold"/>
+                                <Border Margin="0,8,0,14"
+                                        Padding="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <TextBlock Text="{Binding SelectedArchiveEntry.Description, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay, Converter={StaticResource HtmlToPlainTextConverter}}"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MaterialDesignBody}"/>
+                                </Border>
+
+                                <TextBlock Text="Link"
+                                           FontWeight="SemiBold"/>
+                                <Border Margin="0,8,0,0"
+                                        Padding="12"
+                                        Background="{DynamicResource MaterialDesignCardBackground}"
+                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                    <TextBlock Text="{Binding SelectedArchiveEntry.Item.Link, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay, TargetNullValue=No link available}"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+                                </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <Grid x:Name="PreviewBrowserContainer"
+                                  Visibility="Collapsed">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <ToolBar x:Name="PreviewFullscreenToolbar"
+                                         Grid.Row="0"
+                                         Style="{StaticResource MaterialDesignToolBar}"
+                                         Visibility="Collapsed"
+                                         Panel.ZIndex="25">
+                                <Button x:Name="PreviewFullscreenRefreshButton"
+                                        ToolTip="Reload article"
+                                        Click="PreviewFullscreenRefreshButton_Click"
+                                        Style="{StaticResource MaterialDesignFlatButton}"
+                                            Width="40"
+                                            Height="40"
+                                            Padding="6">
+                                        <materialDesign:PackIcon Kind="Refresh"
+                                                                 Width="20"
+                                                                 Height="20"
+                                                                 Foreground="{DynamicResource MaterialDesignBody}"/>
+                                    </Button>
+                                    <Button x:Name="PreviewFullscreenEnableVideoButton"
+                                            ToolTip="Allow embedded media on this page. Some sites need this for custom video players."
+                                            Click="PreviewEnableVideoButton_Click"
+                                            Style="{StaticResource MaterialDesignFlatButton}"
+                                            Height="40"
+                                            Padding="10,0"
+                                            Visibility="Collapsed">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="PlayCircleOutline"
+                                                                     Width="20"
+                                                                     Height="20"
+                                                                     Margin="0,0,6,0"
+                                                                     Foreground="{DynamicResource MaterialDesignBody}"/>
+                                            <TextBlock Text="Allow Media"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Separator x:Name="PreviewFullscreenVideoSeparator"
+                                               Visibility="Collapsed"/>
+                                    <Separator/>
+                                    <Button x:Name="PreviewFullscreenOverlayButton"
+                                            Click="PreviewFullscreenButton_Click"
+                                            Style="{StaticResource MaterialDesignFlatButton}"
+                                            Height="40"
+                                            Padding="10,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="FullscreenExit"
+                                                                     Width="20"
+                                                                     Height="20"
+                                                                     Margin="0,0,6,0"
+                                                                     Foreground="{DynamicResource MaterialDesignBody}"/>
+                                            <TextBlock Text="Exit Fullscreen"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Separator/>
+                                    <TextBlock x:Name="PreviewFullscreenLinkTextBlock"
+                                               VerticalAlignment="Center"
+                                               Margin="5,0"
+                                               FontStyle="Italic"
+                                               Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               MaxWidth="420"/>
+                                </ToolBar>
+
+                                <wv:WebView2 x:Name="PreviewWebView"
+                                             Grid.Row="1"
+                                             Margin="1"/>
+
+                                <Grid x:Name="PreviewLoadingOverlay"
+                                      Grid.RowSpan="2"
+                                      Background="{DynamicResource MaterialDesignPaper}"
+                                      Panel.ZIndex="20"
+                                      IsHitTestVisible="True"
+                                      Visibility="Collapsed">
+                                    <StackPanel HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Orientation="Vertical">
+                                        <Image Source="pack://application:,,,/Resources/mynewsfeeder.ico"
+                                               Width="88"
+                                               Height="88"
+                                               Margin="0,0,0,10"
+                                               Stretch="Uniform"
+                                               RenderTransformOrigin="0.5,0.5">
+                                            <Image.RenderTransform>
+                                                <RotateTransform x:Name="LibraryLogoSpinner" Angle="0"/>
+                                            </Image.RenderTransform>
+                                            <Image.Triggers>
+                                                <EventTrigger RoutedEvent="Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard RepeatBehavior="Forever">
+                                                            <DoubleAnimation Storyboard.TargetName="LibraryLogoSpinner"
+                                                                             Storyboard.TargetProperty="Angle"
+                                                                             From="0"
+                                                                             To="360"
+                                                                             Duration="0:0:1.25"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Image.Triggers>
+                                        </Image>
+                                        <TextBlock Text="Loading page..."
+                                                   Foreground="{DynamicResource MaterialDesignBody}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+
+                        <Grid Grid.Row="4"
+                              Margin="0,14,0,0"
+                              MaxWidth="360"
+                              HorizontalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Button x:Name="PreviewOpenArticleButton"
+                                    Grid.Row="0"
+                                    Grid.Column="0"
+                                    Content="Open Article"
+                                    Click="PreviewOpenArticleButton_Click"
+                                    Style="{StaticResource ArchivePrimaryButtonStyle}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,0,8,8"/>
+                            <Button x:Name="PreviewReaderModeButton"
+                                    Grid.Row="0"
+                                    Grid.Column="1"
+                                    Content="Reader Mode"
+                                    Click="PreviewReaderModeButton_Click"
+                                    Style="{StaticResource ArchiveActionButtonStyle}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,0,0,8"/>
+                            <Button x:Name="PreviewOpenLinkButton"
+                                    Grid.Row="1"
+                                    Grid.Column="0"
+                                    Content="Open Link"
+                                    Click="PreviewOpenLinkButton_Click"
+                                    Style="{StaticResource ArchiveActionButtonStyle}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,0,8,0"/>
+                            <Button x:Name="PreviewCopyLinkButton"
+                                    Grid.Row="1"
+                                    Grid.Column="1"
+                                    Content="Copy Link"
+                                    Click="PreviewCopyLinkButton_Click"
+                                    Style="{StaticResource ArchiveActionButtonStyle}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,0,0,0"/>
+                            <Button x:Name="PreviewShowContentButton"
+                                    Grid.Row="2"
+                                    Grid.Column="0"
+                                    Grid.ColumnSpan="2"
+                                    Content="Show Content"
+                                    Click="PreviewShowContentButton_Click"
+                                    Style="{StaticResource ArchiveActionButtonStyle}"
+                                    HorizontalAlignment="Stretch"
+                                    Visibility="Collapsed"
+                                    Margin="0,8,0,0"/>
+                            <Button x:Name="PreviewEnableVideoButton"
+                                    Grid.Row="3"
+                                    Grid.Column="0"
+                                    Grid.ColumnSpan="2"
+                                    Content="Allow Media"
+                                    Click="PreviewEnableVideoButton_Click"
+                                    Style="{StaticResource ArchiveActionButtonStyle}"
+                                    HorizontalAlignment="Stretch"
+                                    ToolTip="Allow embedded media on this page. Some sites need this for custom video players."
+                                    Visibility="Collapsed"
+                                    Margin="0,8,0,0"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </GroupBox>
+        </Grid>
+
+        <StackPanel x:Name="FooterActionsPanel"
+                    Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,14,0,0">
+            <Button Content="Close"
+                    Click="CloseButton_Click"
+                    Style="{StaticResource ArchivePrimaryButtonStyle}"/>
+        </StackPanel>
+    </Grid>
+</Window>

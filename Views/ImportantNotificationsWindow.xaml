@@ -12,15 +12,73 @@
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         FontFamily="{DynamicResource MaterialDesignFont}">
     <Window.Resources>
-        <ContextMenu x:Key="NotificationItemContextMenu">
+        <Style x:Key="NotificationItemContextMenuStyle" TargetType="ContextMenu">
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="MinWidth" Value="180"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{DynamicResource MaterialDesignPaper}"
+                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="4"
+                                SnapsToDevicePixels="True">
+                            <StackPanel IsItemsHost="True"
+                                        KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NotificationItemMenuItemStyle" TargetType="MenuItem">
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="MenuItemBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter ContentSource="Header"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="MenuItemBorder" Property="Background" Value="#673AB7"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <ContextMenu x:Key="NotificationItemContextMenu"
+                     Style="{StaticResource NotificationItemContextMenuStyle}">
             <MenuItem Header="Read Later"
+                      Style="{StaticResource NotificationItemMenuItemStyle}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       Click="ReadLaterMenuItem_Click"/>
             <MenuItem Header="Pin"
+                      Style="{StaticResource NotificationItemMenuItemStyle}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       Click="PinMenuItem_Click"/>
+            <MenuItem Header="Archive"
+                      Style="{StaticResource NotificationItemMenuItemStyle}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Click="ArchiveMenuItem_Click"/>
             <Separator/>
             <MenuItem Header="Clear"
+                      Style="{StaticResource NotificationItemMenuItemStyle}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       Click="ClearMenuItem_Click"/>
         </ContextMenu>

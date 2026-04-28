@@ -11,8 +11,8 @@ This topic covers how to move, restore, or remove your app data safely.
 
 ## Import and export feeds
 
-- Open **Manage Feeds**.
-- Use **Import** / **Export** with:
+- Open `Manage Feeds`.
+- Use `Import` / `Export` with:
   - `OPML` (best for moving feeds between different readers)
   - `JSON` (best for My News Feeder to My News Feeder migration)
 
@@ -27,4 +27,4 @@ This topic covers how to move, restore, or remove your app data safely.
 
 ## Full documentation
 
-- [See full documentation on GitHub Wiki](https://github.com/Morgoth01/my-news-feeder/wiki#11-data-backup-and-migration)
+- [See full documentation on GitHub Wiki](https://github.com/Morgoth01/my-news-feeder/wiki/My-News-Feeder-3.1.0#12-data-backup-and-migration)

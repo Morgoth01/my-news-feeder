@@ -35,7 +35,7 @@ namespace MyNewsFeeder.Views
             };
 
             var ver = Assembly.GetEntryAssembly()?.GetName()?.Version;
-            var shortVer = ver != null ? ver.ToString(2) : "1.0";
+            var shortVer = ver != null ? ver.ToString(3) : "3.1.0";
             VersionText.Text = $"Version {shortVer}";
 
             _settings = _settingsService.LoadSettings() ?? new Models.AppSettings();

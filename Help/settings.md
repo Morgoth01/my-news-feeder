@@ -33,4 +33,4 @@ The Settings window is split into topics on the left and options on the right.
 
 ## Full documentation
 
-- [See full documentation on GitHub Wiki](https://github.com/Morgoth01/my-news-feeder/wiki#9-settings)
+- [See full documentation on GitHub Wiki](https://github.com/Morgoth01/my-news-feeder/wiki/My-News-Feeder-3.1.0#10-settings)

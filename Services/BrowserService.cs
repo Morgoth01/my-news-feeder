@@ -29,6 +29,17 @@ namespace MyNewsFeeder.Services
         private string _currentUrl;
         private static string _logoDataUri;
         private string _userDataFolder;
+        private string CurrentTransitionMaskColor => _darkModeEnabled ? "#111111" : "#ffffff";
+        private static readonly CoreWebView2WebResourceContext[] AdBlockResourceContexts =
+        {
+            CoreWebView2WebResourceContext.Document,
+            CoreWebView2WebResourceContext.Script,
+            CoreWebView2WebResourceContext.Stylesheet,
+            CoreWebView2WebResourceContext.XmlHttpRequest,
+            CoreWebView2WebResourceContext.Image,
+            CoreWebView2WebResourceContext.Media,
+            CoreWebView2WebResourceContext.Font
+        };
 
         private static readonly string[] AllowedSchemes =
         {
@@ -42,6 +53,43 @@ namespace MyNewsFeeder.Services
         public BrowserService()
         {
             _adBlocker = new AdBlockerService();
+        }
+
+        public BrowserSession CreateSession(WebView2 webView = null)
+        {
+            return new BrowserSession(this, webView, _darkModeEnabled, _adBlockerEnabled);
+        }
+
+        public async Task PrimeAsync()
+        {
+            if (_linkWebView == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!_isInitialized || _linkWebView.CoreWebView2 == null)
+                {
+                    await InitializeWebViewAsync();
+                }
+
+                if (_linkWebView?.CoreWebView2 == null)
+                {
+                    return;
+                }
+
+                _suppressHistoryPush = true;
+                _currentUrl = null;
+                _linkWebView.NavigateToString("<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='background:#111;'></body></html>");
+                await Task.Delay(50);
+                _suppressHistoryPush = true;
+                _linkWebView.CoreWebView2.Navigate("about:blank");
+            }
+            catch
+            {
+                // Ignore prime failures; normal navigation still works.
+            }
         }
 
         private static bool TryGetAllowedUri(string url, out Uri uri)
@@ -124,14 +172,13 @@ namespace MyNewsFeeder.Services
         {
             // Setup ad blocking for all requests
             core.WebResourceRequested += OnWebResourceRequested;
-            core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            AddAdBlockFilters(core);
 
             // Handle new window requests to apply ad blocking
             core.NewWindowRequested += OnNewWindowRequested;
 
-            // Navigation events for native dark mode only
+            // Navigation events for native dark mode fallback
             core.NavigationCompleted += OnNavigationCompleted;
-            core.DOMContentLoaded += OnDOMContentLoaded;
             core.NavigationStarting += OnNavigationStarting;
 
             ApplyPreferredColorScheme();
@@ -140,14 +187,11 @@ namespace MyNewsFeeder.Services
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.IsZoomControlEnabled = true;
             core.Settings.AreBrowserAcceleratorKeysEnabled = false;
-            core.Settings.AreDevToolsEnabled = true; // needed for devtools protocol calls
+            core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsGeneralAutofillEnabled = false;
             core.Settings.IsPasswordAutosaveEnabled = false;
             core.Settings.AreHostObjectsAllowed = false;
             core.Settings.IsStatusBarEnabled = false;
-
-            // Apply JavaScript-based popup blocking in background
-            _ = Task.Run(async () => await ApplyPopupBlockingScript());
 
             // Warm up renderer
             if (string.IsNullOrWhiteSpace(_linkWebView.Source?.ToString()))
@@ -156,7 +200,40 @@ namespace MyNewsFeeder.Services
             }
         }
 
-        private async Task<CoreWebView2Environment> GetSharedEnvironmentAsync()
+        internal void AddAdBlockFilters(CoreWebView2 core)
+        {
+            if (core == null)
+            {
+                return;
+            }
+
+            foreach (var context in AdBlockResourceContexts)
+            {
+                core.AddWebResourceRequestedFilter("*", context);
+            }
+        }
+
+        internal bool ShouldBlockNewWindowRequest(string url)
+        {
+            if (_adBlocker.ShouldBlockUrl(url))
+            {
+                return true;
+            }
+
+            return IsLikelyPopup(url);
+        }
+
+        internal bool ShouldBlockResource(string url, string currentUrl)
+        {
+            if (!_adBlockerEnabled || string.IsNullOrWhiteSpace(url))
+            {
+                return false;
+            }
+
+            return _adBlocker.ShouldBlockUrl(url, currentUrl);
+        }
+
+        internal async Task<CoreWebView2Environment> GetSharedEnvironmentAsync()
         {
             if (_sharedEnvironment != null) return _sharedEnvironment;
 
@@ -203,17 +280,9 @@ namespace MyNewsFeeder.Services
             {
                 var url = e.Uri;
 
-                // Check if the URL should be blocked
-                if (_adBlocker.ShouldBlockUrl(url))
+                if (ShouldBlockNewWindowRequest(url))
                 {
                     e.Handled = true; // Completely suppress the popup
-                    return;
-                }
-
-                // Check for popup characteristics
-                if (IsLikelyPopup(url))
-                {
-                    e.Handled = true; // Block likely popups
                     return;
                 }
 
@@ -227,7 +296,7 @@ namespace MyNewsFeeder.Services
             }
         }
 
-        private bool IsLikelyPopup(string url)
+        internal bool IsLikelyPopup(string url)
         {
             if (string.IsNullOrEmpty(url)) return false;
 
@@ -250,17 +319,7 @@ namespace MyNewsFeeder.Services
             {
                 var url = e.Request.Uri;
 
-                // Check if AdBlocker is enabled
-                if (!_adBlockerEnabled)
-                {
-                    return;
-                }
-
-                // Set user agent for better compatibility
-                e.Request.Headers.SetHeader("User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-
-                if (_adBlocker.ShouldBlockUrl(url))
+                if (ShouldBlockResource(url, _currentUrl))
                 {
                     // Create proper blocking response with 204 No Content
                     e.Response = _linkWebView.CoreWebView2.Environment.CreateWebResourceResponse(
@@ -287,6 +346,7 @@ namespace MyNewsFeeder.Services
                     _backStack.Clear();
                     _forwardStack.Clear();
                     _suppressHistoryPush = true;
+                    await MaskCurrentDocumentAsync();
 
                     if (forceReload)
                     {
@@ -329,6 +389,7 @@ namespace MyNewsFeeder.Services
                     _backStack.Clear();
                     _forwardStack.Clear();
                     _suppressHistoryPush = true; // new article load
+                    await MaskCurrentDocumentAsync();
 
                     // Step 1: Clear browser content
                     _linkWebView.CoreWebView2.Navigate("about:blank");
@@ -351,7 +412,7 @@ namespace MyNewsFeeder.Services
         }
 
         // Fast navigation without loading screen
-        public void NavigateFast(string url)
+        public async void NavigateFast(string url)
         {
             if (string.IsNullOrEmpty(url)) return;
 
@@ -363,8 +424,10 @@ namespace MyNewsFeeder.Services
                     _backStack.Clear();
                     _forwardStack.Clear();
                     _suppressHistoryPush = true; // new article load
-
-                    // Direct navigation without loading screen
+                    _currentUrl = null;
+                    await MaskCurrentDocumentAsync();
+                    _linkWebView.NavigateToString(CreateTransitionHtml());
+                    await Task.Delay(35);
                     _linkWebView.CoreWebView2.Navigate(url);
                 }
                 catch (Exception)
@@ -461,6 +524,25 @@ namespace MyNewsFeeder.Services
             }
         }
 
+        public void NavigateToPlaceholder()
+        {
+            if (_linkWebView == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _suppressHistoryPush = true;
+                _currentUrl = null;
+                _linkWebView.NavigateToString(CreatePlaceholderHtml());
+            }
+            catch
+            {
+                // Ignore failures while navigating to placeholder content.
+            }
+        }
+
         public void GoBack()
         {
             try
@@ -519,7 +601,6 @@ namespace MyNewsFeeder.Services
         {
             _darkModeEnabled = enabled;
             ApplyPreferredColorScheme();
-            ApplyNativeDarkModeToWebView();
         }
 
         public void SetAdBlockerEnabled(bool enabled)
@@ -527,184 +608,11 @@ namespace MyNewsFeeder.Services
             _adBlockerEnabled = enabled;
         }
 
-        // Native Dark Mode Only - No CSS Filters
-        private void ApplyNativeDarkModeToWebView()
-        {
-            // Thread safety check
-            if (!System.Windows.Application.Current.Dispatcher.CheckAccess())
-            {
-                System.Windows.Application.Current.Dispatcher.Invoke(() => ApplyNativeDarkModeToWebView());
-                return;
-            }
+        internal AdBlockerService SharedAdBlocker => _adBlocker;
 
-            if (_linkWebView?.CoreWebView2 != null)
-            {
-                try
-                {
-                    if (_darkModeEnabled)
-                    {
-                        // Native dark mode only - no CSS filters
-                        var nativeDarkModeScript = @"
-(function() {
-    console.log('Applying native dark mode only...');
-    
-    // Remove any existing dark mode styles first
-    var existingStyles = document.querySelectorAll('style[data-native-dark-mode]');
-    existingStyles.forEach(function(style) {
-        style.remove();
-    });
-    
-    // Step 1: Check if website has native dark mode support
-    const hasColorSchemeMeta = !!document.querySelector('meta[name=""color-scheme""]');
-    const hasThemeColorMeta = !!document.querySelector('meta[name=""theme-color""]');
-    let hasDarkModeCSS = false;
-    
-    // Check for CSS dark mode rules
-    try {
-        Array.from(document.styleSheets).forEach(sheet => {
-            try {
-                Array.from(sheet.cssRules || []).forEach(rule => {
-                    if (rule.cssText && rule.cssText.includes('prefers-color-scheme: dark')) {
-                        hasDarkModeCSS = true;
-                    }
-                });
-            } catch(e) {}
-        });
-    } catch(e) {}
-    
-    // Check for common dark mode indicators
-    const hasDataTheme = !!document.querySelector('[data-theme]');
-    const hasDarkClass = !!document.querySelector('.dark, .dark-mode, .night-mode');
-    
-    // Website-specific detection
-    const hostname = window.location.hostname.toLowerCase();
-    const knownDarkModeSites = [
-        'github.com', 'stackoverflow.com', 'reddit.com', 'twitter.com',
-        'youtube.com', 'discord.com', 'slack.com', 'notion.so',
-        'medium.com', 'dev.to', 'codepen.io'
-    ];
-    
-    const isKnownDarkModeSite = knownDarkModeSites.some(site => hostname.includes(site));
-    const hasNativeSupport = hasDarkModeCSS || hasColorSchemeMeta || isKnownDarkModeSite || hasDataTheme;
-    
-    console.log('Native dark mode detection:', {
-        hasColorSchemeMeta: hasColorSchemeMeta,
-        hasThemeColorMeta: hasThemeColorMeta,
-        hasDarkModeCSS: hasDarkModeCSS,
-        hasDataTheme: hasDataTheme,
-        hasDarkClass: hasDarkClass,
-        isKnownDarkModeSite: isKnownDarkModeSite,
-        hasNativeSupport: hasNativeSupport,
-        hostname: hostname
-    });
-    
-    // ONLY apply native dark mode if website supports it
-    if (hasNativeSupport) {
-        console.log('Website supports native dark mode - applying enhancements');
-        
-        var style = document.createElement('style');
-        style.setAttribute('data-native-dark-mode', 'true');
-        
-        // Set color scheme meta if not present
-        if (!hasColorSchemeMeta) {
-            var metaColorScheme = document.createElement('meta');
-            metaColorScheme.name = 'color-scheme';
-            metaColorScheme.content = 'dark light';
-            document.head.appendChild(metaColorScheme);
-        }
-        
-        // Apply website-specific dark mode triggers
-        if (hostname.includes('github.com')) {
-            document.documentElement.setAttribute('data-color-mode', 'dark');
-            document.documentElement.setAttribute('data-dark-theme', 'dark');
-        } else if (hostname.includes('stackoverflow.com')) {
-            localStorage.setItem('so-theme', 'dark');
-        } else if (hostname.includes('reddit.com')) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        } else if (hostname.includes('youtube.com')) {
-            document.documentElement.setAttribute('dark', '');
-        }
-        
-        style.innerHTML = `
-            /* Native dark mode enhancements only */
-            :root {
-                color-scheme: dark !important;
-            }
-            
-            html, body {
-                color-scheme: dark !important;
-            }
-            
-            /* Force dark mode preference */
-            @media (prefers-color-scheme: light) {
-                :root { 
-                    color-scheme: dark !important; 
-                }
-            }
-        `;
-        
-        // Add style to head
-        if (document.head) {
-            document.head.appendChild(style);
-        } else {
-            document.documentElement.appendChild(style);
-        }
-        
-        // Set global indicators
-        document.documentElement.style.setProperty('--webview-dark-mode', 'native');
-        document.documentElement.setAttribute('data-dark-mode-type', 'native');
-        
-        console.log('Native dark mode applied successfully');
-    } else {
-        console.log('Website does not support native dark mode - no changes applied');
-        document.documentElement.style.setProperty('--webview-dark-mode', 'not-supported');
-        document.documentElement.setAttribute('data-dark-mode-type', 'not-supported');
-    }
-})();
-";
-                        _linkWebView.CoreWebView2.ExecuteScriptAsync(nativeDarkModeScript);
-                    }
-                    else
-                    {
-                        // Remove native dark mode
-                        var removeNativeDarkModeScript = @"
-(function() {
-    console.log('Removing native dark mode...');
-    
-    // Remove all native dark mode styles
-    var darkStyles = document.querySelectorAll('style[data-native-dark-mode]');
-    darkStyles.forEach(function(style) {
-        style.remove();
-    });
-    
-    // Reset properties
-    document.documentElement.style.removeProperty('--webview-dark-mode');
-    document.documentElement.removeAttribute('data-dark-mode-type');
-    
-    // Reset website-specific dark mode attributes
-    document.documentElement.removeAttribute('data-color-mode');
-    document.documentElement.removeAttribute('data-dark-theme');
-    document.documentElement.removeAttribute('data-theme');
-    document.documentElement.removeAttribute('dark');
-    
-    // Reset color scheme to light
-    var metaColorScheme = document.querySelector('meta[name=""color-scheme""]');
-    if (metaColorScheme) {
-        metaColorScheme.content = 'light';
-    }
-    
-    console.log('Native dark mode removed successfully');
-})();
-";
-                        _linkWebView.CoreWebView2.ExecuteScriptAsync(removeNativeDarkModeScript);
-                    }
-                }
-                catch (Exception)
-                {
-                    // Ignore failures while applying native dark mode script.
-                }
-            }
-        }
+        internal bool CurrentDarkModeEnabled => _darkModeEnabled;
+
+        internal bool CurrentAdBlockerEnabled => _adBlockerEnabled;
 
         /// <summary>
         /// Ensure the WebView reports the correct preferred color scheme to pages.
@@ -829,55 +737,6 @@ namespace MyNewsFeeder.Services
         }
         
 
-        private async Task ApplyPopupBlockingScript()
-        {
-            if (_linkWebView?.CoreWebView2 != null)
-            {
-                try
-                {
-                    var popupBlockingScript = @"
-(function() {
-    console.log('AdBlocker popup blocking script loaded');
-    
-    // Override window.open to prevent popups
-    var originalOpen = window.open;
-    window.open = function(url, name, features) {
-        console.log('🚫 Popup blocked by script:', url);
-        return null;
-    };
-    
-    // Block common popup triggers
-    document.addEventListener('click', function(e) {
-        var target = e.target;
-        if (target.tagName === 'A' && target.target === '_blank') {
-            var href = target.href;
-            if (href && (href.includes('popup') || href.includes('ad') || href.includes('doubleclick'))) {
-                e.preventDefault();
-                console.log('🚫 Popup link blocked by script:', href);
-            }
-        }
-    });
-    
-    // Block setTimeout/setInterval based popups
-    var originalSetTimeout = window.setTimeout;
-    window.setTimeout = function(func, delay) {
-        if (typeof func === 'string' && func.includes('window.open')) {
-            console.log('🚫 Popup setTimeout blocked');
-            return null;
-        }
-        return originalSetTimeout.apply(this, arguments);
-    };
-})();
-";
-                    await _linkWebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(popupBlockingScript);
-                }
-                catch (Exception)
-                {
-                    // Ignore popup script injection failures.
-                }
-            }
-        }
-
         // Simplified loading HTML for faster rendering
         private string CreateSimpleLoadingHtml()
         {
@@ -930,6 +789,49 @@ namespace MyNewsFeeder.Services
         <p>Loading…</p>
     </div>
 </body>
+</html>";
+        }
+
+        private string CreateTransitionHtml()
+        {
+            var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
+            return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <style>
+        html, body {{
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: {backgroundColor};
+            overflow: hidden;
+        }}
+    </style>
+</head>
+<body></body>
+</html>";
+        }
+
+        private string CreatePlaceholderHtml()
+        {
+            var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
+            return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <style>
+        html, body {{
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: {backgroundColor};
+        }}
+    </style>
+</head>
+<body></body>
 </html>";
         }
 
@@ -1032,46 +934,44 @@ namespace MyNewsFeeder.Services
         // Navigation completed with immediate dark mode application
         private void OnNavigationCompleted(object sender, Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs e)
         {
-            try
-            {
-                if (e.IsSuccess && _darkModeEnabled)
-                {
-                    // Apply dark mode immediately without delay
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                    {
-                        ApplyNativeDarkModeToWebView();
-                    });
-                }
-            }
-            catch (Exception)
-            {
-                // Ignore navigation callbacks that fail during shutdown.
-            }
         }
 
-        private void OnDOMContentLoaded(object sender, Microsoft.Web.WebView2.Core.CoreWebView2DOMContentLoadedEventArgs e)
+        private async Task MaskCurrentDocumentAsync()
         {
+            if (_linkWebView?.CoreWebView2 == null)
+            {
+                return;
+            }
+
             try
             {
-                if (_darkModeEnabled)
-                {
-                    // Ensure we're on UI thread
-                    if (System.Windows.Application.Current.Dispatcher.CheckAccess())
-                    {
-                        ApplyNativeDarkModeToWebView();
-                    }
-                    else
-                    {
-                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            ApplyNativeDarkModeToWebView();
-                        });
-                    }
-                }
+                var color = CurrentTransitionMaskColor;
+                var script = $@"(() => {{
+    try {{
+        const existing = document.getElementById('mnf-transition-mask');
+        if (existing) existing.remove();
+        const mask = document.createElement('div');
+        mask.id = 'mnf-transition-mask';
+        mask.style.position = 'fixed';
+        mask.style.inset = '0';
+        mask.style.background = '{color}';
+        mask.style.opacity = '1';
+        mask.style.pointerEvents = 'none';
+        mask.style.zIndex = '2147483647';
+        document.documentElement.style.background = '{color}';
+        if (document.body) {{
+            document.body.style.background = '{color}';
+            document.body.appendChild(mask);
+        }} else {{
+            document.documentElement.appendChild(mask);
+        }}
+    }} catch (e) {{}}
+}})();";
+                await _linkWebView.CoreWebView2.ExecuteScriptAsync(script);
             }
-            catch (Exception)
+            catch
             {
-                // Ignore navigation callbacks that fail during shutdown.
+                // Ignore masking failures and continue with navigation.
             }
         }
 

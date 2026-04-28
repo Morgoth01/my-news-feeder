@@ -14,6 +14,7 @@ namespace MyNewsFeeder.ViewModels
         private bool _isExpanded = true;
         private int _unreadCount;
         private bool _hideUnreadIndicators;
+        private bool _opensInWindow;
 
         public ArticleSectionViewModel()
         {
@@ -77,6 +78,19 @@ namespace MyNewsFeeder.ViewModels
                 {
                     _hideUnreadIndicators = value;
                     OnPropertyChanged(nameof(HideUnreadIndicators));
+                }
+            }
+        }
+
+        public bool OpensInWindow
+        {
+            get => _opensInWindow;
+            set
+            {
+                if (_opensInWindow != value)
+                {
+                    _opensInWindow = value;
+                    OnPropertyChanged(nameof(OpensInWindow));
                 }
             }
         }

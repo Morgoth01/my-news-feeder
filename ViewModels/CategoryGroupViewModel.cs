@@ -15,6 +15,7 @@ namespace MyNewsFeeder.ViewModels
         private ObservableCollection<FeedGroupViewModel> _feeds;
         private int _unreadCount;
         private bool _hideUnreadIndicators;
+        private bool _isNavigationSelected;
         
         public string Name
         {
@@ -91,6 +92,19 @@ namespace MyNewsFeeder.ViewModels
                 {
                     _hideUnreadIndicators = value;
                     OnPropertyChanged(nameof(HideUnreadIndicators));
+                }
+            }
+        }
+
+        public bool IsNavigationSelected
+        {
+            get => _isNavigationSelected;
+            set
+            {
+                if (_isNavigationSelected != value)
+                {
+                    _isNavigationSelected = value;
+                    OnPropertyChanged(nameof(IsNavigationSelected));
                 }
             }
         }

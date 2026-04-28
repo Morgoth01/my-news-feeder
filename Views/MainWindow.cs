@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -24,9 +25,37 @@ namespace MyNewsFeeder.Views
             IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
 
         private MainViewModel _viewModel;
-        private bool _warmupDone;
+        private bool _startupInitializationStarted;
         private HelpWindow _helpWindow;
         private SettingsDialog _settingsWindow;
+        private bool _webViewShortcutHandlersAttached;
+        private bool _contentFullscreenApplied;
+        private GridLength _savedToolbarRowHeight;
+        private GridLength _savedSectionsColumnWidth;
+        private GridLength _savedSectionsSplitterColumnWidth;
+        private GridLength _savedExplorerColumnWidth;
+        private GridLength _savedExplorerSplitterColumnWidth;
+        private GridLength _savedArticleListColumnWidth;
+        private GridLength _savedArticleListSplitterColumnWidth;
+        private GridLength _savedArticleContentRowHeight;
+        private GridLength _savedArticleSplitterRowHeight;
+        private GridLength _savedBrowserContentRowHeight;
+        private GridLength _collapsedExplorerColumnWidth;
+        private GridLength _collapsedExplorerSplitterColumnWidth;
+        private GridLength _collapsedArticleListColumnWidth;
+        private GridLength _collapsedArticleListSplitterColumnWidth;
+        private double _savedExplorerColumnMinWidth;
+        private double _savedArticleListColumnMinWidth;
+        private double _savedExpandedExplorerWidth;
+        private double _savedExpandedArticleListWidth;
+        private double _savedArticleContentRowMinHeight;
+        private int _savedArticleBrowserGridColumn;
+        private int _savedArticleBrowserGridColumnSpan = 1;
+        private WindowStyle _savedWindowStyle;
+        private ResizeMode _savedResizeMode;
+        private WindowState _savedWindowState;
+        private bool _isFeedExplorerCollapsed;
+        private bool _isArticleListCollapsed;
 
         public MainWindow()
         {
@@ -49,9 +78,36 @@ namespace MyNewsFeeder.Views
             _viewModel.RequestTreeScrollOffset = GetTreeScrollOffset;
             _viewModel.ScrollOffsetRestoreRequested += ViewModel_ScrollOffsetRestoreRequested;
             _viewModel.ScrollSelectionToTopRequested += ViewModel_ScrollSelectionToTopRequested;
+            _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             Loaded += MainWindow_Loaded;
             PreviewKeyDown += MainWindow_PreviewKeyDown;
+            PreviewMouseDown += MainWindow_PreviewMouseDown;
+        }
+
+        private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (KeywordTextBox == null || !KeywordTextBox.IsKeyboardFocusWithin)
+            {
+                return;
+            }
+
+            if (e.OriginalSource is not DependencyObject source)
+            {
+                return;
+            }
+
+            if (IsDescendantOf(source, KeywordTextBox))
+            {
+                return;
+            }
+
+            if (FindAncestor<TextBoxBase>(source) != null || FindAncestor<PasswordBox>(source) != null)
+            {
+                return;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() => Focus()), DispatcherPriority.Input);
         }
 
         private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -78,14 +134,64 @@ namespace MyNewsFeeder.Views
                 return;
             }
 
+            if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && e.Key == Key.A)
+            {
+                if (_viewModel?.OpenArchiveWindowCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.OpenArchiveWindowCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && e.Key == Key.P)
+            {
+                if (_viewModel?.OpenLibraryWindowCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.OpenLibraryWindowCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && e.Key == Key.L)
+            {
+                if (_viewModel?.OpenReadLaterWindowCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.OpenReadLaterWindowCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
             if (e.Key == Key.Escape)
             {
+                if (_viewModel?.IsContentFullscreen == true)
+                {
+                    _viewModel.ExitContentFullscreen();
+                    e.Handled = true;
+                    return;
+                }
+
                 if (_settingsWindow != null && _settingsWindow.IsLoaded && _settingsWindow.IsActive)
                 {
                     _settingsWindow.Close();
                     e.Handled = true;
                     return;
                 }
+            }
+
+            if (e.Key == Key.F11)
+            {
+                if (_viewModel?.ToggleContentFullscreenCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.ToggleContentFullscreenCommand.Execute(null);
+                    e.Handled = true;
+                }
+                return;
             }
 
             // Let text inputs handle their own navigation
@@ -97,7 +203,27 @@ namespace MyNewsFeeder.Views
 
             if (DataContext is MainViewModel vm)
             {
-                if (e.Key == Key.Up && vm.NavigateSelectionCommand?.CanExecute(-1) == true)
+                if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.PageUp && vm.NavigateFeedCommand?.CanExecute(-1) == true)
+                {
+                    vm.NavigateFeedCommand.Execute(-1);
+                    e.Handled = true;
+                }
+                else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.PageDown && vm.NavigateFeedCommand?.CanExecute(1) == true)
+                {
+                    vm.NavigateFeedCommand.Execute(1);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.PageUp && vm.NavigateSelectionCommand?.CanExecute(-5) == true)
+                {
+                    vm.NavigateSelectionCommand.Execute(-5);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.PageDown && vm.NavigateSelectionCommand?.CanExecute(5) == true)
+                {
+                    vm.NavigateSelectionCommand.Execute(5);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Up && vm.NavigateSelectionCommand?.CanExecute(-1) == true)
                 {
                     vm.NavigateSelectionCommand.Execute(-1);
                     e.Handled = true;
@@ -117,51 +243,190 @@ namespace MyNewsFeeder.Views
             int useDark = 1;
             DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf(typeof(int)));
 
-            // initialize webviews
             _viewModel = DataContext as MainViewModel;
-            var env = await _viewModel.GetSharedWebViewEnvironmentAsync();
-            await linkWebView.EnsureCoreWebView2Async(env);
-            await articleWebView.EnsureCoreWebView2Async(env);
-            _viewModel.SetWebView(linkWebView);
-            _viewModel.SetArticleWebView(articleWebView);
-            _viewModel.ClearBrowserOnStartup();
-            await PreWarmBrowserWebViewAsync();
+            UpdatePaneToggleButtons();
+            await Dispatcher.Yield(DispatcherPriority.Render);
+            _viewModel?.StartInitialRefresh();
+            _ = InitializeStartupInfrastructureAsync();
         }
 
-        private async Task PreWarmBrowserWebViewAsync()
+        private async Task InitializeStartupInfrastructureAsync()
         {
-            if (_warmupDone || linkWebView?.CoreWebView2 == null)
+            if (_startupInitializationStarted || _viewModel == null)
             {
                 return;
             }
 
-            _warmupDone = true;
+            _startupInitializationStarted = true;
+
             try
             {
-                // Hide without breaking bindings
-                linkWebView.SetCurrentValue(VisibilityProperty, Visibility.Hidden);
+                var env = await _viewModel.GetSharedWebViewEnvironmentAsync();
+                await Dispatcher.Yield(DispatcherPriority.Background);
 
-                var tcs = new TaskCompletionSource<bool>();
-                void Handler(object s, CoreWebView2NavigationCompletedEventArgs e)
-                {
-                    linkWebView.CoreWebView2.NavigationCompleted -= Handler;
-                    tcs.TrySetResult(true);
-                }
-                linkWebView.CoreWebView2.NavigationCompleted += Handler;
+                await linkWebView.EnsureCoreWebView2Async(env);
+                await Dispatcher.Yield(DispatcherPriority.Background);
 
-                linkWebView.CoreWebView2.Navigate("https://github.com/Morgoth01/my-news-feeder");
-                await Task.WhenAny(tcs.Task, Task.Delay(3000));
-                linkWebView.CoreWebView2.Navigate("about:blank");
+                await articleWebView.EnsureCoreWebView2Async(env);
+                _viewModel.SetWebView(linkWebView);
+                _viewModel.SetArticleWebView(articleWebView);
+                AttachWebViewShortcutHandlers();
+                _viewModel.ClearBrowserOnStartup();
+                _ = PrimeEmbeddedBrowserAfterStartupAsync();
             }
             catch
             {
-                // ignore warm-up failures
+                // Keep startup resilient even if WebView initialization is slow or fails.
             }
-            finally
+        }
+
+        private async Task PrimeEmbeddedBrowserAfterStartupAsync()
+        {
+            if (_viewModel == null)
             {
-                // Restore binding-driven visibility
-                linkWebView.ClearValue(VisibilityProperty);
+                return;
             }
+
+            try
+            {
+                await Task.Delay(750);
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                await _viewModel.PrimeEmbeddedBrowserAsync();
+            }
+            catch
+            {
+                // Ignore warmup failures; first real navigation will still work.
+            }
+        }
+
+        private void AttachWebViewShortcutHandlers()
+        {
+            if (_webViewShortcutHandlersAttached)
+            {
+                return;
+            }
+
+            if (linkWebView == null || articleWebView == null)
+            {
+                return;
+            }
+
+            linkWebView.PreviewKeyDown += WebView_PreviewKeyDown;
+            articleWebView.PreviewKeyDown += WebView_PreviewKeyDown;
+            _webViewShortcutHandlersAttached = true;
+        }
+
+        private void WebView_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && e.Key == Key.A)
+            {
+                if (_viewModel?.OpenArchiveWindowCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.OpenArchiveWindowCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && e.Key == Key.P)
+            {
+                if (_viewModel?.OpenLibraryWindowCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.OpenLibraryWindowCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && e.Key == Key.L)
+            {
+                if (_viewModel?.OpenReadLaterWindowCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.OpenReadLaterWindowCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (e.Key == Key.F11)
+            {
+                if (_viewModel?.ToggleContentFullscreenCommand?.CanExecute(null) == true)
+                {
+                    _viewModel.ToggleContentFullscreenCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.PageUp)
+            {
+                if (_viewModel?.NavigateFeedCommand?.CanExecute(-1) == true)
+                {
+                    _viewModel.NavigateFeedCommand.Execute(-1);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.PageDown)
+            {
+                if (_viewModel?.NavigateFeedCommand?.CanExecute(1) == true)
+                {
+                    _viewModel.NavigateFeedCommand.Execute(1);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (e.Key == Key.PageUp)
+            {
+                if (_viewModel?.NavigateSelectionCommand?.CanExecute(-5) == true)
+                {
+                    _viewModel.NavigateSelectionCommand.Execute(-5);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (e.Key == Key.PageDown)
+            {
+                if (_viewModel?.NavigateSelectionCommand?.CanExecute(5) == true)
+                {
+                    _viewModel.NavigateSelectionCommand.Execute(5);
+                    e.Handled = true;
+                }
+
+                return;
+            }
+
+            if (e.Key == Key.Escape && _viewModel?.IsContentFullscreen == true)
+            {
+                _viewModel.ExitContentFullscreen();
+                e.Handled = true;
+            }
+        }
+
+        private static bool IsDescendantOf(DependencyObject source, DependencyObject target)
+        {
+            var current = source;
+            while (current != null)
+            {
+                if (ReferenceEquals(current, target))
+                {
+                    return true;
+                }
+
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            return false;
         }
 
         private void AboutButton_Click(object sender, RoutedEventArgs e)
@@ -204,6 +469,119 @@ namespace MyNewsFeeder.Views
             }
         }
 
+        private void ShowAllSidebarButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || DataContext is not MainViewModel viewModel)
+            {
+                return;
+            }
+
+            var menu = BuildShowAllFeedsMenu(viewModel);
+            menu.PlacementTarget = button;
+            menu.Placement = PlacementMode.Right;
+            menu.IsOpen = true;
+        }
+
+        private void LibrarySidebarButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainViewModel viewModel)
+            {
+                return;
+            }
+
+            if (viewModel.OpenLibraryWindowCommand?.CanExecute(null) == true)
+            {
+                viewModel.OpenLibraryWindowCommand.Execute(null);
+            }
+        }
+
+        private ContextMenu BuildShowAllFeedsMenu(MainViewModel viewModel)
+        {
+            var menu = new ContextMenu();
+            if (TryFindResource("ArticleContextMenuStyle") is Style contextMenuStyle)
+            {
+                menu.Style = contextMenuStyle;
+            }
+
+            var menuItemStyle = TryFindResource("ArticleMenuItemStyle") as Style;
+            var feeds = viewModel.GetEnabledFeedsForShowAll();
+            if (feeds.Count == 0)
+            {
+                menu.Items.Add(new MenuItem
+                {
+                    Header = "No feeds available",
+                    IsEnabled = false,
+                    Style = menuItemStyle
+                });
+                return menu;
+            }
+
+            var groupedFeeds = feeds
+                .GroupBy(feed => string.IsNullOrWhiteSpace(feed.Category) ? "Default" : feed.Category)
+                .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            for (int groupIndex = 0; groupIndex < groupedFeeds.Count; groupIndex++)
+            {
+                var group = groupedFeeds[groupIndex];
+                foreach (var feed in group.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    var feedItem = new MenuItem
+                    {
+                        Header = $"{group.Key}  •  {feed.Name}",
+                        Tag = feed,
+                        Style = menuItemStyle,
+                        Icon = new PackIcon
+                        {
+                            Kind = PackIconKind.Rss,
+                            Width = 16,
+                            Height = 16
+                        }
+                    };
+                    feedItem.Click += ShowAllFeedMenuItem_Click;
+                    menu.Items.Add(feedItem);
+                }
+
+                if (groupIndex < groupedFeeds.Count - 1)
+                {
+                    menu.Items.Add(new Separator());
+                }
+            }
+
+            return menu;
+        }
+
+        private void ShowAllFeedMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuItem menuItem ||
+                menuItem.Tag is not Feed feed ||
+                DataContext is not MainViewModel viewModel)
+            {
+                return;
+            }
+
+            if (viewModel.OpenFeedAllWindowForFeedCommand?.CanExecute(feed) == true)
+            {
+                viewModel.OpenFeedAllWindowForFeedCommand.Execute(feed);
+            }
+        }
+
+        private void SectionTile_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if ((sender as FrameworkElement)?.DataContext is not ArticleSectionViewModel section ||
+                !section.OpensInWindow)
+            {
+                return;
+            }
+
+            if (DataContext is MainViewModel viewModel &&
+                viewModel.OpenArchiveWindowCommand?.CanExecute(null) == true)
+            {
+                viewModel.OpenArchiveWindowCommand.Execute(null);
+                e.Handled = true;
+            }
+        }
+
         private async void HelpMenuCheckUpdates_Click(object sender, RoutedEventArgs e)
         {
             CloseHelpMenuPopup();
@@ -226,6 +604,169 @@ namespace MyNewsFeeder.Views
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
             ShowSettingsWindow();
+        }
+
+        private void ToggleFeedsPaneButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isFeedExplorerCollapsed = !_isFeedExplorerCollapsed;
+            ApplyPaneCollapseState();
+        }
+
+        private void ToggleArticlesPaneButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isArticleListCollapsed = !_isArticleListCollapsed;
+            ApplyPaneCollapseState();
+        }
+
+        private void ApplyPaneCollapseState()
+        {
+            const double collapsedPaneWidth = 60;
+
+            if (_contentFullscreenApplied)
+            {
+                UpdatePaneToggleButtons();
+                return;
+            }
+
+            if (_isFeedExplorerCollapsed)
+            {
+                if (ExplorerColumn.ActualWidth > collapsedPaneWidth + 4)
+                {
+                    _savedExpandedExplorerWidth = ExplorerColumn.ActualWidth;
+                    _collapsedExplorerColumnWidth = new GridLength(_savedExpandedExplorerWidth);
+                    _collapsedExplorerSplitterColumnWidth = ExplorerSplitterColumn.Width;
+                    if (_viewModel != null && _savedExpandedExplorerWidth > 0)
+                    {
+                        _viewModel.PendingTreeWidth = _savedExpandedExplorerWidth;
+                    }
+                }
+
+                FeedExplorerPane.Visibility = Visibility.Visible;
+                FeedExplorerPane.Padding = new Thickness(2, 6, 2, 6);
+                MainVerticalSplitter.Visibility = Visibility.Collapsed;
+                if (FeedExplorerBodyScrollViewer != null)
+                {
+                    FeedExplorerBodyScrollViewer.Visibility = Visibility.Collapsed;
+                }
+                if (FeedExplorerHeaderContent != null)
+                {
+                    FeedExplorerHeaderContent.Visibility = Visibility.Collapsed;
+                }
+                ExplorerColumn.MinWidth = 0;
+                ExplorerColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(collapsedPaneWidth));
+                ExplorerSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+            }
+            else
+            {
+                FeedExplorerPane.Visibility = Visibility.Visible;
+                FeedExplorerPane.Padding = new Thickness(6);
+                MainVerticalSplitter.Visibility = Visibility.Visible;
+                if (FeedExplorerBodyScrollViewer != null)
+                {
+                    FeedExplorerBodyScrollViewer.Visibility = Visibility.Visible;
+                }
+                if (FeedExplorerHeaderContent != null)
+                {
+                    FeedExplorerHeaderContent.Visibility = Visibility.Visible;
+                }
+                ExplorerColumn.MinWidth = _savedExplorerColumnMinWidth;
+                ExplorerColumn.SetCurrentValue(
+                    ColumnDefinition.WidthProperty,
+                    _savedExpandedExplorerWidth > 0
+                        ? new GridLength(_savedExpandedExplorerWidth)
+                        : (_collapsedExplorerColumnWidth.Value > 0
+                            ? _collapsedExplorerColumnWidth
+                            : new GridLength(Math.Max(_viewModel?.PendingTreeWidth ?? 280, 260))));
+                if (_viewModel != null && _savedExpandedExplorerWidth > 0)
+                {
+                    _viewModel.PendingTreeWidth = _savedExpandedExplorerWidth;
+                }
+                ExplorerSplitterColumn.SetCurrentValue(
+                    ColumnDefinition.WidthProperty,
+                    _collapsedExplorerSplitterColumnWidth.Value > 0
+                        ? _collapsedExplorerSplitterColumnWidth
+                        : new GridLength(5));
+            }
+
+            if (_isArticleListCollapsed)
+            {
+                if (ArticleListColumn.ActualWidth > collapsedPaneWidth + 4)
+                {
+                    _savedExpandedArticleListWidth = ArticleListColumn.ActualWidth;
+                    _collapsedArticleListColumnWidth = new GridLength(_savedExpandedArticleListWidth);
+                    _collapsedArticleListSplitterColumnWidth = ArticleListSplitterColumn.Width;
+                    _savedArticleListColumnMinWidth = ArticleListColumn.MinWidth;
+                }
+
+                ArticleListPane.Visibility = Visibility.Visible;
+                ArticleListPane.Padding = new Thickness(2, 6, 2, 6);
+                ArticleListVerticalSplitter.Visibility = Visibility.Collapsed;
+                MainArticleList.Visibility = Visibility.Collapsed;
+                if (ArticleListHeaderContent != null)
+                {
+                    ArticleListHeaderContent.Visibility = Visibility.Collapsed;
+                }
+                if (ArticleListHeaderActions != null)
+                {
+                    ArticleListHeaderActions.Visibility = Visibility.Collapsed;
+                }
+                ArticleListColumn.MinWidth = 0;
+                ArticleListColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(collapsedPaneWidth));
+                ArticleListSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+            }
+            else
+            {
+                ArticleListPane.Visibility = Visibility.Visible;
+                ArticleListPane.Padding = new Thickness(6);
+                ArticleListVerticalSplitter.Visibility = Visibility.Visible;
+                MainArticleList.Visibility = Visibility.Visible;
+                if (ArticleListHeaderContent != null)
+                {
+                    ArticleListHeaderContent.Visibility = Visibility.Visible;
+                }
+                if (ArticleListHeaderActions != null)
+                {
+                    ArticleListHeaderActions.Visibility = Visibility.Visible;
+                }
+                ArticleListColumn.MinWidth = _savedArticleListColumnMinWidth > 0 ? _savedArticleListColumnMinWidth : 300;
+                ArticleListColumn.SetCurrentValue(
+                    ColumnDefinition.WidthProperty,
+                    _savedExpandedArticleListWidth > 0
+                        ? new GridLength(_savedExpandedArticleListWidth)
+                        : (_collapsedArticleListColumnWidth.Value > 0
+                            ? _collapsedArticleListColumnWidth
+                            : new GridLength(380)));
+                ArticleListSplitterColumn.SetCurrentValue(
+                    ColumnDefinition.WidthProperty,
+                    _collapsedArticleListSplitterColumnWidth.Value > 0
+                        ? _collapsedArticleListSplitterColumnWidth
+                        : new GridLength(5));
+            }
+
+            UpdatePaneToggleButtons();
+        }
+
+        private void UpdatePaneToggleButtons()
+        {
+            if (ToggleFeedsPaneIcon != null)
+            {
+                ToggleFeedsPaneIcon.Kind = _isFeedExplorerCollapsed ? PackIconKind.ChevronRight : PackIconKind.ChevronLeft;
+            }
+
+            if (ToggleArticlesPaneIcon != null)
+            {
+                ToggleArticlesPaneIcon.Kind = _isArticleListCollapsed ? PackIconKind.ChevronRight : PackIconKind.ChevronLeft;
+            }
+
+            if (ToggleFeedsPaneButton != null)
+            {
+                ToggleFeedsPaneButton.ToolTip = _isFeedExplorerCollapsed ? "Show feeds" : "Hide feeds";
+            }
+
+            if (ToggleArticlesPaneButton != null)
+            {
+                ToggleArticlesPaneButton.ToolTip = _isArticleListCollapsed ? "Show articles" : "Hide articles";
+            }
         }
 
         private void ShowHelpWindow(string topicId = null)
@@ -331,6 +872,11 @@ namespace MyNewsFeeder.Views
         {
             try
             {
+                if (_viewModel?.IsContentFullscreen == true)
+                {
+                    return;
+                }
+
                 if (_viewModel != null &&
                     ((FrameworkElement)sender).Parent is Grid mainGrid &&
                     mainGrid.RowDefinitions.Count >= 3)
@@ -349,6 +895,24 @@ namespace MyNewsFeeder.Views
 
         protected override void OnClosed(EventArgs e)
         {
+            if (_viewModel != null)
+            {
+                _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            }
+
+            if (_webViewShortcutHandlersAttached)
+            {
+                if (linkWebView != null)
+                {
+                    linkWebView.PreviewKeyDown -= WebView_PreviewKeyDown;
+                }
+
+                if (articleWebView != null)
+                {
+                    articleWebView.PreviewKeyDown -= WebView_PreviewKeyDown;
+                }
+            }
+
             Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
             base.OnClosed(e);
         }
@@ -380,6 +944,154 @@ namespace MyNewsFeeder.Views
             {
                 // Ignore helper window shutdown issues during app close.
             }
+        }
+
+        private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsContentFullscreen))
+            {
+                Dispatcher.BeginInvoke(new Action(() => ApplyContentFullscreenState(_viewModel?.IsContentFullscreen == true)));
+                return;
+            }
+
+            if (e.PropertyName == nameof(MainViewModel.IsLoading) && _viewModel?.IsLoading == true)
+            {
+                Dispatcher.BeginInvoke(new Action(CloseOpenContextMenus), DispatcherPriority.Input);
+            }
+        }
+
+        private void CloseOpenContextMenus()
+        {
+            try
+            {
+                CloseContextMenusRecursive(this);
+            }
+            catch
+            {
+                // Ignore context-menu close failures during refresh.
+            }
+        }
+
+        private static void CloseContextMenusRecursive(DependencyObject root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            if (root is FrameworkElement element && element.ContextMenu != null && element.ContextMenu.IsOpen)
+            {
+                element.ContextMenu.IsOpen = false;
+            }
+
+            if (root is FrameworkContentElement contentElement &&
+                contentElement.ContextMenu != null &&
+                contentElement.ContextMenu.IsOpen)
+            {
+                contentElement.ContextMenu.IsOpen = false;
+            }
+
+            var childCount = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < childCount; i++)
+            {
+                CloseContextMenusRecursive(VisualTreeHelper.GetChild(root, i));
+            }
+        }
+
+        private void ApplyContentFullscreenState(bool isFullscreen)
+        {
+            if (isFullscreen == _contentFullscreenApplied)
+            {
+                return;
+            }
+
+            if (isFullscreen)
+            {
+                _savedToolbarRowHeight = MainToolbarRow.Height;
+                _savedSectionsColumnWidth = SectionsColumn.Width;
+                _savedSectionsSplitterColumnWidth = SectionsSplitterColumn.Width;
+                _savedExplorerColumnWidth = ExplorerColumn.Width;
+                _savedExplorerSplitterColumnWidth = ExplorerSplitterColumn.Width;
+                _savedArticleListColumnWidth = ArticleListColumn.Width;
+                _savedArticleListSplitterColumnWidth = ArticleListSplitterColumn.Width;
+                _savedArticleContentRowHeight = ArticleContentRow.Height;
+                _savedArticleSplitterRowHeight = ArticleBrowserSplitterRow.Height;
+                _savedBrowserContentRowHeight = BrowserContentRow.Height;
+                _savedExplorerColumnMinWidth = ExplorerColumn.MinWidth;
+                _savedArticleContentRowMinHeight = ArticleContentRow.MinHeight;
+                _savedArticleBrowserGridColumn = Grid.GetColumn(ArticleBrowserGrid);
+                _savedArticleBrowserGridColumnSpan = Grid.GetColumnSpan(ArticleBrowserGrid);
+                _savedWindowStyle = WindowStyle;
+                _savedResizeMode = ResizeMode;
+                _savedWindowState = WindowState;
+
+                MainToolbarRow.Height = new GridLength(0);
+                MainToolbar.Visibility = Visibility.Collapsed;
+                SectionsPane.Visibility = Visibility.Collapsed;
+                FeedExplorerPane.Visibility = Visibility.Collapsed;
+                MainVerticalSplitter.Visibility = Visibility.Collapsed;
+                ArticleListPane.Visibility = Visibility.Collapsed;
+                ArticleListVerticalSplitter.Visibility = Visibility.Collapsed;
+                ArticleContentPane.Visibility = Visibility.Collapsed;
+                ArticleHorizontalSplitter.Visibility = Visibility.Collapsed;
+
+                SectionsColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+                SectionsSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+                ExplorerColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+                ExplorerSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+                ArticleListColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+                ArticleListSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(0));
+                ArticleBrowserColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
+                ExplorerColumn.MinWidth = 0;
+
+                ArticleContentRow.Height = new GridLength(0);
+                ArticleBrowserSplitterRow.Height = new GridLength(0);
+                BrowserContentRow.Height = new GridLength(1, GridUnitType.Star);
+                ArticleContentRow.MinHeight = 0;
+                Grid.SetColumn(ArticleBrowserGrid, 0);
+                Grid.SetColumnSpan(ArticleBrowserGrid, MainContentGrid.ColumnDefinitions.Count);
+                Panel.SetZIndex(ArticleBrowserGrid, 100);
+
+                WindowStyle = WindowStyle.None;
+                ResizeMode = ResizeMode.NoResize;
+                WindowState = WindowState.Maximized;
+            }
+            else
+            {
+                MainToolbarRow.Height = _savedToolbarRowHeight;
+                MainToolbar.Visibility = Visibility.Visible;
+                SectionsPane.Visibility = Visibility.Visible;
+                FeedExplorerPane.Visibility = Visibility.Visible;
+                MainVerticalSplitter.Visibility = Visibility.Visible;
+                ArticleListPane.Visibility = Visibility.Visible;
+                ArticleListVerticalSplitter.Visibility = Visibility.Visible;
+                ArticleContentPane.Visibility = Visibility.Visible;
+                ArticleHorizontalSplitter.Visibility = Visibility.Visible;
+
+                SectionsColumn.SetCurrentValue(ColumnDefinition.WidthProperty, _savedSectionsColumnWidth);
+                SectionsSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, _savedSectionsSplitterColumnWidth);
+                ExplorerColumn.SetCurrentValue(ColumnDefinition.WidthProperty, _savedExplorerColumnWidth);
+                ExplorerSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, _savedExplorerSplitterColumnWidth);
+                ArticleListColumn.SetCurrentValue(ColumnDefinition.WidthProperty, _savedArticleListColumnWidth);
+                ArticleListSplitterColumn.SetCurrentValue(ColumnDefinition.WidthProperty, _savedArticleListSplitterColumnWidth);
+                ArticleBrowserColumn.SetCurrentValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
+                ExplorerColumn.MinWidth = _savedExplorerColumnMinWidth;
+
+                ArticleContentRow.Height = _savedArticleContentRowHeight;
+                ArticleBrowserSplitterRow.Height = _savedArticleSplitterRowHeight;
+                BrowserContentRow.Height = _savedBrowserContentRowHeight;
+                ArticleContentRow.MinHeight = _savedArticleContentRowMinHeight;
+                Grid.SetColumn(ArticleBrowserGrid, _savedArticleBrowserGridColumn);
+                Grid.SetColumnSpan(ArticleBrowserGrid, Math.Max(1, _savedArticleBrowserGridColumnSpan));
+                Panel.SetZIndex(ArticleBrowserGrid, 0);
+
+                WindowStyle = _savedWindowStyle;
+                ResizeMode = _savedResizeMode;
+                WindowState = _savedWindowState;
+                ApplyPaneCollapseState();
+            }
+
+            _contentFullscreenApplied = isFullscreen;
         }
 
         private void ViewModel_SelectionRestoreRequested(string linkToRestore)

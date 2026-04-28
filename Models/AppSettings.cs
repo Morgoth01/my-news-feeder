@@ -62,8 +62,21 @@ namespace MyNewsFeeder.Models
         public HashSet<string> ReadArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> PinnedArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> ReadLaterArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> ArchivedArticleLinks { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public List<FeedItem> PinnedArticleSnapshots { get; set; } = new List<FeedItem>();
         public List<FeedItem> ReadLaterArticleSnapshots { get; set; } = new List<FeedItem>();
+        public List<FeedItem> ArchivedArticleSnapshots { get; set; } = new List<FeedItem>();
+        public List<ArticleLabelDefinition> ArticleLabels { get; set; } = new List<ArticleLabelDefinition>();
+        public List<SavedLabelColorDefinition> SavedLabelColorDefinitions { get; set; } = new List<SavedLabelColorDefinition>();
+        public List<string> SavedLabelColors { get; set; } = new List<string>();
+        public Dictionary<string, List<string>> ArticleLabelAssignments { get; set; } = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string> ArticleNoteAssignments { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public ArchiveViewPreferences ArchiveViewPreferences { get; set; } = new ArchiveViewPreferences();
+        public FeedAllWindowPreferences FeedAllWindowPreferences { get; set; } = new FeedAllWindowPreferences();
+        public FeedManagerWindowPreferences FeedManagerWindowPreferences { get; set; } = new FeedManagerWindowPreferences();
+        public List<ArchiveSavedView> ArchiveSavedViews { get; set; } = new List<ArchiveSavedView>();
+        public bool ArchiveAutoCleanupEnabled { get; set; } = false;
+        public int ArchiveAutoCleanupDays { get; set; } = 90;
 
         public static readonly int[] AvailableRefreshIntervals = { 5, 10, 15, 20, 30, 45, 60 };
         public static readonly int[] AvailableLiveRefreshIntervals = { 60, 30, 10 };
@@ -78,7 +91,12 @@ namespace MyNewsFeeder.Models
                    ImportantNotificationsRetentionHours >= 0 && ImportantNotificationsRetentionHours <= 24 * 30 &&
                    AvailableLiveRefreshIntervals.Contains(LiveRefreshIntervalSeconds) &&
                    ArticleWindowHeight >= 200 && ArticleWindowHeight <= 2000 &&
-                   BrowserWindowHeight >= 200 && BrowserWindowHeight <= 2000;
+                   BrowserWindowHeight >= 200 && BrowserWindowHeight <= 2000 &&
+                   ArchiveAutoCleanupDays >= 1 && ArchiveAutoCleanupDays <= 3650 &&
+                   (!(FeedAllWindowPreferences?.WindowWidth.HasValue ?? false) || (FeedAllWindowPreferences.WindowWidth.Value >= 620 && FeedAllWindowPreferences.WindowWidth.Value <= 4000)) &&
+                   (!(FeedAllWindowPreferences?.WindowHeight.HasValue ?? false) || (FeedAllWindowPreferences.WindowHeight.Value >= 480 && FeedAllWindowPreferences.WindowHeight.Value <= 4000)) &&
+                   (!(FeedManagerWindowPreferences?.WindowWidth.HasValue ?? false) || (FeedManagerWindowPreferences.WindowWidth.Value >= 620 && FeedManagerWindowPreferences.WindowWidth.Value <= 4000)) &&
+                   (!(FeedManagerWindowPreferences?.WindowHeight.HasValue ?? false) || (FeedManagerWindowPreferences.WindowHeight.Value >= 480 && FeedManagerWindowPreferences.WindowHeight.Value <= 4000));
         }
 
         public void ResetToDefaults()
@@ -120,8 +138,21 @@ namespace MyNewsFeeder.Models
             ReadArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             PinnedArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             ReadLaterArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            ArchivedArticleLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             PinnedArticleSnapshots = new List<FeedItem>();
             ReadLaterArticleSnapshots = new List<FeedItem>();
+            ArchivedArticleSnapshots = new List<FeedItem>();
+            ArticleLabels = new List<ArticleLabelDefinition>();
+            SavedLabelColorDefinitions = new List<SavedLabelColorDefinition>();
+            SavedLabelColors = new List<string>();
+            ArticleLabelAssignments = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            ArticleNoteAssignments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            ArchiveViewPreferences = new ArchiveViewPreferences();
+            FeedAllWindowPreferences = new FeedAllWindowPreferences();
+            FeedManagerWindowPreferences = new FeedManagerWindowPreferences();
+            ArchiveSavedViews = new List<ArchiveSavedView>();
+            ArchiveAutoCleanupEnabled = false;
+            ArchiveAutoCleanupDays = 90;
 
         }
 
@@ -172,8 +203,36 @@ namespace MyNewsFeeder.Models
                 ReadArticleLinks = new HashSet<string>(this.ReadArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase),
                 PinnedArticleLinks = new HashSet<string>(this.PinnedArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase),
                 ReadLaterArticleLinks = new HashSet<string>(this.ReadLaterArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase),
+                ArchivedArticleLinks = new HashSet<string>(this.ArchivedArticleLinks ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase),
                 PinnedArticleSnapshots = new List<FeedItem>(this.PinnedArticleSnapshots ?? new List<FeedItem>()),
-                ReadLaterArticleSnapshots = new List<FeedItem>(this.ReadLaterArticleSnapshots ?? new List<FeedItem>())
+                ReadLaterArticleSnapshots = new List<FeedItem>(this.ReadLaterArticleSnapshots ?? new List<FeedItem>()),
+                ArchivedArticleSnapshots = new List<FeedItem>(this.ArchivedArticleSnapshots ?? new List<FeedItem>()),
+                ArticleLabels = (this.ArticleLabels ?? new List<ArticleLabelDefinition>()).Select(label => label?.Clone() ?? new ArticleLabelDefinition()).ToList(),
+                SavedLabelColorDefinitions = (this.SavedLabelColorDefinitions ?? new List<SavedLabelColorDefinition>())
+                    .Select(color => color?.Clone() ?? new SavedLabelColorDefinition())
+                    .Where(color => !string.IsNullOrWhiteSpace(color.Name) && !string.IsNullOrWhiteSpace(color.ColorHex))
+                    .ToList(),
+                SavedLabelColors = (this.SavedLabelColors ?? new List<string>())
+                    .Where(color => !string.IsNullOrWhiteSpace(color))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                ArticleLabelAssignments = (this.ArticleLabelAssignments ?? new Dictionary<string, List<string>>())
+                    .ToDictionary(
+                        entry => entry.Key,
+                        entry => (entry.Value ?? new List<string>()).Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                        StringComparer.OrdinalIgnoreCase),
+                ArticleNoteAssignments = (this.ArticleNoteAssignments ?? new Dictionary<string, string>())
+                    .Where(entry => !string.IsNullOrWhiteSpace(entry.Key))
+                    .ToDictionary(
+                        entry => entry.Key,
+                        entry => entry.Value ?? string.Empty,
+                        StringComparer.OrdinalIgnoreCase),
+                ArchiveViewPreferences = this.ArchiveViewPreferences?.Clone() ?? new ArchiveViewPreferences(),
+                FeedAllWindowPreferences = this.FeedAllWindowPreferences?.Clone() ?? new FeedAllWindowPreferences(),
+                FeedManagerWindowPreferences = this.FeedManagerWindowPreferences?.Clone() ?? new FeedManagerWindowPreferences(),
+                ArchiveSavedViews = (this.ArchiveSavedViews ?? new List<ArchiveSavedView>()).Select(view => view?.Clone() ?? new ArchiveSavedView()).ToList(),
+                ArchiveAutoCleanupEnabled = this.ArchiveAutoCleanupEnabled,
+                ArchiveAutoCleanupDays = this.ArchiveAutoCleanupDays
             };
         }
     }

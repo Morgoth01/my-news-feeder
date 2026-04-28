@@ -35,7 +35,7 @@ namespace MyNewsFeeder.Services
         {
             var result = new UpdateCheckResult
             {
-                CurrentVersion = (currentVersion ?? Assembly.GetEntryAssembly()?.GetName()?.Version ?? new Version(1, 0, 0, 0)).ToString(2)
+                CurrentVersion = (currentVersion ?? Assembly.GetEntryAssembly()?.GetName()?.Version ?? new Version(1, 0, 0, 0)).ToString(3)
             };
 
             try
@@ -135,7 +135,7 @@ namespace MyNewsFeeder.Services
             }
 
             if (MessageBox.Show(
-                    $"A new version {result.LatestVersion.ToString(2)} is available.\nYou have {result.CurrentVersion}.\n\nDownload now?",
+                    $"A new version {result.LatestVersion.ToString(3)} is available.\nYou have {result.CurrentVersion}.\n\nDownload now?",
                     "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Question)
                 != MessageBoxResult.Yes)
             {

@@ -234,6 +234,14 @@ namespace MyNewsFeeder.Views
                     continue;
                 }
 
+                if (trimmed.StartsWith("### ", StringComparison.Ordinal))
+                {
+                    currentList = null;
+                    var heading = CreateParagraph(trimmed.Substring(4), fontSize: 17, FontWeights.SemiBold, marginBottom: 8);
+                    doc.Blocks.Add(heading);
+                    continue;
+                }
+
                 if (trimmed.StartsWith("- ", StringComparison.Ordinal) || trimmed.StartsWith("* ", StringComparison.Ordinal))
                 {
                     if (currentList == null)
@@ -289,7 +297,8 @@ namespace MyNewsFeeder.Views
             {
                 var boldStart = text.IndexOf("**", cursor, StringComparison.Ordinal);
                 var linkStart = text.IndexOf('[', cursor);
-                var nextToken = GetNextTokenStart(boldStart, linkStart);
+                var codeStart = text.IndexOf('`', cursor);
+                var nextToken = GetNextTokenStart(boldStart, linkStart, codeStart);
 
                 if (nextToken < 0)
                 {
@@ -320,6 +329,26 @@ namespace MyNewsFeeder.Views
                     continue;
                 }
 
+                if (nextToken == codeStart)
+                {
+                    var codeEnd = text.IndexOf('`', codeStart + 1);
+                    if (codeEnd < 0)
+                    {
+                        inlines.Add(new Run(text.Substring(codeStart)));
+                        return;
+                    }
+
+                    var codeText = text.Substring(codeStart + 1, codeEnd - codeStart - 1);
+                    var inlineCode = new Span(new Run(codeText))
+                    {
+                        FontFamily = new FontFamily("Consolas"),
+                        Background = new SolidColorBrush(Color.FromArgb(40, 124, 58, 237))
+                    };
+                    inlines.Add(inlineCode);
+                    cursor = codeEnd + 1;
+                    continue;
+                }
+
                 // Markdown link: [label](https://...)
                 if (TryParseMarkdownLink(text, linkStart, out var label, out var url, out var endIndex) &&
                     TryCreateAllowedUri(url, out var navigateUri))
@@ -342,11 +371,12 @@ namespace MyNewsFeeder.Views
             }
         }
 
-        private static int GetNextTokenStart(int boldStart, int linkStart)
+        private static int GetNextTokenStart(int boldStart, int linkStart, int codeStart)
         {
-            if (boldStart < 0) return linkStart;
-            if (linkStart < 0) return boldStart;
-            return Math.Min(boldStart, linkStart);
+            var candidates = new[] { boldStart, linkStart, codeStart }
+                .Where(index => index >= 0)
+                .ToList();
+            return candidates.Count == 0 ? -1 : candidates.Min();
         }
 
         private static bool TryParseMarkdownLink(string text, int linkStart, out string label, out string url, out int endIndex)

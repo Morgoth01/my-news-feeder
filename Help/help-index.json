@@ -27,8 +27,13 @@
     },
     {
       "id": "reader-mode",
-      "title": "Reader Mode",
+      "title": "Reading Articles",
       "file": "reader-mode.md"
+    },
+    {
+      "id": "library",
+      "title": "Library",
+      "file": "library.md"
     },
     {
       "id": "important-feeds",
