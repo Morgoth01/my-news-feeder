@@ -8,6 +8,16 @@ Dive into your favorite feeds without distractions!</div>
 <br/>
 <br/>
 
+<p align="center">
+  <a href="https://github.com/Morgoth01/my-news-feeder/releases">
+    <img src="https://img.shields.io/github/v/release/Morgoth01/my-news-feeder" alt="Release">
+  </a>
+  <img src="https://img.shields.io/github/license/Morgoth01/my-news-feeder" alt="License">
+  <img src="https://img.shields.io/github/last-commit/Morgoth01/my-news-feeder" alt="Last Commit">
+  <img src="https://img.shields.io/github/issues/Morgoth01/my-news-feeder" alt="Issues">
+  <img src="https://img.shields.io/github/stars/Morgoth01/my-news-feeder" alt="Stars">
+</p>
+
 Find the latest release and notes here:
 **https://github.com/Morgoth01/my-news-feeder/releases**
 
@@ -16,11 +26,11 @@ For the complete User Guide and detailed feature documentation, see the Wiki: [h
 
 ## App Screenshots
 ### Light-Mode
-<img width="1453" height="1007" alt="meeI4Ewpzq" src="https://github.com/user-attachments/assets/9ecb474a-0202-46f2-a69e-f13e7ca9b14d" />
+<img width="3840" height="2076" alt="G3KQr11ywi" src="https://github.com/user-attachments/assets/f2979c76-f696-41a0-aa88-da223a25f8a1" />
 
 
 ### Dark-Mode
-<img width="1453" height="1007" alt="XayiYDAoNf" src="https://github.com/user-attachments/assets/0752c27e-4289-45f7-ac05-f1ad75a7d099" />
+<img width="3840" height="2076" alt="ymJuCflt31" src="https://github.com/user-attachments/assets/dc7fa7da-f0f3-4742-b346-006929a340b1" />
 
 
 ## Application Libraries
