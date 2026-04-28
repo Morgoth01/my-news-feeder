@@ -8,15 +8,15 @@ Dive into your favorite feeds without distractions!</div>
 <br/>
 <br/>
 
-<p align="center">
-  <a href="https://github.com/Morgoth01/my-news-feeder/releases">
-    <img src="https://img.shields.io/github/v/release/Morgoth01/my-news-feeder" alt="Release">
-  </a>
-  <img src="https://img.shields.io/github/license/Morgoth01/my-news-feeder" alt="License">
-  <img src="https://img.shields.io/github/last-commit/Morgoth01/my-news-feeder" alt="Last Commit">
-  <img src="https://img.shields.io/github/issues/Morgoth01/my-news-feeder" alt="Issues">
-  <img src="https://img.shields.io/github/stars/Morgoth01/my-news-feeder" alt="Stars">
-</p>
+<div align="center">
+
+[![Release](https://img.shields.io/github/v/release/Morgoth01/my-news-feeder?style=for-the-badge)](https://github.com/Morgoth01/my-news-feeder/releases)
+![License](https://img.shields.io/github/license/Morgoth01/my-news-feeder?style=for-the-badge)
+![Last Commit](https://img.shields.io/github/last-commit/Morgoth01/my-news-feeder?style=for-the-badge)
+![Issues](https://img.shields.io/github/issues/Morgoth01/my-news-feeder?style=for-the-badge)
+![Stars](https://img.shields.io/github/stars/Morgoth01/my-news-feeder?style=for-the-badge)
+
+</div>
 
 Find the latest release and notes here:
 **https://github.com/Morgoth01/my-news-feeder/releases**
