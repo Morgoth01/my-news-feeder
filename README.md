@@ -21,6 +21,12 @@ Dive into your favorite feeds without distractions!</div>
 Find the latest release and notes here:
 **https://github.com/Morgoth01/my-news-feeder/releases**
 
+## Note
+
+Currently, the app only supports publicly accessible RSS/Atom feeds.
+
+Feeds that require authentication or account login are not supported yet.
+
 ## User Guide
 For the complete User Guide and detailed feature documentation, see the Wiki: [https://github.com/Morgoth01/My-News-Feeder/wiki](https://github.com/Morgoth01/my-news-feeder/wiki)
 
