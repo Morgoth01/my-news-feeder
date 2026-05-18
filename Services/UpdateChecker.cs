@@ -33,9 +33,10 @@ namespace MyNewsFeeder.Services
 
         public static async Task<UpdateCheckResult> CheckAsync(Version currentVersion = null)
         {
+            var effectiveCurrentVersion = currentVersion ?? Assembly.GetEntryAssembly()?.GetName()?.Version ?? new Version(1, 0, 0, 0);
             var result = new UpdateCheckResult
             {
-                CurrentVersion = (currentVersion ?? Assembly.GetEntryAssembly()?.GetName()?.Version ?? new Version(1, 0, 0, 0)).ToString(3)
+                CurrentVersion = FormatVersion(effectiveCurrentVersion)
             };
 
             try
@@ -110,7 +111,8 @@ namespace MyNewsFeeder.Services
             {
                 if (showFailureMessage)
                 {
-                    MessageBox.Show(
+                    ShowMessage(
+                        owner,
                         "Update check failed.\nVisit https://github.com/Morgoth01/My-News-Feeder/releases/latest",
                         "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
@@ -122,7 +124,7 @@ namespace MyNewsFeeder.Services
             {
                 if (showUpToDateMessage)
                 {
-                    MessageBox.Show($"You are running the latest version ({result.CurrentVersion}).",
+                    ShowMessage(owner, $"You are running the latest version ({result.CurrentVersion}).",
                         "Up to Date", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 ClearInProgress();
@@ -134,8 +136,9 @@ namespace MyNewsFeeder.Services
                 _interactivePromptShown = true;
             }
 
-            if (MessageBox.Show(
-                    $"A new version {result.LatestVersion.ToString(3)} is available.\nYou have {result.CurrentVersion}.\n\nDownload now?",
+            if (ShowMessage(
+                    owner,
+                    $"A new version {FormatVersion(result.LatestVersion)} is available.\nYou have {result.CurrentVersion}.\n\nDownload now?",
                     "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Question)
                 != MessageBoxResult.Yes)
             {
@@ -147,7 +150,7 @@ namespace MyNewsFeeder.Services
             {
                 if (showFailureMessage)
                 {
-                    MessageBox.Show("No ZIP or 7z asset found in the latest release.", "Error",
+                    ShowMessage(owner, "No ZIP or 7z asset found in the latest release.", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 ClearInProgress();
@@ -173,19 +176,47 @@ namespace MyNewsFeeder.Services
             {
                 if (showFailureMessage)
                 {
-                    MessageBox.Show($"Download failed: {ex.Message}", "Error",
+                    ShowMessage(owner, $"Download failed: {ex.Message}", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 ClearInProgress();
                 return false;
             }
 
-            MessageBox.Show(
+            ShowMessage(
+                owner,
                 $"Downloaded to:\n{savePath}\n\nPlease unzip and replace the old files.\nVisit https://github.com/Morgoth01/My-News-Feeder/releases/latest for release notes.",
                 "Download Complete", MessageBoxButton.OK, MessageBoxImage.Information);
 
             ClearInProgress();
             return true;
+        }
+
+        private static MessageBoxResult ShowMessage(
+            Window owner,
+            string message,
+            string caption,
+            MessageBoxButton buttons,
+            MessageBoxImage image)
+        {
+            return owner != null
+                ? MessageBox.Show(owner, message, caption, buttons, image)
+                : MessageBox.Show(message, caption, buttons, image);
+        }
+
+        private static string FormatVersion(Version version)
+        {
+            if (version == null)
+            {
+                return "1.0";
+            }
+
+            if (version.Build <= 0)
+            {
+                return $"{version.Major}.{version.Minor}";
+            }
+
+            return $"{version.Major}.{version.Minor}.{version.Build}";
         }
     }
 }
