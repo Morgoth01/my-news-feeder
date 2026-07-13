@@ -8,19 +8,35 @@ Dive into your favorite feeds without distractions!</div>
 <br/>
 <br/>
 
+<div align="center">
+
+[![Release](https://img.shields.io/github/v/release/Morgoth01/my-news-feeder?style=for-the-badge)](https://github.com/Morgoth01/my-news-feeder/releases)
+![License](https://img.shields.io/github/license/Morgoth01/my-news-feeder?style=for-the-badge)
+![Last Commit](https://img.shields.io/github/last-commit/Morgoth01/my-news-feeder?style=for-the-badge)
+![Issues](https://img.shields.io/github/issues/Morgoth01/my-news-feeder?style=for-the-badge)
+![Stars](https://img.shields.io/github/stars/Morgoth01/my-news-feeder?style=for-the-badge)
+
+</div>
+
 Find the latest release and notes here:
 **https://github.com/Morgoth01/my-news-feeder/releases**
+
+## Note
+
+Currently, the app only supports publicly accessible RSS/Atom feeds.
+
+Feeds that require authentication or account login are not supported yet.
 
 ## User Guide
 For the complete User Guide and detailed feature documentation, see the Wiki: [https://github.com/Morgoth01/My-News-Feeder/wiki](https://github.com/Morgoth01/my-news-feeder/wiki)
 
 ## App Screenshots
 ### Light-Mode
-<img width="1453" height="1007" alt="meeI4Ewpzq" src="https://github.com/user-attachments/assets/9ecb474a-0202-46f2-a69e-f13e7ca9b14d" />
+<img width="3840" height="2076" alt="G3KQr11ywi" src="https://github.com/user-attachments/assets/f2979c76-f696-41a0-aa88-da223a25f8a1" />
 
 
 ### Dark-Mode
-<img width="1453" height="1007" alt="XayiYDAoNf" src="https://github.com/user-attachments/assets/0752c27e-4289-45f7-ac05-f1ad75a7d099" />
+<img width="3840" height="2076" alt="ymJuCflt31" src="https://github.com/user-attachments/assets/dc7fa7da-f0f3-4742-b346-006929a340b1" />
 
 
 ## Application Libraries
