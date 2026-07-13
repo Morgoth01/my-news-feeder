@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using MyNewsFeeder.ViewModels;
 
 namespace MyNewsFeeder.Views
 {
@@ -39,6 +40,7 @@ namespace MyNewsFeeder.Views
             _topicPanels = new Dictionary<string, FrameworkElement>(StringComparer.OrdinalIgnoreCase)
             {
                 ["general"] = GeneralPanel,
+                ["terminal"] = TerminalPanel,
                 ["refresh"] = RefreshPanel,
                 ["feed"] = FeedPanel,
                 ["adblocker"] = AdblockerPanel,
@@ -86,6 +88,11 @@ namespace MyNewsFeeder.Views
 
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
+            if (DataContext is MainViewModel viewModel)
+            {
+                viewModel.DiscardPendingSettingsChanges();
+            }
+
             Close();
         }
     }

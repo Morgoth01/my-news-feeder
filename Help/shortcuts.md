@@ -16,9 +16,10 @@
 - `Ctrl+Shift+L`: Add selected article to Read Later
 - `Ctrl+Shift+X`: Archive selected article
 - `Ctrl+Shift+U`: Mark selected article as unread
-- `Ctrl+Shift+C`: Copy selected article link
+- `Ctrl+Shift+C`: Copy selected article link (single article)
 - `Ctrl+O`: Open selected article in a new window
 - `Ctrl+I`: Open Latest Important Feeds
+- `Ctrl` + left click: Select multiple articles in the main article list
 - `Up / Down`: Move article selection
 - `PageUp / PageDown`: Jump 5 articles up or down in the current article list
 - `Ctrl+PageUp / Ctrl+PageDown`: Switch to the previous or next feed in the main window and in `Show All`

@@ -208,15 +208,15 @@ namespace MyNewsFeeder.Services
         {
             if (version == null)
             {
-                return "1.0";
+                return "1.0.0";
             }
 
-            if (version.Build <= 0)
+            if (version.Build >= 0)
             {
-                return $"{version.Major}.{version.Minor}";
+                return $"{version.Major}.{version.Minor}.{version.Build}";
             }
 
-            return $"{version.Major}.{version.Minor}.{version.Build}";
+            return $"{version.Major}.{version.Minor}.0";
         }
     }
 }

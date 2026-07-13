@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
@@ -20,16 +22,59 @@ namespace MyNewsFeeder.Views
     public partial class MainWindow : Window
     {
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        private const int WH_MOUSE_LL = 14;
+        private const int WM_MOUSEWHEEL = 0x020A;
+        private const int VK_CONTROL = 0x11;
         [DllImport("dwmapi.dll", PreserveSig = true)]
         private static extern int DwmSetWindowAttribute(
             IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
+
+        private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern short GetKeyState(int nVirtKey);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSLLHOOKSTRUCT
+        {
+            public POINT Pt;
+            public uint MouseData;
+            public uint Flags;
+            public uint Time;
+            public IntPtr DwExtraInfo;
+        }
 
         private MainViewModel _viewModel;
         private bool _startupInitializationStarted;
         private HelpWindow _helpWindow;
         private SettingsDialog _settingsWindow;
+        private TerminalWindow _terminalWindow;
+        private bool _isClosing;
         private bool _webViewShortcutHandlersAttached;
         private bool _contentFullscreenApplied;
+        private HwndSource _hwndSource;
+        private IntPtr _mouseHookId = IntPtr.Zero;
+        private LowLevelMouseProc _mouseHookProc;
         private GridLength _savedToolbarRowHeight;
         private GridLength _savedSectionsColumnWidth;
         private GridLength _savedSectionsSplitterColumnWidth;
@@ -56,6 +101,18 @@ namespace MyNewsFeeder.Views
         private WindowState _savedWindowState;
         private bool _isFeedExplorerCollapsed;
         private bool _isArticleListCollapsed;
+        public static readonly DependencyProperty SelectedMainArticleContextItemsProperty =
+            DependencyProperty.Register(
+                nameof(SelectedMainArticleContextItems),
+                typeof(IReadOnlyList<FeedItem>),
+                typeof(MainWindow),
+                new PropertyMetadata(Array.Empty<FeedItem>()));
+
+        public IReadOnlyList<FeedItem> SelectedMainArticleContextItems
+        {
+            get => (IReadOnlyList<FeedItem>)GetValue(SelectedMainArticleContextItemsProperty);
+            private set => SetValue(SelectedMainArticleContextItemsProperty, value ?? Array.Empty<FeedItem>());
+        }
 
         public MainWindow()
         {
@@ -76,6 +133,8 @@ namespace MyNewsFeeder.Views
             }
             _viewModel.SelectionRestoreRequested += ViewModel_SelectionRestoreRequested;
             _viewModel.RequestTreeScrollOffset = GetTreeScrollOffset;
+            _viewModel.HasOpenContextMenu = HasOpenContextMenu;
+            _viewModel.IsTerminalModeActive = () => IsTerminalModeActive;
             _viewModel.ScrollOffsetRestoreRequested += ViewModel_ScrollOffsetRestoreRequested;
             _viewModel.ScrollSelectionToTopRequested += ViewModel_ScrollSelectionToTopRequested;
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
@@ -83,6 +142,123 @@ namespace MyNewsFeeder.Views
             Loaded += MainWindow_Loaded;
             PreviewKeyDown += MainWindow_PreviewKeyDown;
             PreviewMouseDown += MainWindow_PreviewMouseDown;
+        }
+
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            _hwndSource = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+            _hwndSource?.AddHook(WndProc);
+            InstallArticleZoomMouseHook();
+        }
+
+        private void InstallArticleZoomMouseHook()
+        {
+            if (_mouseHookId != IntPtr.Zero)
+            {
+                return;
+            }
+
+            _mouseHookProc = LowLevelMouseHookCallback;
+            using var currentProcess = Process.GetCurrentProcess();
+            using var currentModule = currentProcess.MainModule;
+            _mouseHookId = SetWindowsHookEx(
+                WH_MOUSE_LL,
+                _mouseHookProc,
+                GetModuleHandle(currentModule?.ModuleName),
+                0);
+        }
+
+        private IntPtr LowLevelMouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 &&
+                wParam.ToInt32() == WM_MOUSEWHEEL &&
+                (GetKeyState(VK_CONTROL) & unchecked((short)0x8000)) != 0)
+            {
+                var hookData = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                var screenPoint = new Point(hookData.Pt.X, hookData.Pt.Y);
+                var wheelDelta = unchecked((short)((hookData.MouseData >> 16) & 0xffff));
+                if (TryAdjustArticleZoomFromMouseHook(screenPoint, wheelDelta))
+                {
+                    return (IntPtr)1;
+                }
+            }
+
+            return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
+        }
+
+        private bool TryAdjustArticleZoomFromMouseHook(Point screenPoint, int wheelDelta)
+        {
+            if (wheelDelta == 0 || Dispatcher == null || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+            {
+                return false;
+            }
+
+            try
+            {
+                return Dispatcher.Invoke(() =>
+                {
+                    if (!IsActive || !IsScreenPointOverArticleWebView(screenPoint))
+                    {
+                        return false;
+                    }
+
+                    _viewModel?.AdjustCurrentArticleZoomFactor(wheelDelta > 0 ? 1 : -1);
+                    return true;
+                });
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_MOUSEWHEEL &&
+                Keyboard.Modifiers == ModifierKeys.Control &&
+                IsScreenPointOverArticleWebView(GetMouseWheelScreenPoint(lParam)))
+            {
+                var delta = GetMouseWheelDelta(wParam);
+                _viewModel?.AdjustCurrentArticleZoomFactor(delta > 0 ? 1 : -1);
+                handled = true;
+            }
+
+            return IntPtr.Zero;
+        }
+
+        private static int GetMouseWheelDelta(IntPtr wParam)
+        {
+            return unchecked((short)((wParam.ToInt64() >> 16) & 0xffff));
+        }
+
+        private static Point GetMouseWheelScreenPoint(IntPtr lParam)
+        {
+            var value = lParam.ToInt64();
+            return new Point(
+                unchecked((short)(value & 0xffff)),
+                unchecked((short)((value >> 16) & 0xffff)));
+        }
+
+        private bool IsScreenPointOverArticleWebView(Point screenPoint)
+        {
+            if (articleWebView == null || !articleWebView.IsVisible || articleWebView.ActualWidth <= 0 || articleWebView.ActualHeight <= 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                var localPoint = articleWebView.PointFromScreen(screenPoint);
+                return localPoint.X >= 0 &&
+                       localPoint.Y >= 0 &&
+                       localPoint.X <= articleWebView.ActualWidth &&
+                       localPoint.Y <= articleWebView.ActualHeight;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
@@ -108,6 +284,80 @@ namespace MyNewsFeeder.Views
             }
 
             Dispatcher.BeginInvoke(new Action(() => Focus()), DispatcherPriority.Input);
+        }
+
+        private void MainArticleList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not ListBoxItem itemContainer ||
+                itemContainer.DataContext is not FeedItem item)
+            {
+                return;
+            }
+
+            if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                itemContainer.IsSelected = !itemContainer.IsSelected;
+                UpdateSelectedMainArticleContextItems(item);
+                e.Handled = true;
+                return;
+            }
+
+            if (sender is ListBox listBox)
+            {
+                listBox.SelectedItems.Clear();
+                itemContainer.IsSelected = true;
+            }
+
+            UpdateSelectedMainArticleContextItems(item);
+            if (_viewModel?.ArticleClickCommand?.CanExecute(item) == true)
+            {
+                _viewModel.ArticleClickCommand.Execute(item);
+            }
+
+            e.Handled = true;
+        }
+
+        private void MainArticleList_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not ListBoxItem itemContainer ||
+                itemContainer.DataContext is not FeedItem item)
+            {
+                return;
+            }
+
+            if (sender is ListBox listBox && !itemContainer.IsSelected)
+            {
+                listBox.SelectedItems.Clear();
+                itemContainer.IsSelected = true;
+            }
+
+            UpdateSelectedMainArticleContextItems(item);
+            itemContainer.Focus();
+        }
+
+        private void UpdateSelectedMainArticleContextItems(FeedItem fallbackItem)
+        {
+            var selectedItems = MainArticleList?.SelectedItems
+                .OfType<FeedItem>()
+                .Where(item => item != null)
+                .ToList() ?? new List<FeedItem>();
+
+            if (selectedItems.Count == 0 && fallbackItem != null)
+            {
+                selectedItems.Add(fallbackItem);
+            }
+
+            SelectedMainArticleContextItems = selectedItems;
+            SyncMainArticleSelectionState(selectedItems);
+        }
+
+        private void SyncMainArticleSelectionState(IReadOnlyCollection<FeedItem> selectedItems)
+        {
+            var selected = new HashSet<FeedItem>(selectedItems ?? Array.Empty<FeedItem>());
+            foreach (var item in MainArticleList?.Items?.OfType<FeedItem>() ?? Enumerable.Empty<FeedItem>())
+            {
+                item.IsSelected = selected.Contains(item);
+            }
         }
 
         private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -236,6 +486,17 @@ namespace MyNewsFeeder.Views
             }
         }
 
+        private void FeedSummaryScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (Keyboard.Modifiers != ModifierKeys.Control)
+            {
+                return;
+            }
+
+            _viewModel?.AdjustCurrentArticleZoomFactor(e.Delta > 0 ? 1 : -1);
+            e.Handled = true;
+        }
+
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             // dark title‐bar on Win10+
@@ -248,6 +509,11 @@ namespace MyNewsFeeder.Views
             await Dispatcher.Yield(DispatcherPriority.Render);
             _viewModel?.StartInitialRefresh();
             _ = InitializeStartupInfrastructureAsync();
+
+            if (_viewModel?.StartInTerminal == true)
+            {
+                _ = Dispatcher.BeginInvoke(new Action(ShowTerminalWindow), DispatcherPriority.ApplicationIdle);
+            }
         }
 
         private async Task InitializeStartupInfrastructureAsync()
@@ -313,7 +579,19 @@ namespace MyNewsFeeder.Views
 
             linkWebView.PreviewKeyDown += WebView_PreviewKeyDown;
             articleWebView.PreviewKeyDown += WebView_PreviewKeyDown;
+            articleWebView.PreviewMouseWheel += ArticleWebView_PreviewMouseWheel;
             _webViewShortcutHandlersAttached = true;
+        }
+
+        private async void ArticleWebView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (Keyboard.Modifiers != ModifierKeys.Control)
+            {
+                return;
+            }
+
+            await Task.Delay(250);
+            _viewModel?.SaveCurrentArticleZoomFactor();
         }
 
         private void WebView_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -457,6 +735,12 @@ namespace MyNewsFeeder.Views
         {
             CloseHelpMenuPopup();
             ShowHelpWindow("shortcuts");
+        }
+
+        private void HelpMenuTerminal_Click(object sender, RoutedEventArgs e)
+        {
+            CloseHelpMenuPopup();
+            ShowTerminalWindow();
         }
 
         private void HelpMenuButton_Click(object sender, RoutedEventArgs e)
@@ -853,6 +1137,170 @@ namespace MyNewsFeeder.Views
             }
         }
 
+        private void ShowTerminalWindow()
+        {
+            try
+            {
+                _savedWindowState = WindowState;
+                _savedWindowStyle = WindowStyle;
+                _savedResizeMode = ResizeMode;
+
+                if (_terminalWindow == null || !_terminalWindow.IsLoaded)
+                {
+                    _terminalWindow = new TerminalWindow(_viewModel)
+                    {
+                        Owner = null,
+                        WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                        ShowInTaskbar = true
+                    };
+                    _terminalWindow.Closed += TerminalWindow_Closed;
+                    _terminalWindow.Show();
+                    _terminalWindow.Activate();
+                    Hide();
+                    return;
+                }
+
+                if (_terminalWindow.WindowState == WindowState.Minimized)
+                {
+                    _terminalWindow.WindowState = WindowState.Normal;
+                }
+
+                _terminalWindow.Activate();
+                _terminalWindow.Topmost = true;
+                _terminalWindow.Topmost = false;
+                Hide();
+            }
+            catch (Exception ex)
+            {
+                WriteMainWindowDiagnostic("ShowTerminalWindow", ex);
+                if (_terminalWindow != null && !_terminalWindow.IsLoaded)
+                {
+                    try
+                    {
+                        _terminalWindow.Closed -= TerminalWindow_Closed;
+                        _terminalWindow.Close();
+                    }
+                    catch
+                    {
+                        // Ignore cleanup failures for a terminal window that never opened.
+                    }
+
+                    _terminalWindow = null;
+                }
+
+                RestoreMainWindowAfterTerminal();
+            }
+        }
+
+        public bool IsTerminalModeActive => _terminalWindow != null && _terminalWindow.IsLoaded;
+
+        public bool TryHandleNotificationActivationInTerminal(ImportantNotificationItem item)
+        {
+            if (!IsTerminalModeActive || _terminalWindow == null || item == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                _terminalWindow.ShowNotificationActivation(item);
+                Hide();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WriteMainWindowDiagnostic("TryHandleNotificationActivationInTerminal", ex);
+                return true;
+            }
+        }
+
+        public bool TryHandleLatestNotificationsActivationInTerminal(IEnumerable<ImportantNotificationItem> items)
+        {
+            if (!IsTerminalModeActive || _terminalWindow == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                _terminalWindow.ShowLatestNotificationsActivation(items);
+                Hide();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WriteMainWindowDiagnostic("TryHandleLatestNotificationsActivationInTerminal", ex);
+                return true;
+            }
+        }
+
+        private void TerminalWindow_Closed(object sender, EventArgs e)
+        {
+            if (_terminalWindow != null)
+            {
+                _terminalWindow.Closed -= TerminalWindow_Closed;
+                _terminalWindow = null;
+            }
+
+            if (_isClosing)
+            {
+                return;
+            }
+
+            Dispatcher.BeginInvoke(new Action(RestoreMainWindowAfterTerminal), DispatcherPriority.Background);
+        }
+
+        private void RestoreMainWindowAfterTerminal()
+        {
+            try
+            {
+                Show();
+
+                if (_savedWindowState != WindowState.Minimized)
+                {
+                    WindowState = _savedWindowState;
+                }
+
+                WindowStyle = _savedWindowStyle;
+                ResizeMode = _savedResizeMode;
+                Activate();
+            }
+            catch (Exception ex)
+            {
+                WriteMainWindowDiagnostic("RestoreMainWindowAfterTerminal", ex);
+                try
+                {
+                    Visibility = Visibility.Visible;
+                    Activate();
+                }
+                catch
+                {
+                    // There is nothing useful left to do during window recovery.
+                }
+            }
+        }
+
+        private static void WriteMainWindowDiagnostic(string source, Exception ex)
+        {
+            try
+            {
+                var logDirectory = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "MyNewsFeeder",
+                    "logs");
+                System.IO.Directory.CreateDirectory(logDirectory);
+
+                var logPath = System.IO.Path.Combine(logDirectory, "app-diagnostics.log");
+                System.IO.File.AppendAllText(
+                    logPath,
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [MainWindow.{source}]{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
+            }
+            catch
+            {
+                // Ignore diagnostics logging failures.
+            }
+        }
+
         private void CloseHelpMenuPopup()
         {
             try
@@ -910,7 +1358,21 @@ namespace MyNewsFeeder.Views
                 if (articleWebView != null)
                 {
                     articleWebView.PreviewKeyDown -= WebView_PreviewKeyDown;
+                    articleWebView.PreviewMouseWheel -= ArticleWebView_PreviewMouseWheel;
                 }
+            }
+
+            if (_hwndSource != null)
+            {
+                _hwndSource.RemoveHook(WndProc);
+                _hwndSource = null;
+            }
+
+            if (_mouseHookId != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_mouseHookId);
+                _mouseHookId = IntPtr.Zero;
+                _mouseHookProc = null;
             }
 
             Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
@@ -919,6 +1381,8 @@ namespace MyNewsFeeder.Views
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            _isClosing = true;
+
             if (DataContext is MainViewModel vm)
             {
                 vm.SaveSectionExpandedStates();
@@ -938,6 +1402,12 @@ namespace MyNewsFeeder.Views
                 {
                     _settingsWindow.Close();
                     _settingsWindow = null;
+                }
+
+                if (_terminalWindow != null)
+                {
+                    _terminalWindow.Close();
+                    _terminalWindow = null;
                 }
             }
             catch
@@ -970,6 +1440,47 @@ namespace MyNewsFeeder.Views
             {
                 // Ignore context-menu close failures during refresh.
             }
+        }
+
+        private bool HasOpenContextMenu()
+        {
+            try
+            {
+                return HasOpenContextMenuRecursive(this);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool HasOpenContextMenuRecursive(DependencyObject root)
+        {
+            if (root == null)
+            {
+                return false;
+            }
+
+            if (root is FrameworkElement element && element.ContextMenu?.IsOpen == true)
+            {
+                return true;
+            }
+
+            if (root is FrameworkContentElement contentElement && contentElement.ContextMenu?.IsOpen == true)
+            {
+                return true;
+            }
+
+            var childCount = VisualTreeHelper.GetChildrenCount(root);
+            for (int i = 0; i < childCount; i++)
+            {
+                if (HasOpenContextMenuRecursive(VisualTreeHelper.GetChild(root, i)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void CloseContextMenusRecursive(DependencyObject root)

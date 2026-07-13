@@ -250,7 +250,7 @@ namespace MyNewsFeeder.Services
             SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
         }
 
-        public void ShowImportantArticles(IReadOnlyList<FeedItem> items)
+        public void ShowImportantArticles(IReadOnlyList<FeedItem> items, bool showWindowsToast = true)
         {
             if (_disposed || items == null || items.Count == 0)
             {
@@ -259,6 +259,10 @@ namespace MyNewsFeeder.Services
 
             RememberLatestItems(items);
             UpdateLatestItemsWindowIfOpen();
+            if (!showWindowsToast)
+            {
+                return;
+            }
 
             if (items.Count == 1)
             {
@@ -601,6 +605,11 @@ namespace MyNewsFeeder.Services
                     return;
                 }
 
+                if (TryRouteLatestNotificationsToTerminal(snapshot))
+                {
+                    return;
+                }
+
                 if (_notificationsWindow == null || !_notificationsWindow.IsLoaded)
                 {
                     _notificationsWindow = new ImportantNotificationsWindow(
@@ -636,6 +645,16 @@ namespace MyNewsFeeder.Services
                 _notificationsWindow.Closed -= NotificationsWindow_Closed;
                 _notificationsWindow = null;
             }
+        }
+
+        private static bool TryRouteLatestNotificationsToTerminal(IEnumerable<ImportantNotificationItem> items)
+        {
+            if (WpfApplication.Current?.MainWindow is not MainWindow mainWindow)
+            {
+                return false;
+            }
+
+            return mainWindow.TryHandleLatestNotificationsActivationInTerminal(items);
         }
 
         private void ClearLatestItems()
@@ -832,7 +851,11 @@ namespace MyNewsFeeder.Services
                         {
                             WpfApplication.Current.MainWindow = mainWindow;
                         }
-                        mainWindow.Show();
+                    }
+
+                    if (mainWindow.TryHandleNotificationActivationInTerminal(item))
+                    {
+                        return;
                     }
 
                     if (!mainWindow.IsVisible)
@@ -939,6 +962,8 @@ namespace MyNewsFeeder.Services
                     {
                         toast.Activated += (_, __) => OpenArticleFromNotification(new ImportantNotificationItem
                         {
+                            Title = title?.Trim() ?? string.Empty,
+                            FeedName = message?.Trim() ?? string.Empty,
                             Link = normalizedLink,
                             ReceivedAt = DateTime.Now
                         });

@@ -1,4 +1,6 @@
 using System.Linq;
+using System.IO;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.ServiceModel.Syndication;
@@ -37,7 +39,10 @@ namespace MyNewsFeeder.Services
             {
                 AllowAutoRedirect = true,
                 MaxAutomaticRedirections = 10,
-                CheckCertificateRevocationList = true
+                CheckCertificateRevocationList = true,
+                AutomaticDecompression = DecompressionMethods.GZip
+                    | DecompressionMethods.Deflate
+                    | DecompressionMethods.Brotli
             };
 
             _httpClient = new HttpClient(handler, disposeHandler: true);
@@ -63,7 +68,7 @@ namespace MyNewsFeeder.Services
                 using var response = await _httpClient.GetAsync(normalizedUrl).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
-                using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                using var stream = await OpenDecodedFeedStreamAsync(response.Content).ConfigureAwait(false);
                 using var xmlReader = XmlReader.Create(stream);
                 var syndicationFeed = SyndicationFeed.Load(xmlReader);
                 var title = syndicationFeed?.Title?.Text;
@@ -209,7 +214,7 @@ namespace MyNewsFeeder.Services
                 using var response = await _httpClient.GetAsync(normalizedUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
 
-                using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                using var stream = await OpenDecodedFeedStreamAsync(response.Content).ConfigureAwait(false);
                 using var xmlReader = XmlReader.Create(stream);
                 var syndicationFeed = SyndicationFeed.Load(xmlReader);
 
@@ -284,6 +289,42 @@ namespace MyNewsFeeder.Services
                 };
             }
         }
+
+        private static async Task<Stream> OpenDecodedFeedStreamAsync(HttpContent content)
+        {
+            var bytes = await content.ReadAsByteArrayAsync().ConfigureAwait(false);
+            var stream = new MemoryStream(bytes, writable: false);
+
+            if (bytes.Length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B)
+            {
+                return new GZipStream(stream, CompressionMode.Decompress);
+            }
+
+            if (LooksLikeZlibDeflate(bytes))
+            {
+                return new ZLibStream(stream, CompressionMode.Decompress);
+            }
+
+            return stream;
+        }
+
+        private static bool LooksLikeZlibDeflate(byte[] bytes)
+        {
+            if (bytes.Length < 2)
+            {
+                return false;
+            }
+
+            var compressionMethod = bytes[0] & 0x0F;
+            if (compressionMethod != 8)
+            {
+                return false;
+            }
+
+            var header = (bytes[0] << 8) + bytes[1];
+            return header % 31 == 0;
+        }
+
         private static IReadOnlyList<string> NormalizeAdvertisementKeywords(IReadOnlyCollection<string> keywords)
         {
             if (keywords == null || keywords.Count == 0)

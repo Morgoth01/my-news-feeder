@@ -329,6 +329,15 @@
                                                                  Height="18"/>
                                     </MenuItem.Icon>
                                 </MenuItem>
+                                <MenuItem Header="Terminal (Preview)"
+                                          Click="HelpMenuTerminal_Click"
+                                          Style="{StaticResource HelpMenuItemStyle}">
+                                    <MenuItem.Icon>
+                                        <materialDesign:PackIcon Kind="Console"
+                                                                 Width="18"
+                                                                 Height="18"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <Separator Style="{StaticResource HelpMenuSeparatorStyle}"/>
                                 <MenuItem Header="Check for updates"
                                           Click="HelpMenuCheckUpdates_Click"
@@ -666,6 +675,26 @@
                                         BorderBrush="{DynamicResource MaterialDesignDivider}"
                                         BorderThickness="1"
                                         MouseLeftButtonUp="SectionTile_MouseLeftButtonUp">
+                                    <Border.ContextMenu>
+                                        <ContextMenu Style="{StaticResource ArticleContextMenuStyle}">
+                                            <MenuItem Header="Mark as read"
+                                                      Command="{Binding DataContext.MarkGroupAsReadCommand, Source={x:Reference RootWindow}}"
+                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      Style="{StaticResource ArticleMenuItemStyle}">
+                                                <MenuItem.Icon>
+                                                    <materialDesign:PackIcon Kind="CheckAll" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Mark as unread"
+                                                      Command="{Binding DataContext.MarkGroupAsUnreadCommand, Source={x:Reference RootWindow}}"
+                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      Style="{StaticResource ArticleMenuItemStyle}">
+                                                <MenuItem.Icon>
+                                                    <materialDesign:PackIcon Kind="Undo" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                </MenuItem.Icon>
+                                            </MenuItem>
+                                        </ContextMenu>
+                                    </Border.ContextMenu>
                                     <StackPanel Orientation="Vertical"
                                                 HorizontalAlignment="Center">
                                         <materialDesign:PackIcon Kind="{Binding IconKind}"
@@ -1063,6 +1092,32 @@
                                                                 BorderBrush="{DynamicResource PrimaryHueMidBrush}"
                                                                 Padding="8,6"
                                                                 CornerRadius="6">
+                                                            <Border.ContextMenu>
+                                                                <ContextMenu Style="{StaticResource ArticleContextMenuStyle}">
+                                                                    <MenuItem Header="Mark as read"
+                                                                              Command="{Binding DataContext.MarkGroupAsReadCommand, Source={x:Reference RootWindow}}"
+                                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                                                        <MenuItem.Icon>
+                                                                            <materialDesign:PackIcon Kind="CheckAll"
+                                                                                                     Width="16"
+                                                                                                     Height="16"
+                                                                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                    <MenuItem Header="Mark as unread"
+                                                                              Command="{Binding DataContext.MarkGroupAsUnreadCommand, Source={x:Reference RootWindow}}"
+                                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                                                        <MenuItem.Icon>
+                                                                            <materialDesign:PackIcon Kind="Undo"
+                                                                                                     Width="16"
+                                                                                                     Height="16"
+                                                                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                </ContextMenu>
+                                                            </Border.ContextMenu>
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
                                                                     <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
@@ -1133,7 +1188,23 @@
                                                                                                   CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                                                                   Style="{StaticResource ArticleMenuItemStyle}">
                                                                                             <MenuItem.Icon>
-                                                                                                <materialDesign:PackIcon Kind="OpenInNew" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                                               <materialDesign:PackIcon Kind="OpenInNew" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                                           </MenuItem.Icon>
+                                                                                       </MenuItem>
+                                                                                        <MenuItem Header="Mark as read"
+                                                                                                  Command="{Binding DataContext.MarkGroupAsReadCommand, Source={x:Reference RootWindow}}"
+                                                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                                                  Style="{StaticResource ArticleMenuItemStyle}">
+                                                                                            <MenuItem.Icon>
+                                                                                                <materialDesign:PackIcon Kind="CheckAll" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                                            </MenuItem.Icon>
+                                                                                        </MenuItem>
+                                                                                        <MenuItem Header="Mark as unread"
+                                                                                                  Command="{Binding DataContext.MarkGroupAsUnreadCommand, Source={x:Reference RootWindow}}"
+                                                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                                                  Style="{StaticResource ArticleMenuItemStyle}">
+                                                                                            <MenuItem.Icon>
+                                                                                                <materialDesign:PackIcon Kind="Undo" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
                                                                                             </MenuItem.Icon>
                                                                                         </MenuItem>
                                                                                     </ContextMenu>
@@ -1240,6 +1311,22 @@
                                                                                   Style="{StaticResource ArticleMenuItemStyle}">
                                                                             <MenuItem.Icon>
                                                                                 <materialDesign:PackIcon Kind="OpenInNew" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                            </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                        <MenuItem Header="Mark as read"
+                                                                                  Command="{Binding DataContext.MarkGroupAsReadCommand, Source={x:Reference RootWindow}}"
+                                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                                  Style="{StaticResource ArticleMenuItemStyle}">
+                                                                            <MenuItem.Icon>
+                                                                                <materialDesign:PackIcon Kind="CheckAll" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                            </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                        <MenuItem Header="Mark as unread"
+                                                                                  Command="{Binding DataContext.MarkGroupAsUnreadCommand, Source={x:Reference RootWindow}}"
+                                                                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                                  Style="{StaticResource ArticleMenuItemStyle}">
+                                                                            <MenuItem.Icon>
+                                                                                <materialDesign:PackIcon Kind="Undo" Width="16" Height="16" Foreground="{DynamicResource PrimaryHueMidBrush}"/>
                                                                             </MenuItem.Icon>
                                                                         </MenuItem>
                                                                     </ContextMenu>
@@ -1565,6 +1652,28 @@
                                                                                                      Foreground="{DynamicResource PrimaryHueMidBrush}"/>
                                                                         </MenuItem.Icon>
                                                                     </MenuItem>
+                                                                    <MenuItem Header="Mark as read"
+                                                                              Command="{Binding DataContext.MarkGroupAsReadCommand, Source={x:Reference RootWindow}}"
+                                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                                                        <MenuItem.Icon>
+                                                                            <materialDesign:PackIcon Kind="CheckAll"
+                                                                                                     Width="16"
+                                                                                                     Height="16"
+                                                                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
+                                                                    <MenuItem Header="Mark as unread"
+                                                                              Command="{Binding DataContext.MarkGroupAsUnreadCommand, Source={x:Reference RootWindow}}"
+                                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                                                        <MenuItem.Icon>
+                                                                            <materialDesign:PackIcon Kind="Undo"
+                                                                                                     Width="16"
+                                                                                                     Height="16"
+                                                                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                        </MenuItem.Icon>
+                                                                    </MenuItem>
                                                                 </ContextMenu>
                                                             </Border.ContextMenu>
                                                             <Border.Style>
@@ -1748,8 +1857,11 @@
                     <ListBox x:Name="MainArticleList"
                              Grid.Row="1"
                              ItemsSource="{Binding CurrentArticleItemsView}"
+                             SelectionMode="Extended"
                              Background="Transparent"
                              BorderThickness="0"
+                             PreviewMouseLeftButtonDown="MainArticleList_PreviewMouseLeftButtonDown"
+                             PreviewMouseRightButtonDown="MainArticleList_PreviewMouseRightButtonDown"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              ScrollViewer.CanContentScroll="True"
@@ -1763,7 +1875,7 @@
                                 <Setter Property="Margin" Value="0"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="BorderThickness" Value="0"/>
-                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="Focusable" Value="True"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListBoxItem">
@@ -1783,6 +1895,32 @@
                                                 CornerRadius="8"
                                                 Padding="10,8"
                                                 Margin="0,10,0,6">
+                                            <Border.ContextMenu>
+                                                <ContextMenu Style="{StaticResource ArticleContextMenuStyle}">
+                                                    <MenuItem Header="Mark as read"
+                                                              Command="{Binding DataContext.MarkGroupAsReadCommand, Source={x:Reference RootWindow}}"
+                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                                        <MenuItem.Icon>
+                                                            <materialDesign:PackIcon Kind="CheckAll"
+                                                                                     Width="16"
+                                                                                     Height="16"
+                                                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Mark as unread"
+                                                              Command="{Binding DataContext.MarkGroupAsUnreadCommand, Source={x:Reference RootWindow}}"
+                                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              Style="{StaticResource ArticleMenuItemStyle}">
+                                                        <MenuItem.Icon>
+                                                            <materialDesign:PackIcon Kind="Undo"
+                                                                                     Width="16"
+                                                                                     Height="16"
+                                                                                     Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
                                             <StackPanel>
                                                 <Border Background="{DynamicResource PrimaryHueMidBrush}"
                                                         CornerRadius="10"
@@ -1829,9 +1967,6 @@
                                         BorderBrush="{DynamicResource MaterialDesignDivider}"
                                         BorderThickness="2">
                                     <Border.InputBindings>
-                                        <MouseBinding MouseAction="LeftClick"
-                                                      Command="{Binding DataContext.ArticleClickCommand, ElementName=RootWindow}"
-                                                      CommandParameter="{Binding}"/>
                                         <MouseBinding MouseAction="LeftDoubleClick"
                                                       Command="{Binding DataContext.OpenArticleInWindowCommand, ElementName=RootWindow}"
                                                       CommandParameter="{Binding}"/>
@@ -1842,28 +1977,32 @@
                                                       IsCheckable="True"
                                                       IsChecked="{Binding IsPinned}"
                                                       Command="{Binding DataContext.PinArticleCommand, Source={x:Reference RootWindow}}"
-                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding SelectedMainArticleContextItems, Source={x:Reference RootWindow}}"
                                                       Style="{StaticResource ArticleMenuItemStyle}"/>
                                             <MenuItem Header="{Binding IsReadLater, Converter={StaticResource BooleanToTextConverter}, ConverterParameter='Unsave|Read Later'}"
                                                       IsCheckable="True"
                                                       IsChecked="{Binding IsReadLater}"
                                                       Command="{Binding DataContext.ReadLaterArticleCommand, Source={x:Reference RootWindow}}"
-                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding SelectedMainArticleContextItems, Source={x:Reference RootWindow}}"
                                                       Style="{StaticResource ArticleMenuItemStyle}"/>
                                             <MenuItem Header="{Binding IsArchived, Converter={StaticResource BooleanToTextConverter}, ConverterParameter='Unarchive|Archive'}"
                                                       IsCheckable="True"
                                                       IsChecked="{Binding IsArchived}"
                                                       Command="{Binding DataContext.ArchiveArticleCommand, Source={x:Reference RootWindow}}"
-                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding SelectedMainArticleContextItems, Source={x:Reference RootWindow}}"
                                                       Style="{StaticResource ArticleMenuItemStyle}"/>
-                                            <MenuItem Header="Unread"
-                                                      Command="{Binding DataContext.MarkUnreadCommand, Source={x:Reference RootWindow}}"
-                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                            <MenuItem Header="Mark as read"
+                                                      Command="{Binding DataContext.MarkGroupAsReadCommand, Source={x:Reference RootWindow}}"
+                                                      CommandParameter="{Binding SelectedMainArticleContextItems, Source={x:Reference RootWindow}}"
+                                                      Style="{StaticResource ArticleMenuItemStyle}"/>
+                                            <MenuItem Header="Mark as unread"
+                                                      Command="{Binding DataContext.MarkGroupAsUnreadCommand, Source={x:Reference RootWindow}}"
+                                                      CommandParameter="{Binding SelectedMainArticleContextItems, Source={x:Reference RootWindow}}"
                                                       Style="{StaticResource ArticleMenuItemStyle}"/>
                                             <Separator/>
                                             <MenuItem Header="Copy Link"
                                                       Command="{Binding DataContext.CopyArticleLinkCommand, Source={x:Reference RootWindow}}"
-                                                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding SelectedMainArticleContextItems, Source={x:Reference RootWindow}}"
                                                       Style="{StaticResource ArticleMenuItemStyle}"/>
                                         </ContextMenu>
                                     </Border.ContextMenu>
@@ -2117,10 +2256,69 @@
                                     Margin="2"/>
                         </Grid>
 
+                        <ScrollViewer x:Name="FeedSummaryScrollViewer"
+                                      Grid.Row="1"
+                                      Margin="2"
+                                      Padding="0"
+                                      Background="#0B0B0B"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PreviewMouseWheel="FeedSummaryScrollViewer_PreviewMouseWheel"
+                                      Visibility="{Binding IsFeedSummaryVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border Padding="15">
+                                <StackPanel HorizontalAlignment="Stretch">
+                                    <TextBlock Text="{Binding FeedSummaryTitle}"
+                                               Foreground="#90CAF9"
+                                               FontSize="{Binding FeedSummaryTitleFontSize}"
+                                               FontWeight="Bold"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,8"/>
+                                    <StackPanel Orientation="Horizontal"
+                                                Margin="0,0,0,10">
+                                        <TextBlock Text="{Binding FeedSummaryFeedName}"
+                                                   Foreground="#90CAF9"
+                                                   FontSize="{Binding FeedSummaryMetaFontSize}"
+                                                   FontWeight="SemiBold"/>
+                                        <TextBlock Text=" • "
+                                                   Foreground="#BDBDBD"
+                                                   FontSize="{Binding FeedSummaryMetaFontSize}"/>
+                                        <TextBlock Text="{Binding FeedSummaryPublicationDate}"
+                                                   Foreground="#BDBDBD"
+                                                   FontSize="{Binding FeedSummaryMetaFontSize}"/>
+                                    </StackPanel>
+                                    <Border Height="2"
+                                            Background="#90CAF9"
+                                            Margin="0,0,0,15"/>
+                                    <TextBlock Text="{Binding FeedSummaryDescription}"
+                                               Foreground="#EDEDED"
+                                               FontSize="{Binding FeedSummaryBodyFontSize}"
+                                               LineHeight="{Binding FeedSummaryBodyLineHeight}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,15"/>
+                                    <Border BorderBrush="#90CAF9"
+                                            BorderThickness="3,0,0,0"
+                                            Background="#151515"
+                                            Padding="10"
+                                            Margin="0,0,0,0">
+                                        <TextBlock Text="{Binding FeedSummaryLink, StringFormat=Full Article (Use Show Content for integrated browser): {0}}"
+                                                   Foreground="#81C784"
+                                                   FontSize="{Binding FeedSummaryMetaFontSize}"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </ScrollViewer>
                         <wv:WebView2 x:Name="articleWebView"
                                      Grid.Row="1"
                                      Margin="2"
-                                     Visibility="{Binding IsNotLoading, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                     Visibility="{Binding IsArticleWebViewVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <Border Grid.Row="1"
+                                Margin="2"
+                                Background="#0B0B0B"
+                                Panel.ZIndex="10"
+                                IsHitTestVisible="False"
+                                Visibility="{Binding IsArticleTransitionOverlayVisible, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                     </Grid>
                 </Border>
                 <!-- Horizontal Splitter -->

@@ -45,6 +45,7 @@
                          Style="{StaticResource MaterialDesignListBox}"
                          Margin="8">
                     <ListBoxItem Content="General" Tag="general" IsSelected="True"/>
+                    <ListBoxItem Content="Terminal (Preview)" Tag="terminal"/>
                     <ListBoxItem Content="Refresh" Tag="refresh"/>
                     <ListBoxItem Content="Feed Settings" Tag="feed"/>
                     <ListBoxItem Content="Adblocker" Tag="adblocker"/>
@@ -92,6 +93,43 @@
                                           Margin="0,8,0,2"
                                           ToolTip="Keep browser window open and auto-load articles when switching"/>
                                 <TextBlock Text="When enabled, the content panel stays open and automatically loads the newly selected article."
+                                           Margin="20,2,0,0"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <StackPanel x:Name="TerminalPanel"
+                                        Visibility="Collapsed">
+                                <CheckBox Content="Open app in Terminal Mode by default"
+                                          IsChecked="{Binding PendingStartInTerminal}"
+                                          Margin="0,2"/>
+                                <TextBlock Text="When enabled, future app launches open the terminal first. Closing the terminal returns to the GUI."
+                                           Margin="20,2,0,8"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="0,4,0,6">
+                                    <TextBlock Text="Terminal theme:"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0"/>
+                                    <ComboBox Width="180"
+                                              ItemsSource="{Binding AvailableTerminalThemes}"
+                                              SelectedItem="{Binding PendingTerminalThemeName}"
+                                              Style="{StaticResource MaterialDesignComboBox}"/>
+                                </StackPanel>
+                                <TextBlock Text="Theme changes apply to newly opened terminal windows and are shared with the terminal 'theme' command."
+                                           Margin="20,0,0,8"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                           TextWrapping="Wrap"/>
+
+                                <CheckBox Content="Play terminal boot animation"
+                                          IsChecked="{Binding PendingTerminalBootAnimationEnabled}"
+                                          Margin="0,4,0,2"/>
+                                <TextBlock Text="Disable this for a faster terminal startup. You can still preview it with the terminal command 'bootanim preview'."
                                            Margin="20,2,0,0"
                                            FontSize="10"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
@@ -205,45 +243,45 @@
                             <StackPanel x:Name="FilterPanel"
                                         Visibility="Collapsed">
                                 <CheckBox Content="Hide advertisement articles"
-                                          IsChecked="{Binding AdvertisementFilterEnabled}"
+                                          IsChecked="{Binding PendingAdvertisementFilterEnabled}"
                                           Margin="0,2"
                                           ToolTip="Filter feed items that look like ads based on configurable keywords."/>
                                 <TextBlock Text="Filter keywords (one per line)"
                                            Margin="20,2,0,2"
                                            FontSize="10"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                           Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                <TextBox Text="{Binding AdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
+                                           Visibility="{Binding PendingAdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <TextBox Text="{Binding PendingAdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
                                          AcceptsReturn="True"
                                          Height="110"
                                          Margin="20,0,0,8"
                                          VerticalScrollBarVisibility="Auto"
                                          Style="{StaticResource MaterialDesignTextBox}"
-                                         Visibility="{Binding AdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                         Visibility="{Binding PendingAdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
                                          TextWrapping="Wrap"/>
 
-                                <CheckBox Content="Desktop notifications for important items"
-                                          IsChecked="{Binding DesktopNotificationsEnabled}"
+                                <CheckBox Content="Desktop notifications for important items in GUI mode"
+                                          IsChecked="{Binding PendingDesktopNotificationsEnabled}"
                                           Margin="0,2"/>
                                 <TextBlock Text="Important keywords (one per line)"
                                            Margin="20,2,0,2"
                                            FontSize="10"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
-                                           Visibility="{Binding DesktopNotificationsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                <TextBox Text="{Binding ImportantKeywordsText, UpdateSourceTrigger=LostFocus}"
+                                           Visibility="{Binding PendingDesktopNotificationsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <TextBox Text="{Binding PendingImportantKeywordsText, UpdateSourceTrigger=LostFocus}"
                                          AcceptsReturn="True"
                                          Height="92"
                                          Margin="20,0,0,2"
                                          VerticalScrollBarVisibility="Auto"
                                          Style="{StaticResource MaterialDesignTextBox}"
-                                         Visibility="{Binding DesktopNotificationsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                         Visibility="{Binding PendingDesktopNotificationsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
                                          TextWrapping="Wrap"/>
                             </StackPanel>
 
                             <StackPanel x:Name="AdblockerPanel"
                                         Visibility="Collapsed">
                                 <CheckBox Content="Enable AdBlocker"
-                                          IsChecked="{Binding AdBlockerEnabled}"
+                                          IsChecked="{Binding PendingAdBlockerEnabled}"
                                           Margin="0,2"/>
                                 <Button Content="AdBlocker Settings"
                                         Command="{Binding AdBlockerSettingsCommand}"

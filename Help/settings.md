@@ -7,6 +7,12 @@ The Settings window is split into topics on the left and options on the right.
 - Dark Mode
 - Show Content Always-On
 
+## Terminal (Preview)
+
+- Open app in Terminal Mode by default
+- Choose the default terminal theme
+- Enable or disable the terminal boot animation
+
 ## Refresh
 
 - Auto Refresh interval

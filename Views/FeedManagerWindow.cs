@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using MyNewsFeeder.Models;
+using MyNewsFeeder.Services;
 using MyNewsFeeder.ViewModels;
 
 namespace MyNewsFeeder.Views
@@ -327,6 +328,61 @@ namespace MyNewsFeeder.Views
         {
             return string.IsNullOrWhiteSpace(category) ? "Default" : category;
         }
+
+        private static bool TryExtractFeedUrl(IDataObject data, out string url)
+        {
+            url = null;
+            if (data == null)
+            {
+                return false;
+            }
+
+            var candidates = new[]
+            {
+                DataFormats.UnicodeText,
+                DataFormats.Text,
+                DataFormats.StringFormat
+            };
+
+            foreach (var format in candidates)
+            {
+                if (!data.GetDataPresent(format))
+                {
+                    continue;
+                }
+
+                var raw = data.GetData(format) as string;
+                if (TryExtractFeedUrl(raw, out url))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryExtractFeedUrl(string rawText, out string url)
+        {
+            url = null;
+            if (string.IsNullOrWhiteSpace(rawText))
+            {
+                return false;
+            }
+
+            var separators = new[] { ' ', '\r', '\n', '\t', '"', '\'', '<', '>', '(', ')' };
+            foreach (var part in rawText.Split(separators, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var candidate = part.Trim().TrimEnd('.', ',', ';', ':');
+                if (FeedService.TryNormalizeFeedUrl(candidate, out var normalizedUrl))
+                {
+                    url = normalizedUrl;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private void CategoryListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             _categoryStartPoint = e.GetPosition(null);
@@ -381,6 +437,34 @@ namespace MyNewsFeeder.Views
             if (e.OriginalSource is DependencyObject source)
             {
                 StartFeedDrag(source);
+            }
+        }
+
+        private void FeedDataGrid_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(typeof(Feed)))
+            {
+                e.Effects = DragDropEffects.Move;
+                e.Handled = true;
+                return;
+            }
+
+            e.Effects = TryExtractFeedUrl(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        }
+
+        private void FeedDataGrid_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(typeof(Feed)))
+            {
+                return;
+            }
+
+            if (DataContext is FeedManagerViewModel viewModel &&
+                TryExtractFeedUrl(e.Data, out var feedUrl))
+            {
+                viewModel.AddFeedFromUrl(feedUrl);
+                e.Handled = true;
             }
         }
 

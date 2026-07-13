@@ -1,0 +1,398 @@
+<Window x:Class="MyNewsFeeder.Views.TerminalWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:MyNewsFeeder.Views.Converters"
+        xmlns:viewModels="clr-namespace:MyNewsFeeder.ViewModels"
+        Title="Terminal"
+        Height="640"
+        Width="980"
+        MinHeight="420"
+        MinWidth="640"
+        WindowStartupLocation="CenterOwner"
+        Background="{Binding ThemeBackgroundBrush}"
+        Foreground="{Binding ThemeForegroundBrush}"
+        FontFamily="{Binding ThemeFontFamily}"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="Aliased"
+        PreviewMouseWheel="TerminalWindow_PreviewMouseWheel"
+        Loaded="TerminalWindow_Loaded">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <SolidColorBrush x:Key="TerminalBackgroundBrush" Color="#020602"/>
+        <SolidColorBrush x:Key="TerminalPanelBrush" Color="#020902"/>
+        <SolidColorBrush x:Key="TerminalTextBrush" Color="#5EE75E"/>
+        <SolidColorBrush x:Key="TerminalDimTextBrush" Color="#2F8F2F"/>
+        <SolidColorBrush x:Key="TerminalBorderBrush" Color="#2AA52A"/>
+        <SolidColorBrush x:Key="TerminalSelectionBrush" Color="#154815"/>
+        <SolidColorBrush x:Key="TerminalTextSelectionBrush" Color="#4B5563"/>
+        <SolidColorBrush x:Key="TerminalTextSelectionTextBrush" Color="#5EE75E"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#4B5563"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#5EE75E"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#4B5563"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#5EE75E"/>
+        <DrawingBrush x:Key="CrtScanlineBrush"
+                      TileMode="Tile"
+                      Viewport="0,0,1,4"
+                      ViewportUnits="Absolute"
+                      Stretch="None">
+            <DrawingBrush.Drawing>
+                <GeometryDrawing Brush="#77000000">
+                    <GeometryDrawing.Geometry>
+                        <RectangleGeometry Rect="0,0,1,1"/>
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+        <RadialGradientBrush x:Key="CrtVignetteBrush"
+                             Center="0.5,0.5"
+                             GradientOrigin="0.5,0.5"
+                             RadiusX="0.78"
+                             RadiusY="0.92">
+            <GradientStop Color="#00000000" Offset="0.44"/>
+            <GradientStop Color="#66000000" Offset="0.78"/>
+            <GradientStop Color="#D0000000" Offset="1.0"/>
+        </RadialGradientBrush>
+        <RadialGradientBrush x:Key="CrtGlassGlowBrush"
+                             Center="0.5,0.12"
+                             GradientOrigin="0.5,0.02"
+                             RadiusX="0.85"
+                             RadiusY="0.65">
+            <GradientStop Color="#3355FF55" Offset="0.0"/>
+            <GradientStop Color="#1155FF55" Offset="0.38"/>
+            <GradientStop Color="#00000000" Offset="1.0"/>
+        </RadialGradientBrush>
+        
+        <!-- Syntax Highlighting Colors -->
+        <SolidColorBrush x:Key="CommandBrush" Color="#FF55FF"/>      <!-- Pink für Befehle -->
+        <SolidColorBrush x:Key="ErrorBrush" Color="#FF5555"/>        <!-- Rot für Fehler -->
+        <SolidColorBrush x:Key="SuccessBrush" Color="#55FF55"/>      <!-- Hellgrün für Erfolg -->
+        <SolidColorBrush x:Key="WarningBrush" Color="#FFFF55"/>      <!-- Gelb für Warnungen -->
+        <SolidColorBrush x:Key="HeaderBrush" Color="#55FFFF"/>       <!-- Cyan für Überschriften -->
+        
+        <!-- Converter für TerminalLineType zu Brush (theme-aware) -->
+        <local:ThemeAwareLineTypeConverter x:Key="TerminalLineTypeToBrushConverter"/>
+
+        <Style TargetType="{x:Type TextBox}">
+            <Setter Property="Background" Value="{DynamicResource TerminalBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TerminalTextBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource TerminalTextBrush}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource TerminalTextSelectionBrush}"/>
+            <Setter Property="SelectionTextBrush" Value="{DynamicResource TerminalTextSelectionTextBrush}"/>
+            <Setter Property="SelectionOpacity" Value="0.55"/>
+            <Setter Property="IsInactiveSelectionHighlightEnabled" Value="True"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource TerminalBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+            <Setter Property="TextOptions.TextRenderingMode" Value="Aliased"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type TextBox}">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Focusable="False"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          VerticalScrollBarVisibility="Hidden"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type ListBox}">
+            <Setter Property="Background" Value="{DynamicResource TerminalPanelBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TerminalTextBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        </Style>
+
+        <Style TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Foreground" Value="{DynamicResource TerminalTextBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="4,3"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{DynamicResource TerminalDimTextBrush}"
+                                BorderThickness="0,0,0,1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource TerminalSelectionBrush}"/>
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource TerminalTextBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TerminalTextBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="12">
+        <Grid x:Name="CommandGrid">
+            <Grid.Style>
+                <Style TargetType="{x:Type Grid}">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsBrowseMode}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Border Grid.Row="0"
+                    BorderBrush="{DynamicResource TerminalBorderBrush}"
+                    BorderThickness="1"
+                    Background="{DynamicResource TerminalPanelBrush}">
+                <TextBox x:Name="OutputTextBox"
+                         Text="{Binding OutputText, Mode=OneWay}"
+                         Padding="12"
+                         Foreground="{DynamicResource TerminalTextBrush}"
+                         FontFamily="Consolas"
+                         FontSize="14"
+                         TextWrapping="NoWrap"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         IsReadOnly="True"
+                         AcceptsReturn="True"
+                         AcceptsTab="True"
+                         IsTabStop="False"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         SelectionBrush="{DynamicResource TerminalTextSelectionBrush}"
+                         SelectionTextBrush="{DynamicResource TerminalTextSelectionTextBrush}"
+                         SelectionOpacity="0.55"
+                         IsInactiveSelectionHighlightEnabled="True"
+                         PreviewMouseLeftButtonUp="OutputTextBox_PreviewMouseLeftButtonUp"
+                         PreviewKeyDown="SelectableOutputTextBox_PreviewKeyDown"
+                         PreviewTextInput="SelectableOutputTextBox_PreviewTextInput">
+                    <TextBox.Effect>
+                        <DropShadowEffect Color="#6BFF6B"
+                                          ShadowDepth="0"
+                                          BlurRadius="5"
+                                          Opacity="{Binding ThemeGlowOpacity}"/>
+                    </TextBox.Effect>
+                </TextBox>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Margin="0,10,0,0"
+                    BorderBrush="{DynamicResource TerminalBorderBrush}"
+                    BorderThickness="1"
+                    Background="{DynamicResource TerminalPanelBrush}"
+                    Padding="8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="PromptTextBlock"
+                               Text="news&gt;"
+                               Foreground="{DynamicResource TerminalTextBrush}"
+                               FontFamily="Consolas"
+                               FontSize="15"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <TextBox x:Name="InputTextBox"
+                             Grid.Column="1"
+                             Text="{Binding CurrentInput, UpdateSourceTrigger=PropertyChanged}"
+                             PreviewMouseDown="InputTextBox_PreviewMouseDown"
+                             PreviewKeyDown="InputTextBox_KeyDown"
+                             GotKeyboardFocus="InputTextBox_GotKeyboardFocus"
+                             KeyDown="InputTextBox_KeyDown">
+                        <TextBox.Effect>
+                            <DropShadowEffect Color="#6BFF6B"
+                                              ShadowDepth="0"
+                                              BlurRadius="4"
+                                              Opacity="{Binding ThemeGlowOpacity}"/>
+                        </TextBox.Effect>
+                    </TextBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid x:Name="BrowseGrid"
+              Visibility="{Binding IsBrowseMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+              PreviewKeyDown="BrowseGrid_PreviewKeyDown"
+              PreviewMouseDown="BrowseGrid_PreviewMouseDown">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.1*"/>
+                <ColumnDefinition Width="1.6*"/>
+                <ColumnDefinition Width="2.3*"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Row="0"
+                       Grid.ColumnSpan="3"
+                       Text="{Binding BrowseTitle}"
+                       Foreground="{DynamicResource TerminalTextBrush}"
+                       FontFamily="Consolas"
+                       FontSize="16"
+                       FontWeight="Bold"
+                       Margin="0,0,0,8"/>
+
+            <Border Grid.Row="1"
+                    Grid.Column="0"
+                    BorderBrush="{DynamicResource TerminalBorderBrush}"
+                    BorderThickness="1"
+                    Background="{DynamicResource TerminalPanelBrush}"
+                    Margin="0,0,8,0">
+                <DockPanel>
+                    <TextBlock x:Name="BrowseFeedsHeaderTextBlock"
+                               DockPanel.Dock="Top"
+                               Text="FEEDS"
+                               Foreground="{DynamicResource TerminalTextBrush}"
+                               FontFamily="Consolas"
+                               FontWeight="Bold"
+                               Margin="8,6"/>
+                    <ListBox x:Name="BrowseFeedsList"
+                             ItemsSource="{Binding BrowseFeeds}"
+                             SelectedItem="{Binding SelectedBrowseFeed, Mode=TwoWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Display}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Grid.Column="1"
+                    BorderBrush="{DynamicResource TerminalBorderBrush}"
+                    BorderThickness="1"
+                    Background="{DynamicResource TerminalPanelBrush}"
+                    Margin="0,0,8,0">
+                <DockPanel>
+                    <TextBlock x:Name="BrowseArticlesHeaderTextBlock"
+                               DockPanel.Dock="Top"
+                               Text="ARTICLES"
+                               Foreground="{DynamicResource TerminalTextBrush}"
+                               FontFamily="Consolas"
+                               FontWeight="Bold"
+                               Margin="8,6"/>
+                    <ListBox x:Name="BrowseArticlesList"
+                             ItemsSource="{Binding BrowseArticles}"
+                             SelectedItem="{Binding SelectedBrowseArticle, Mode=TwoWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Display}"
+                                           TextWrapping="Wrap"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Grid.Column="2"
+                    BorderBrush="{DynamicResource TerminalBorderBrush}"
+                    BorderThickness="1"
+                    Background="{DynamicResource TerminalPanelBrush}">
+                <DockPanel>
+                    <TextBlock x:Name="BrowseReaderHeaderTextBlock"
+                               DockPanel.Dock="Top"
+                               Text="READER"
+                               Foreground="{DynamicResource TerminalTextBrush}"
+                               FontFamily="Consolas"
+                               FontWeight="Bold"
+                               Margin="8,6"/>
+                    <ScrollViewer x:Name="BrowseReaderScrollViewer"
+                                  Padding="10"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <TextBox x:Name="BrowseReaderTextBox"
+                                 Text="{Binding ReaderText, Mode=OneWay}"
+                                 Foreground="{DynamicResource TerminalTextBrush}"
+                                 FontFamily="Consolas"
+                                 FontSize="14"
+                                 TextWrapping="Wrap"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 IsReadOnly="True"
+                                 AcceptsReturn="True"
+                                 VerticalScrollBarVisibility="Disabled"
+                                 Focusable="True"
+                                 SelectionBrush="{DynamicResource TerminalTextSelectionBrush}"
+                                 SelectionTextBrush="{DynamicResource TerminalTextSelectionTextBrush}"
+                                 SelectionOpacity="0.55"
+                                 IsInactiveSelectionHighlightEnabled="True"
+                                 PreviewMouseLeftButtonUp="BrowseReaderTextBox_PreviewMouseLeftButtonUp"
+                                 Cursor="IBeam">
+                            <TextBox.Effect>
+                                <DropShadowEffect Color="#6BFF6B"
+                                                  ShadowDepth="0"
+                                                  BlurRadius="4"
+                                                  Opacity="{Binding ThemeGlowOpacity}"/>
+                            </TextBox.Effect>
+                        </TextBox>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <Border Grid.Row="2"
+                    Grid.ColumnSpan="3"
+                    Margin="0,10,0,0"
+                    BorderBrush="{DynamicResource TerminalBorderBrush}"
+                    BorderThickness="1"
+                    Background="{DynamicResource TerminalPanelBrush}"
+                    Padding="8">
+                <TextBlock Text="{Binding BrowseStatus}"
+                           Foreground="{DynamicResource TerminalTextBrush}"
+                           FontFamily="Consolas"
+                           FontSize="14"/>
+            </Border>
+        </Grid>
+        <Rectangle IsHitTestVisible="False"
+                   Fill="{StaticResource CrtGlassGlowBrush}"
+                   Opacity="{Binding ThemeGlowOpacity}"/>
+        <Rectangle IsHitTestVisible="False"
+                   Fill="{StaticResource CrtVignetteBrush}"
+                   Opacity="{Binding ThemeVignetteOpacity}"/>
+        <Rectangle IsHitTestVisible="False"
+                   Fill="{StaticResource CrtScanlineBrush}"
+                   Opacity="{Binding ThemeScanlineOpacity}"/>
+        <Rectangle IsHitTestVisible="False"
+                   Fill="#55B7FFB7"
+                   Visibility="{Binding IsCrtTheme, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Rectangle.Style>
+                <Style TargetType="{x:Type Rectangle}">
+                    <Setter Property="Opacity" Value="0.0"/>
+                    <Style.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                     From="0.0"
+                                                     To="0.035"
+                                                     Duration="0:0:0.085"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Rectangle.Style>
+        </Rectangle>
+    </Grid>
+</Window>

@@ -53,6 +53,11 @@ namespace MyNewsFeeder.Models
         public bool UseCompactArticleCards { get; set; } = false;
         public bool AutoUpdateCheckEnabled { get; set; } = true;
         public bool AutoUpdatePromptShown { get; set; } = false;
+        public double FeedSummaryZoomFactor { get; set; } = 1.0;
+        public double ReaderZoomFactor { get; set; } = 1.0;
+        public bool StartInTerminal { get; set; } = false;
+        public string TerminalThemeName { get; set; } = "Default";
+        public bool TerminalBootAnimationEnabled { get; set; } = true;
 
         // New category-related properties
         public Dictionary<string, bool> CategoryExpandedStates { get; set; } = new Dictionary<string, bool>();
@@ -93,6 +98,8 @@ namespace MyNewsFeeder.Models
                    ArticleWindowHeight >= 200 && ArticleWindowHeight <= 2000 &&
                    BrowserWindowHeight >= 200 && BrowserWindowHeight <= 2000 &&
                    ArchiveAutoCleanupDays >= 1 && ArchiveAutoCleanupDays <= 3650 &&
+                   FeedSummaryZoomFactor >= 0.5 && FeedSummaryZoomFactor <= 3.0 &&
+                   ReaderZoomFactor >= 0.5 && ReaderZoomFactor <= 3.0 &&
                    (!(FeedAllWindowPreferences?.WindowWidth.HasValue ?? false) || (FeedAllWindowPreferences.WindowWidth.Value >= 620 && FeedAllWindowPreferences.WindowWidth.Value <= 4000)) &&
                    (!(FeedAllWindowPreferences?.WindowHeight.HasValue ?? false) || (FeedAllWindowPreferences.WindowHeight.Value >= 480 && FeedAllWindowPreferences.WindowHeight.Value <= 4000)) &&
                    (!(FeedManagerWindowPreferences?.WindowWidth.HasValue ?? false) || (FeedManagerWindowPreferences.WindowWidth.Value >= 620 && FeedManagerWindowPreferences.WindowWidth.Value <= 4000)) &&
@@ -131,6 +138,11 @@ namespace MyNewsFeeder.Models
             UseCompactArticleCards = false;
             AutoUpdateCheckEnabled = true;
             AutoUpdatePromptShown = false;
+            FeedSummaryZoomFactor = 1.0;
+            ReaderZoomFactor = 1.0;
+            StartInTerminal = false;
+            TerminalThemeName = "Default";
+            TerminalBootAnimationEnabled = true;
 
             // Reset category settings
             CategoryExpandedStates = new Dictionary<string, bool>();
@@ -197,6 +209,11 @@ namespace MyNewsFeeder.Models
                 UseCompactArticleCards = this.UseCompactArticleCards,
                 AutoUpdateCheckEnabled = this.AutoUpdateCheckEnabled,
                 AutoUpdatePromptShown = this.AutoUpdatePromptShown,
+                FeedSummaryZoomFactor = this.FeedSummaryZoomFactor,
+                ReaderZoomFactor = this.ReaderZoomFactor,
+                StartInTerminal = this.StartInTerminal,
+                TerminalThemeName = string.IsNullOrWhiteSpace(this.TerminalThemeName) ? "Default" : this.TerminalThemeName,
+                TerminalBootAnimationEnabled = this.TerminalBootAnimationEnabled,
                 // Clone category settings
                 CategoryExpandedStates = new Dictionary<string, bool>(this.CategoryExpandedStates),
                 Categories = new List<string>(this.Categories),

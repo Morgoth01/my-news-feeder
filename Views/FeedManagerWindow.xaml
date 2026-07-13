@@ -180,13 +180,17 @@
                                                   ItemsSource="{Binding Feeds}"
                                                   SelectedItem="{Binding SelectedFeed}"
                                                   AutoGenerateColumns="False"
-                                    CanUserAddRows="False"
-                                    CanUserDeleteRows="False"
-                                    materialDesign:DataGridAssist.CellPadding="13 8 8 8"
-                                    materialDesign:DataGridAssist.ColumnHeaderPadding="8"
-                                    Style="{StaticResource MaterialDesignDataGrid}"
-                                    PreviewMouseLeftButtonDown="FeedDataGrid_PreviewMouseLeftButtonDown"
-                                    MouseMove="FeedDataGrid_MouseMove">
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  AllowDrop="True"
+                                                  Drop="FeedDataGrid_Drop"
+                                                  DragOver="FeedDataGrid_DragOver"
+                                                  DragEnter="FeedDataGrid_DragOver"
+                                                  materialDesign:DataGridAssist.CellPadding="13 8 8 8"
+                                                  materialDesign:DataGridAssist.ColumnHeaderPadding="8"
+                                                  Style="{StaticResource MaterialDesignDataGrid}"
+                                                  PreviewMouseLeftButtonDown="FeedDataGrid_PreviewMouseLeftButtonDown"
+                                                  MouseMove="FeedDataGrid_MouseMove">
 
                                         <DataGrid.RowStyle>
                                                 <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
@@ -325,7 +329,7 @@
                 </StackPanel>
                 <!-- Info Text -->
                 <TextBlock Grid.Row="3"
-                           Text="• Drag the ⋮⋮ to reorder feeds and categories • Click Name or URL to edit • Use checkboxes to enable/disable feeds • Create new categories and assign feeds"
+                           Text="• Drag links into the feed table to add them • Drag the ⋮⋮ to reorder feeds and categories • Click Name or URL to edit • Use checkboxes to enable/disable feeds"
                            FontSize="10"
                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                            Margin="0,8,0,0"

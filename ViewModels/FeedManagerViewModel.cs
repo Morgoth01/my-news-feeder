@@ -343,6 +343,53 @@ namespace MyNewsFeeder.ViewModels
             MarkDirty();
         }
 
+        public bool AddFeedFromUrl(string url, string category = null)
+        {
+            if (!FeedService.TryNormalizeFeedUrl(url, out var normalizedUrl))
+            {
+                return false;
+            }
+
+            if (Feeds.Any(feed => string.Equals(feed?.Url?.Trim(), normalizedUrl, StringComparison.OrdinalIgnoreCase)))
+            {
+                SelectedFeed = Feeds.FirstOrDefault(feed => string.Equals(feed?.Url?.Trim(), normalizedUrl, StringComparison.OrdinalIgnoreCase));
+                return false;
+            }
+
+            var feedName = normalizedUrl;
+            if (Uri.TryCreate(normalizedUrl, UriKind.Absolute, out var uri) && !string.IsNullOrWhiteSpace(uri.Host))
+            {
+                feedName = uri.Host;
+            }
+
+            var targetCategory = string.IsNullOrWhiteSpace(category)
+                ? CategoryNames.FirstOrDefault() ?? "Default"
+                : NormalizeCategoryName(category);
+
+            EnsureCategoryExists(targetCategory);
+
+            var newFeed = new Feed
+            {
+                Name = feedName,
+                Url = normalizedUrl,
+                IsEnabled = true,
+                IsImportant = false,
+                Category = targetCategory
+            };
+
+            newFeed.PropertyChanged += Feed_PropertyChanged;
+            Feeds.Add(newFeed);
+            if (_groupFeedsByCategory)
+            {
+                ApplyFeedOrdering();
+            }
+
+            SelectedFeed = newFeed;
+            MarkDirty();
+            _ = TryAutoFillFeedNameAsync(newFeed);
+            return true;
+        }
+
         private void RemoveFeed()
         {
             if (SelectedFeed == null) return;

@@ -6,6 +6,11 @@
       "file": "getting-started.md"
     },
     {
+      "id": "terminal",
+      "title": "Terminal Mode",
+      "file": "terminal.md"
+    },
+    {
       "id": "settings",
       "title": "Settings",
       "file": "settings.md"
