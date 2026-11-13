@@ -32,11 +32,10 @@ For the complete User Guide and detailed feature documentation, see the Wiki: [h
 
 ## App Screenshots
 ### Light-Mode
-<img width="3840" height="2076" alt="G3KQr11ywi" src="https://github.com/user-attachments/assets/f2979c76-f696-41a0-aa88-da223a25f8a1" />
-
+<img width="3840" height="2076" alt="ACp8jS8I8e" src="https://github.com/user-attachments/assets/01553a41-8b49-476b-a8f3-833d141bd242" />
 
 ### Dark-Mode
-<img width="3840" height="2076" alt="ymJuCflt31" src="https://github.com/user-attachments/assets/dc7fa7da-f0f3-4742-b346-006929a340b1" />
+<img width="3840" height="2076" alt="JGfROd863w" src="https://github.com/user-attachments/assets/19a1f242-4bb1-4184-8a77-d1b0c562ea2c" />
 
 
 ## Application Libraries
