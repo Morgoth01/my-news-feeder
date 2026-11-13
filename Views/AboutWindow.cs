@@ -13,26 +13,14 @@ namespace MyNewsFeeder.Views
 {
     public partial class AboutWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
         private readonly SettingsService _settingsService = new SettingsService();
         private Models.AppSettings _settings;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
 
         public AboutWindow()
         {
             InitializeComponent();
 
-            SourceInitialized += (_, __) =>
-            {
-                var hwnd = new WindowInteropHelper(this).Handle;
-                int useDark = 1;
-                if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-                    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            };
+            WindowThemeHelper.Prepare(this);
 
             var ver = Assembly.GetEntryAssembly()?.GetName()?.Version;
             var shortVer = ver != null ? ver.ToString(3) : "3.1.0";

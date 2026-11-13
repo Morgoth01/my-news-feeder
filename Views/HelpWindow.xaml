@@ -8,7 +8,7 @@
         MinHeight="560"
         MinWidth="760"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         TextElement.FontWeight="Regular"
         TextElement.FontSize="13"
@@ -41,18 +41,16 @@
 
             <GroupBox Grid.Column="0"
                       Header="Topics"
-                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Style="{StaticResource AppSectionGroupBoxStyle}"
                       Margin="0,0,5,0">
                 <ListBox x:Name="TopicsListBox"
-                         Margin="8"
+                         Margin="10"
+                         Background="Transparent"
+                         BorderThickness="0"
                          SelectionChanged="TopicsListBox_SelectionChanged"
                          DisplayMemberPath="Title"
+                         ItemContainerStyle="{StaticResource AppNavigationListItemStyle}"
                          Style="{StaticResource MaterialDesignListBox}">
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
-                            <Setter Property="Padding" Value="10,8"/>
-                        </Style>
-                    </ListBox.ItemContainerStyle>
                 </ListBox>
             </GroupBox>
 
@@ -65,7 +63,7 @@
 
             <GroupBox Grid.Column="2"
                       Header="Content"
-                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Style="{StaticResource AppSectionGroupBoxStyle}"
                       Margin="5,0,0,0">
                 <Grid Margin="14">
                     <Grid.RowDefinitions>
@@ -75,8 +73,8 @@
 
                     <TextBlock x:Name="TopicTitleText"
                                Grid.Row="0"
-                               FontSize="24"
-                               FontWeight="Bold"
+                               FontSize="22"
+                               FontWeight="SemiBold"
                                Margin="0,0,0,12"/>
 
                     <FlowDocumentScrollViewer x:Name="TopicContentViewer"
@@ -92,7 +90,7 @@
         <Button Grid.Row="2"
                 Content="Close"
                 Click="CloseButton_Click"
-                Style="{StaticResource MaterialDesignRaisedButton}"
+                Style="{StaticResource AppSecondaryButtonStyle}"
                 HorizontalAlignment="Right"
                 Width="110"
                 Margin="0,14,0,0"/>

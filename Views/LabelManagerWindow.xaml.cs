@@ -15,13 +15,6 @@ namespace MyNewsFeeder.Views
 {
     public partial class LabelManagerWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private sealed class LabelColorOption
         {
             public string Name { get; init; } = string.Empty;
@@ -49,22 +42,12 @@ namespace MyNewsFeeder.Views
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             InitializeComponent();
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
+            WindowThemeHelper.Prepare(this, _viewModel.DarkMode);
             DataContext = _viewModel;
             ColorComboBox.ItemsSource = _colorOptions;
             RefreshColorOptions();
             RefreshLabels();
             UpdatePreview();
-        }
-
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
         }
 
         private void RefreshLabels()

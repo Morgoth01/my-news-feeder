@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Interop;
-using System.Windows.Media.Animation;
 using MyNewsFeeder.Models;
 using MyNewsFeeder.Services;
 using MyNewsFeeder.ViewModels;
@@ -14,13 +13,6 @@ namespace MyNewsFeeder.Views
 {
     public partial class FeedManagerWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private Feed _draggedFeed;
         private Point _categoryStartPoint;
         private bool _categoryIsDragging = false;
@@ -28,28 +20,16 @@ namespace MyNewsFeeder.Views
         private bool _feedIsDragging = false;
         private bool _isApplyingWindowPlacement;
         private bool _hasInitialWindowPlacementApplied;
-        private bool _hasRevealedInitialFrame;
         private WindowState _lastNonMinimizedWindowState = WindowState.Normal;
 
         public FeedManagerWindow()
         {
             InitializeComponent();
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
-            ContentRendered += FeedManagerWindow_ContentRendered;
+            WindowThemeHelper.Prepare(this);
             Closed += FeedManagerWindow_Closed;
             LocationChanged += FeedManagerWindow_PlacementChanged;
             SizeChanged += FeedManagerWindow_PlacementChanged;
             StateChanged += FeedManagerWindow_StateChanged;
-        }
-
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
         }
 
         public void PrepareInitialWindowPlacement(FeedManagerWindowPreferences preferences)
@@ -64,27 +44,6 @@ namespace MyNewsFeeder.Views
             _hasInitialWindowPlacementApplied = true;
         }
 
-        private void FeedManagerWindow_ContentRendered(object sender, EventArgs e)
-        {
-            if (_hasRevealedInitialFrame)
-            {
-                return;
-            }
-
-            _hasRevealedInitialFrame = true;
-
-            var fadeIn = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromMilliseconds(90),
-                FillBehavior = FillBehavior.Stop
-            };
-
-            fadeIn.Completed += (_, __) => Opacity = 1;
-            BeginAnimation(OpacityProperty, fadeIn, HandoffBehavior.SnapshotAndReplace);
-        }
-
         private void FeedManagerWindow_Closed(object sender, EventArgs e)
         {
             SaveWindowPreferences();
@@ -92,7 +51,7 @@ namespace MyNewsFeeder.Views
 
         private void FeedManagerWindow_PlacementChanged(object sender, EventArgs e)
         {
-            if (!IsLoaded || _isApplyingWindowPlacement)
+            if (!IsLoaded || _isApplyingWindowPlacement || WindowThemeHelper.IsStagingFirstFrame(this))
             {
                 return;
             }

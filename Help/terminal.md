@@ -1,4 +1,4 @@
-# Terminal Mode
+# Terminal Mode (Preview)
 
 My News Feeder includes a terminal interface for keyboard-driven navigation and management of your feeds.
 

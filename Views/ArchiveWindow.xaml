@@ -13,7 +13,7 @@
         WindowStartupLocation="CenterOwner"
         Opacity="0"
         PreviewKeyDown="ArchiveWindow_PreviewKeyDown"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         TextElement.FontWeight="Regular"
         TextElement.FontSize="13"
@@ -23,6 +23,52 @@
     <Window.Resources>
         <conv:HtmlToPlainTextConverter x:Key="HtmlToPlainTextConverter"/>
 
+        <Style x:Key="AppSectionGroupBoxStyle" TargetType="GroupBox">
+            <Setter Property="Background" Value="{DynamicResource AppPanelBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="14,12,14,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="3"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0"
+                                            Background="{DynamicResource AppBrandBrush}"
+                                            CornerRadius="2"/>
+                                    <ContentPresenter Grid.Column="1"
+                                                      ContentSource="Header"
+                                                      Margin="10,0,0,0"
+                                                      VerticalAlignment="Center"
+                                                      TextElement.FontSize="15"
+                                                      TextElement.FontWeight="SemiBold"
+                                                      TextElement.Foreground="{DynamicResource MaterialDesignBody}"/>
+                                </Grid>
+                                <Border Grid.Row="0"
+                                        Height="1"
+                                        Margin="14,0,14,0"
+                                        VerticalAlignment="Bottom"
+                                        Background="{DynamicResource AppStrokeBrush}"/>
+                                <ContentPresenter Grid.Row="1" ContentSource="Content"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ArticleContextMenuStyle" TargetType="ContextMenu">
             <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -30,8 +76,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ContextMenu">
-                        <Border Background="{DynamicResource MaterialDesignPaper}"
-                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                        <Border Background="{DynamicResource AppPopupBackgroundBrush}"
+                                BorderBrush="{DynamicResource AppPopupBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="4"
@@ -55,6 +101,7 @@
             <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Icon" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -80,22 +127,22 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupHighlightBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppPopupHighlightTextBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter TargetName="Outer" Property="Background" Value="#33272727"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupCheckedBrush}"/>
                             </Trigger>
                             <MultiTrigger>
                                 <MultiTrigger.Conditions>
                                     <Condition Property="IsChecked" Value="True"/>
                                     <Condition Property="IsHighlighted" Value="True"/>
                                 </MultiTrigger.Conditions>
-                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppPopupHighlightTextBrush}"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupHighlightBrush}"/>
                             </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
@@ -191,20 +238,18 @@
 
         <Style x:Key="ArchiveActionButtonStyle"
                TargetType="Button"
-               BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+               BasedOn="{StaticResource AppSecondaryButtonStyle}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="18,8"/>
             <Setter Property="MinHeight" Value="38"/>
             <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Background" Value="#FFFFFFFF"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
                              Value="True">
-                    <Setter Property="Foreground" Value="#F7F2FF"/>
-                    <Setter Property="BorderBrush" Value="#C7A6FF"/>
-                    <Setter Property="Background" Value="#4D4D4D"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AppDarkAccentBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkSurfaceBrush}"/>
                 </DataTrigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
@@ -218,9 +263,9 @@
                         <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
                                    Value="True"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Foreground" Value="#9D9D9D"/>
-                    <Setter Property="BorderBrush" Value="#686868"/>
-                    <Setter Property="Background" Value="#3F3F3F"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppDarkTextDisabledBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AppDarkBorderBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkInputBrush}"/>
                 </MultiDataTrigger>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#F5EEFF"/>
@@ -232,14 +277,15 @@
                         <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
                                    Value="True"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Background" Value="#5A5A5A"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkHoverBrush}"/>
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="ArchivePrimaryButtonStyle"
                TargetType="Button"
-               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+               BasedOn="{StaticResource AppPrimaryButtonStyle}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="18,8"/>
             <Setter Property="MinHeight" Value="38"/>
             <Setter Property="MinWidth" Value="104"/>
@@ -258,6 +304,7 @@
         <Style x:Key="ArchiveMenuTriggerButtonStyle"
                TargetType="Button"
                BasedOn="{StaticResource MaterialDesignFlatButton}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="10,4"/>
             <Setter Property="MinHeight" Value="30"/>
             <Setter Property="MinWidth" Value="0"/>
@@ -268,7 +315,7 @@
             <Style.Triggers>
                 <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
                              Value="True">
-                    <Setter Property="Foreground" Value="#F7F2FF"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
                 </DataTrigger>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#1A000000"/>
@@ -280,7 +327,7 @@
                         <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
                                    Value="True"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Background" Value="#26FFFFFF"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkHoverBrush}"/>
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
@@ -288,6 +335,7 @@
         <Style x:Key="ArchiveQuickFilterToggleStyle"
                TargetType="ToggleButton"
                BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="10,4"/>
             <Setter Property="MinHeight" Value="30"/>
             <Setter Property="Margin" Value="0,0,6,6"/>
@@ -299,9 +347,9 @@
             <Style.Triggers>
                 <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}"
                              Value="True">
-                    <Setter Property="Foreground" Value="#F7F2FF"/>
-                    <Setter Property="BorderBrush" Value="#C7A6FF"/>
-                    <Setter Property="Background" Value="#4D4D4D"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AppDarkAccentBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkSurfaceBrush}"/>
                 </DataTrigger>
                 <Trigger Property="IsChecked" Value="True">
                     <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
@@ -324,7 +372,7 @@
                         <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
                         <Condition Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Background" Value="#5A5A5A"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkHoverBrush}"/>
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
@@ -545,13 +593,13 @@
             <GroupBox x:Name="OverviewGroupBox"
                       Grid.Column="0"
                       Header="Overview"
-                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Style="{StaticResource AppSectionGroupBoxStyle}"
                       Margin="0,0,5,0">
                 <StackPanel Margin="14">
                     <Border Padding="10"
-                            Background="{DynamicResource MaterialDesignCardBackground}"
-                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                            BorderThickness="1"
+                            Background="{DynamicResource AppSurfaceRaisedBrush}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             CornerRadius="8">
                         <StackPanel>
                             <TextBlock x:Name="PrimaryCountLabelTextBlock"
@@ -568,9 +616,9 @@
 
                     <Border Margin="0,10,0,0"
                             Padding="10"
-                            Background="{DynamicResource MaterialDesignCardBackground}"
-                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                            BorderThickness="1"
+                            Background="{DynamicResource AppSurfaceRaisedBrush}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             CornerRadius="8">
                         <StackPanel>
                             <TextBlock Text="Visible after filters"
@@ -586,9 +634,9 @@
 
                     <Border Margin="0,10,0,0"
                             Padding="10"
-                            Background="{DynamicResource MaterialDesignCardBackground}"
-                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                            BorderThickness="1"
+                            Background="{DynamicResource AppSurfaceRaisedBrush}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             CornerRadius="8">
                         <StackPanel>
                             <TextBlock Text="Selected"
@@ -605,9 +653,9 @@
                     <Border x:Name="RetentionPanelBorder"
                             Margin="0,14,0,0"
                             Padding="12"
-                            Background="{DynamicResource MaterialDesignCardBackground}"
-                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                            BorderThickness="1"
+                            Background="{DynamicResource AppSurfaceRaisedBrush}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             CornerRadius="8">
                         <StackPanel>
                             <TextBlock Text="Retention"
@@ -657,7 +705,7 @@
             <GroupBox x:Name="ItemsGroupBox"
                       Grid.Column="2"
                       Header="Archived Articles"
-                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Style="{StaticResource AppSectionGroupBoxStyle}"
                       Margin="5,0,5,0">
                 <Grid Margin="14">
                     <Grid.RowDefinitions>
@@ -689,9 +737,9 @@
 
                     <Border x:Name="ConfigurationPanelBorder"
                             Grid.Row="1"
-                            Background="{DynamicResource MaterialDesignCardBackground}"
-                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                            BorderThickness="1"
+                            Background="{DynamicResource AppSurfaceRaisedBrush}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             CornerRadius="8"
                             Padding="12"
                             Margin="0,0,0,12">
@@ -937,6 +985,14 @@
                                   IsReadOnly="True"
                                   SelectionMode="Extended"
                                   SelectionUnit="FullRow"
+                                  Background="{DynamicResource AppSurfaceBrush}"
+                                  RowBackground="{DynamicResource AppSurfaceRaisedBrush}"
+                                  AlternatingRowBackground="{DynamicResource AppSurfaceRaisedBrush}"
+                                  Foreground="{DynamicResource MaterialDesignBody}"
+                                  BorderBrush="{DynamicResource AppStrokeBrush}"
+                                  HorizontalGridLinesBrush="{DynamicResource AppStrokeBrush}"
+                                  VerticalGridLinesBrush="{DynamicResource AppStrokeBrush}"
+                                  GridLinesVisibility="Horizontal"
                                   MouseDoubleClick="ArchiveDataGrid_MouseDoubleClick"
                                   SelectionChanged="ArchiveDataGrid_SelectionChanged"
                                   ColumnReordered="ArchiveDataGrid_ColumnReordered"
@@ -946,6 +1002,30 @@
                                   materialDesign:DataGridAssist.CellPadding="13 8 8 8"
                                   materialDesign:DataGridAssist.ColumnHeaderPadding="8"
                                   Style="{StaticResource MaterialDesignDataGrid}">
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader"
+                                       BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                                    <Setter Property="Background" Value="{DynamicResource AppPanelBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
+                            <DataGrid.CellStyle>
+                                <Style TargetType="DataGridCell"
+                                       BasedOn="{StaticResource MaterialDesignDataGridCell}">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.CellStyle>
                             <DataGrid.GroupStyle>
                                 <GroupStyle>
                                     <GroupStyle.ContainerStyle>
@@ -956,8 +1036,8 @@
                                                         <Expander IsExpanded="True"
                                                                   Margin="0,0,0,8">
                                                             <Expander.Header>
-                                                                <Border Background="{DynamicResource MaterialDesignCardBackground}"
-                                                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                                                <Border Background="{DynamicResource AppSurfaceSubtleBrush}"
+                                                                        BorderBrush="{DynamicResource AppStrokeBrush}"
                                                                         BorderThickness="1"
                                                                         CornerRadius="8"
                                                                         Padding="10,8"
@@ -994,10 +1074,24 @@
                             </DataGrid.GroupStyle>
                             <DataGrid.RowStyle>
                                 <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                    <Setter Property="Background" Value="{DynamicResource AppSurfaceRaisedBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                    <Setter Property="BorderThickness" Value="0,0,0,1"/>
                                     <Setter Property="Tag"
                                             Value="{x:Reference ArchiveWindowRoot}"/>
                                     <Setter Property="ContextMenu"
                                             Value="{StaticResource ArchiveRowContextMenu}"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource AppSurfaceSubtleBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
+                                            <Setter Property="BorderThickness" Value="2"/>
+                                        </Trigger>
+                                    </Style.Triggers>
                                 </Style>
                             </DataGrid.RowStyle>
                             <DataGrid.Columns>
@@ -1089,13 +1183,13 @@
             <GroupBox x:Name="PreviewGroupBox"
                       Grid.Column="4"
                       Header="Preview"
-                      Style="{StaticResource MaterialDesignCardGroupBox}"
+                      Style="{StaticResource AppSectionGroupBoxStyle}"
                       Margin="5,0,0,0">
                 <Grid Margin="14">
                     <Border x:Name="PreviewEmptyStateBorder"
-                            Background="{DynamicResource MaterialDesignCardBackground}"
-                            BorderBrush="{DynamicResource MaterialDesignDivider}"
-                            BorderThickness="1"
+                            Background="{DynamicResource AppSurfaceRaisedBrush}"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
                             CornerRadius="10"
                             Padding="26,18">
                         <StackPanel HorizontalAlignment="Center"
@@ -1570,7 +1664,7 @@
                     Margin="0,14,0,0">
             <Button Content="Close"
                     Click="CloseButton_Click"
-                    Style="{StaticResource ArchivePrimaryButtonStyle}"/>
+                    Style="{StaticResource ArchiveActionButtonStyle}"/>
         </StackPanel>
     </Grid>
 </Window>

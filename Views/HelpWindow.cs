@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -14,13 +16,6 @@ namespace MyNewsFeeder.Views
 {
     public partial class HelpWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private readonly HelpContentService _helpContentService = new HelpContentService();
         private bool _topicsLoaded;
         private string _pendingTopicId;
@@ -28,18 +23,8 @@ namespace MyNewsFeeder.Views
         public HelpWindow()
         {
             InitializeComponent();
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
+            WindowThemeHelper.Prepare(this);
             Loaded += HelpWindow_Loaded;
-        }
-
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
         }
 
         private void HelpWindow_Loaded(object sender, RoutedEventArgs e)
@@ -207,14 +192,23 @@ namespace MyNewsFeeder.Views
 
             List currentList = null;
 
-            foreach (var rawLine in lines)
+            for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
             {
+                var rawLine = lines[lineIndex];
                 var line = rawLine?.TrimEnd() ?? string.Empty;
                 var trimmed = line.Trim();
 
                 if (string.IsNullOrWhiteSpace(trimmed))
                 {
                     currentList = null;
+                    continue;
+                }
+
+                if (TryParseMarkdownTable(lines, lineIndex, out var table, out var tableEndIndex))
+                {
+                    currentList = null;
+                    doc.Blocks.Add(table);
+                    lineIndex = tableEndIndex;
                     continue;
                 }
 
@@ -270,6 +264,166 @@ namespace MyNewsFeeder.Views
             }
 
             return doc;
+        }
+
+        private static bool TryParseMarkdownTable(
+            string[] lines,
+            int headerIndex,
+            out Table table,
+            out int tableEndIndex)
+        {
+            table = null;
+            tableEndIndex = headerIndex;
+
+            if (lines == null || headerIndex < 0 || headerIndex + 1 >= lines.Length)
+            {
+                return false;
+            }
+
+            var headerCells = ParseMarkdownTableRow(lines[headerIndex]);
+            var separatorCells = ParseMarkdownTableRow(lines[headerIndex + 1]);
+            if (headerCells.Count < 2 ||
+                separatorCells.Count != headerCells.Count ||
+                separatorCells.Any(cell => !IsMarkdownTableSeparator(cell)))
+            {
+                return false;
+            }
+
+            var dataRows = new List<IReadOnlyList<string>>();
+            var nextIndex = headerIndex + 2;
+            while (nextIndex < lines.Length)
+            {
+                var candidate = lines[nextIndex]?.Trim() ?? string.Empty;
+                if (!candidate.StartsWith("|", StringComparison.Ordinal) ||
+                    !candidate.EndsWith("|", StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                var cells = ParseMarkdownTableRow(candidate);
+                if (cells.Count != headerCells.Count)
+                {
+                    break;
+                }
+
+                dataRows.Add(cells);
+                nextIndex++;
+            }
+
+            table = CreateMarkdownTable(headerCells, dataRows);
+            tableEndIndex = nextIndex - 1;
+            return true;
+        }
+
+        private static IReadOnlyList<string> ParseMarkdownTableRow(string line)
+        {
+            var normalized = (line ?? string.Empty).Trim();
+            var cells = new List<string>();
+            var currentCell = new StringBuilder();
+
+            for (var index = 0; index < normalized.Length; index++)
+            {
+                var character = normalized[index];
+                if (character == '\\' && index + 1 < normalized.Length && normalized[index + 1] == '|')
+                {
+                    currentCell.Append('|');
+                    index++;
+                    continue;
+                }
+
+                if (character == '|')
+                {
+                    cells.Add(currentCell.ToString().Trim());
+                    currentCell.Clear();
+                    continue;
+                }
+
+                currentCell.Append(character);
+            }
+
+            cells.Add(currentCell.ToString().Trim());
+            if (normalized.StartsWith("|", StringComparison.Ordinal) && cells.Count > 0)
+            {
+                cells.RemoveAt(0);
+            }
+
+            if (normalized.EndsWith("|", StringComparison.Ordinal) && cells.Count > 0)
+            {
+                cells.RemoveAt(cells.Count - 1);
+            }
+
+            return cells;
+        }
+
+        private static bool IsMarkdownTableSeparator(string value)
+        {
+            var normalized = (value ?? string.Empty).Trim();
+            if (normalized.StartsWith(":", StringComparison.Ordinal))
+            {
+                normalized = normalized.Substring(1);
+            }
+
+            if (normalized.EndsWith(":", StringComparison.Ordinal))
+            {
+                normalized = normalized.Substring(0, normalized.Length - 1);
+            }
+
+            return normalized.Length >= 3 && normalized.All(character => character == '-');
+        }
+
+        private static Table CreateMarkdownTable(
+            IReadOnlyList<string> headerCells,
+            IReadOnlyList<IReadOnlyList<string>> dataRows)
+        {
+            var table = new Table
+            {
+                CellSpacing = 1,
+                Margin = new Thickness(0, 2, 0, 14)
+            };
+            table.SetResourceReference(TextElement.BackgroundProperty, "AppStrokeBrush");
+
+            for (var columnIndex = 0; columnIndex < headerCells.Count; columnIndex++)
+            {
+                var width = headerCells.Count == 2
+                    ? new GridLength(columnIndex == 0 ? 38 : 62, GridUnitType.Star)
+                    : new GridLength(1, GridUnitType.Star);
+                table.Columns.Add(new TableColumn { Width = width });
+            }
+
+            var rowGroup = new TableRowGroup();
+            rowGroup.Rows.Add(CreateMarkdownTableRow(headerCells, isHeader: true));
+            foreach (var dataRow in dataRows)
+            {
+                rowGroup.Rows.Add(CreateMarkdownTableRow(dataRow, isHeader: false));
+            }
+
+            table.RowGroups.Add(rowGroup);
+            return table;
+        }
+
+        private static TableRow CreateMarkdownTableRow(IReadOnlyList<string> cells, bool isHeader)
+        {
+            var row = new TableRow();
+            foreach (var value in cells)
+            {
+                var paragraph = CreateParagraph(
+                    value,
+                    fontSize: isHeader ? 14 : 13.5,
+                    isHeader ? FontWeights.SemiBold : FontWeights.Regular,
+                    marginBottom: 0);
+                paragraph.Margin = new Thickness(0);
+
+                var cell = new TableCell(paragraph)
+                {
+                    Padding = new Thickness(9, 7, 9, 7)
+                };
+                cell.SetResourceReference(
+                    TextElement.BackgroundProperty,
+                    isHeader ? "AppSurfaceRaisedBrush" : "AppSurfaceBrush");
+                row.Cells.Add(cell);
+            }
+
+            return row;
         }
 
         private static Paragraph CreateParagraph(string text, double fontSize, FontWeight fontWeight, double marginBottom)

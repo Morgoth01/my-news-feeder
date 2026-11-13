@@ -8,27 +8,25 @@
         MinHeight="560"
         MinWidth="960"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         FontFamily="{DynamicResource MaterialDesignFont}">
     <Window.Resources>
         <Style x:Key="LabelManagerActionButtonStyle"
                TargetType="Button"
-               BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+               BasedOn="{StaticResource AppSecondaryButtonStyle}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="18,8"/>
             <Setter Property="MinHeight" Value="38"/>
             <Setter Property="MinWidth" Value="102"/>
             <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Background" Value="#FFFFFFFF"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding DarkMode}" Value="True">
-                    <Setter Property="Foreground" Value="#F7F2FF"/>
-                    <Setter Property="BorderBrush" Value="#C7A6FF"/>
-                    <Setter Property="Background" Value="#4D4D4D"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AppDarkAccentBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkSurfaceBrush}"/>
                 </DataTrigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
@@ -40,9 +38,9 @@
                         <Condition Binding="{Binding IsEnabled, RelativeSource={RelativeSource Self}}" Value="False"/>
                         <Condition Binding="{Binding DarkMode}" Value="True"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Foreground" Value="#BEBEBE"/>
-                    <Setter Property="BorderBrush" Value="#7A7A7A"/>
-                    <Setter Property="Background" Value="#505050"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppDarkTextDisabledBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AppDarkBorderBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkInputBrush}"/>
                 </MultiDataTrigger>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#F5EEFF"/>
@@ -52,14 +50,15 @@
                         <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/>
                         <Condition Binding="{Binding DarkMode}" Value="True"/>
                     </MultiDataTrigger.Conditions>
-                    <Setter Property="Background" Value="#5A5A5A"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkHoverBrush}"/>
                 </MultiDataTrigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="LabelManagerPrimaryButtonStyle"
                TargetType="Button"
-               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+               BasedOn="{StaticResource AppPrimaryButtonStyle}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="18,8"/>
             <Setter Property="MinHeight" Value="38"/>
             <Setter Property="MinWidth" Value="124"/>
@@ -114,7 +113,7 @@
 
             <GroupBox Grid.Column="0"
                       Header="Existing Labels"
-                      Style="{StaticResource MaterialDesignCardGroupBox}">
+                      Style="{StaticResource AppSectionGroupBoxStyle}">
                 <Grid Margin="14">
                     <ListView x:Name="LabelsListView"
                               SelectionChanged="LabelsListView_SelectionChanged">
@@ -142,7 +141,7 @@
 
             <GroupBox Grid.Column="2"
                       Header="Edit Label"
-                      Style="{StaticResource MaterialDesignCardGroupBox}">
+                      Style="{StaticResource AppSectionGroupBoxStyle}">
                 <StackPanel Margin="14">
                     <TextBox x:Name="LabelNameTextBox"
                              TextChanged="LabelNameTextBox_TextChanged"

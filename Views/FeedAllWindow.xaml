@@ -11,7 +11,7 @@
         MinHeight="620"
         MinWidth="1080"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         TextElement.FontWeight="Regular"
         TextElement.FontSize="13"
@@ -24,8 +24,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ContextMenu">
-                        <Border Background="{DynamicResource MaterialDesignPaper}"
-                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                        <Border Background="{DynamicResource AppPopupBackgroundBrush}"
+                                BorderBrush="{DynamicResource AppPopupBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="4"
@@ -71,8 +71,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupHighlightBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppPopupHighlightTextBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
@@ -85,26 +85,25 @@
 
         <Style x:Key="FeedWindowActionButtonStyle"
                TargetType="Button"
-               BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+               BasedOn="{StaticResource AppSecondaryButtonStyle}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="14,6"/>
             <Setter Property="MinHeight" Value="34"/>
             <Setter Property="BorderThickness" Value="1.5"/>
-            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Background" Value="#FFFFFFFF"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                    <Setter Property="Foreground" Value="#F7F2FF"/>
-                    <Setter Property="BorderBrush" Value="#C7A6FF"/>
-                    <Setter Property="Background" Value="#4D4D4D"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AppDarkAccentBrush}"/>
+                    <Setter Property="Background" Value="{DynamicResource AppDarkSurfaceBrush}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="FeedWindowPrimaryButtonStyle"
                TargetType="Button"
-               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+               BasedOn="{StaticResource AppPrimaryButtonStyle}">
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Padding" Value="14,6"/>
             <Setter Property="MinHeight" Value="34"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -124,8 +123,8 @@
                 Grid.Row="0"
                 Padding="14"
                 Margin="0,0,0,10"
-                Background="{DynamicResource MaterialDesignCardBackground}"
-                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                Background="{DynamicResource AppPanelBrush}"
+                BorderBrush="{DynamicResource AppStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="8">
             <Grid>
@@ -279,8 +278,8 @@
 
             <Border x:Name="ArticlesListPane"
                     Grid.Column="0"
-                    Background="{DynamicResource MaterialDesignCardBackground}"
-                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                    Background="{DynamicResource AppPanelBrush}"
+                    BorderBrush="{DynamicResource AppStrokeBrush}"
                     BorderThickness="1"
                     CornerRadius="8">
                 <ListView x:Name="ArticlesListView"
@@ -323,8 +322,8 @@
                                     CornerRadius="8"
                                     MinHeight="126"
                                     MaxHeight="126"
-                                    Background="{DynamicResource MaterialDesignCardBackground}"
-                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                    Background="{DynamicResource AppSurfaceRaisedBrush}"
+                                    BorderBrush="{DynamicResource AppStrokeBrush}"
                                     BorderThickness="2">
                                 <Border.ContextMenu>
                                     <ContextMenu Opened="ArticleContextMenu_Opened"
@@ -562,8 +561,8 @@
 
             <Border x:Name="PreviewPane"
                     Grid.Column="2"
-                    Background="{DynamicResource MaterialDesignCardBackground}"
-                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                    Background="{DynamicResource AppPanelBrush}"
+                    BorderBrush="{DynamicResource AppStrokeBrush}"
                     BorderThickness="1"
                     CornerRadius="8">
                 <Grid>

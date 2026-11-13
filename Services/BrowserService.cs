@@ -29,7 +29,9 @@ namespace MyNewsFeeder.Services
         private string _currentUrl;
         private static string _logoDataUri;
         private string _userDataFolder;
-        private string CurrentTransitionMaskColor => _darkModeEnabled ? "#111111" : "#ffffff";
+        private string CurrentTransitionMaskColor => _darkModeEnabled
+            ? AppThemeColors.DarkBackground
+            : "#ffffff";
         private static readonly CoreWebView2WebResourceContext[] AdBlockResourceContexts =
         {
             CoreWebView2WebResourceContext.Document,
@@ -740,9 +742,10 @@ namespace MyNewsFeeder.Services
         // Simplified loading HTML for faster rendering
         private string CreateSimpleLoadingHtml()
         {
-            var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
-            var textColor = _darkModeEnabled ? "#e0e0e0" : "#666";
-            var accent = _darkModeEnabled ? "#8e8cd8" : "#7b5bd6";
+            var palette = AppThemeColors.BrowserChrome(_darkModeEnabled);
+            var backgroundColor = palette.Background;
+            var textColor = palette.Text;
+            var accent = palette.Accent;
             var logo = GetLogoDataUri();
 
             return $@"
@@ -794,7 +797,7 @@ namespace MyNewsFeeder.Services
 
         private string CreateTransitionHtml()
         {
-            var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
+            var backgroundColor = AppThemeColors.BrowserChrome(_darkModeEnabled).Background;
             return $@"<!DOCTYPE html>
 <html>
 <head>
@@ -816,7 +819,7 @@ namespace MyNewsFeeder.Services
 
         private string CreatePlaceholderHtml()
         {
-            var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
+            var backgroundColor = AppThemeColors.BrowserChrome(_darkModeEnabled).Background;
             return $@"<!DOCTYPE html>
 <html>
 <head>

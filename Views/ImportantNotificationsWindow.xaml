@@ -8,7 +8,7 @@
         MinHeight="420"
         MinWidth="720"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         FontFamily="{DynamicResource MaterialDesignFont}">
     <Window.Resources>
@@ -19,8 +19,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ContextMenu">
-                        <Border Background="{DynamicResource MaterialDesignPaper}"
-                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                        <Border Background="{DynamicResource AppPopupBackgroundBrush}"
+                                BorderBrush="{DynamicResource AppPopupBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="4"
@@ -50,8 +50,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="MenuItemBorder" Property="Background" Value="#673AB7"/>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter TargetName="MenuItemBorder" Property="Background" Value="{DynamicResource AppPopupHighlightBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppPopupHighlightTextBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45"/>
@@ -105,6 +105,10 @@
             <ListView x:Name="NotificationsListView"
                       Grid.Row="0"
                       Margin="0,0,0,8"
+                      Padding="8"
+                      Background="{DynamicResource AppPanelBrush}"
+                      BorderBrush="{DynamicResource AppStrokeBrush}"
+                      BorderThickness="1"
                       MouseDoubleClick="NotificationsListView_MouseDoubleClick">
                 <ListView.ItemContainerStyle>
                     <Style TargetType="ListViewItem">
@@ -115,7 +119,8 @@
                         <Setter Property="BorderThickness"
                                 Value="1"/>
                         <Setter Property="Padding"
-                                Value="2,1"/>
+                                Value="8,6"/>
+                        <Setter Property="Margin" Value="0,2"/>
                         <Setter Property="HorizontalContentAlignment"
                                 Value="Stretch"/>
                         <Setter Property="Foreground"
@@ -129,6 +134,7 @@
                                             Background="{TemplateBinding Background}"
                                             BorderBrush="{TemplateBinding BorderBrush}"
                                             BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="6"
                                             SnapsToDevicePixels="True">
                                         <GridViewRowPresenter
                                             Margin="{TemplateBinding Padding}"
@@ -138,22 +144,29 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="RowBorder" Property="Background" Value="#673AB7"/>
-                                            <Setter TargetName="RowBorder" Property="BorderBrush" Value="#8B6ADB"/>
-                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                            <Setter TargetName="RowBorder" Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
+                                            <Setter TargetName="RowBorder" Property="BorderThickness" Value="2"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
                                         </Trigger>
                                         <MultiTrigger>
                                             <MultiTrigger.Conditions>
                                                 <Condition Property="IsSelected" Value="True"/>
                                                 <Condition Property="Selector.IsSelectionActive" Value="False"/>
                                             </MultiTrigger.Conditions>
-                                            <Setter TargetName="RowBorder" Property="Background" Value="#5A33A6"/>
-                                            <Setter TargetName="RowBorder" Property="BorderBrush" Value="#7A56C2"/>
-                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                            <Setter TargetName="RowBorder" Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
+                                            <Setter TargetName="RowBorder" Property="BorderThickness" Value="2"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
                                         </MultiTrigger>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="RowBorder" Property="BorderBrush" Value="#7A56C2"/>
-                                        </Trigger>
+                                        <MultiTrigger>
+                                            <MultiTrigger.Conditions>
+                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                <Condition Property="IsSelected" Value="False"/>
+                                            </MultiTrigger.Conditions>
+                                            <Setter TargetName="RowBorder" Property="Background" Value="{DynamicResource AppSurfaceSubtleBrush}"/>
+                                            <Setter TargetName="RowBorder" Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                        </MultiTrigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </Setter.Value>
@@ -224,19 +237,19 @@
                         HorizontalAlignment="Right">
                 <Button Content="Clear All"
                         Click="ClearAllButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Style="{StaticResource AppSecondaryButtonStyle}"
                         Margin="0,0,8,0"/>
                 <Button Content="Open Article"
                         Click="OpenArticleButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Style="{StaticResource AppPrimaryButtonStyle}"
                         Margin="0,0,8,0"/>
                 <Button Content="Copy Link"
                         Click="CopyLinkButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Style="{StaticResource AppSecondaryButtonStyle}"
                         Margin="0,0,8,0"/>
                 <Button Content="Close"
                         Click="CloseButton_Click"
-                        Style="{StaticResource MaterialDesignFlatButton}"/>
+                        Style="{StaticResource AppGhostButtonStyle}"/>
             </StackPanel>
         </Grid>
     </Grid>

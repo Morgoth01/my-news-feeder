@@ -10,6 +10,7 @@ using System.Net;
 using System.Windows;
 using System.Windows.Threading;
 using System.Windows.Data;
+using System.Windows.Media;
 using System.Diagnostics;
 using HtmlAgilityPack;
 using MyNewsFeeder.Models;
@@ -31,6 +32,7 @@ namespace MyNewsFeeder.ViewModels
         public Func<double> RequestTreeScrollOffset;
         public event Action<double> ScrollOffsetRestoreRequested;
         public event Action<FeedItem> ScrollSelectionToTopRequested;
+        public event Action ArticleListScrollToTopRequested;
         public Func<bool> HasOpenContextMenu;
         public Func<bool> IsTerminalModeActive;
 
@@ -979,6 +981,7 @@ namespace MyNewsFeeder.ViewModels
                     theme.SetBaseTheme(BaseTheme.Light);
                 }
                 paletteHelper.SetTheme(theme);
+                ApplyApplicationThemeResources(_settings.DarkMode);
             }
             catch (Exception)
             {
@@ -986,9 +989,57 @@ namespace MyNewsFeeder.ViewModels
             }
         }
 
+        private static void ApplyApplicationThemeResources(bool useDarkMode)
+        {
+            if (Application.Current == null)
+            {
+                return;
+            }
+
+            Application.Current.Resources["AppFocusBrush"] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(useDarkMode ? "#93C5FD" : "#6D3FC0"));
+            Application.Current.Resources["AppPopupBackgroundBrush"] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(useDarkMode ? "#292D34" : "#FFFFFF"));
+            Application.Current.Resources["AppPopupBorderBrush"] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(useDarkMode ? "#4B5260" : "#5F36A8"));
+            Application.Current.Resources["AppPopupHighlightBrush"] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(useDarkMode ? "#31284A" : "#5F36A8"));
+            Application.Current.Resources["AppPopupHighlightTextBrush"] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(useDarkMode ? "#F1F3F5" : "#FFFFFF"));
+            Application.Current.Resources["AppPopupCheckedBrush"] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(useDarkMode ? "#31284A" : "#33272727"));
+            SetApplicationBrush("MaterialDesignBody", useDarkMode ? "#D9DDE3" : "#20242C");
+            SetApplicationBrush("MaterialDesignBodyLight", useDarkMode ? "#AEB5C0" : "#667085");
+            SetApplicationBrush("MaterialDesignPaper", useDarkMode ? "#17181C" : "#F5F6F8");
+            SetApplicationBrush("MaterialDesignCardBackground", useDarkMode ? "#292D34" : "#FFFFFF");
+            SetApplicationBrush("MaterialDesignDivider", useDarkMode ? "#383D46" : "#D8DDE6");
+            SetApplicationBrush("AppCanvasBrush", useDarkMode ? "#17181C" : "#F5F6F8");
+            SetApplicationBrush("AppPanelBrush", useDarkMode ? "#1D1F24" : "#FFFFFF");
+            SetApplicationBrush("AppSurfaceBrush", useDarkMode ? "#23262C" : "#FFFFFF");
+            SetApplicationBrush("AppSurfaceRaisedBrush", useDarkMode ? "#292D34" : "#F8F9FB");
+            SetApplicationBrush("AppSurfaceSubtleBrush", useDarkMode ? "#202329" : "#EEF1F5");
+            SetApplicationBrush("AppStrokeBrush", useDarkMode ? "#383D46" : "#D8DDE6");
+            SetApplicationBrush("AppBrandBrush", useDarkMode ? "#5930A6" : "#5F36A8");
+            SetApplicationBrush("AppBrandHoverBrush", useDarkMode ? "#673AB7" : "#512C91");
+            SetApplicationBrush("AppBrandTextBrush", "#FFFFFF");
+            SetApplicationBrush("AppSelectedSurfaceBrush", useDarkMode ? "#24212E" : "#EEE8F8");
+            SetApplicationBrush("AppSelectedBorderBrush", useDarkMode ? "#8B5CF6" : "#6D3FC0");
+            SetApplicationBrush("AppFeedGroupBackgroundBrush", useDarkMode ? "#17181C" : "#F7F8FA");
+            SetApplicationBrush("AppFeedHeaderBackgroundBrush", useDarkMode ? "#242424" : "#F0F2F5");
+            SetApplicationBrush("AppFeedRowBackgroundBrush", useDarkMode ? "#292929" : "#FFFFFF");
+            SetApplicationBrush("AppFeedGroupBorderBrush", useDarkMode ? "#3A3A3A" : "#D8DDE6");
+        }
+
+        private static void SetApplicationBrush(string key, string color)
+        {
+            Application.Current.Resources[key] = new SolidColorBrush(
+                (Color)ColorConverter.ConvertFromString(color));
+        }
+
         private void ApplyActiveDarkMode()
         {
             ApplyTheme();
+            WindowThemeHelper.ApplyToOpenWindows(_settings.DarkMode);
             _browserService.SetDarkMode(_settings.DarkMode);
             _embeddedBrowserSession?.SetDarkMode(_settings.DarkMode);
             InvalidateAllArticlePreviewCaches();
@@ -2182,6 +2233,7 @@ namespace MyNewsFeeder.ViewModels
 
             if (_isReaderModeActive)
             {
+                SaveCurrentArticleZoomFactor();
                 SetReaderModeActive(false);
                 RestoreFeedSummaryView();
                 return;
@@ -2294,6 +2346,7 @@ namespace MyNewsFeeder.ViewModels
 
             if (!preserveCurrentViewState)
             {
+                SaveCurrentArticleZoomFactor();
                 ResetEmbeddedVideoPlayback();
                 SetReaderModeActive(false);
                 SelectedArticleHtml = GetOrCreateArticleSummaryHtml(feedItem);
@@ -2387,7 +2440,7 @@ namespace MyNewsFeeder.ViewModels
                     Owner = Application.Current?.MainWindow
                 };
 
-                articleWindow.Show();
+                WindowThemeHelper.ShowPrepared(articleWindow);
             }
             catch (Exception)
             {
@@ -3158,7 +3211,7 @@ namespace MyNewsFeeder.ViewModels
                     };
                     _archiveWindow.PrepareInitialWindowPlacement(archivePreferences);
                     _archiveWindow.Closed += ArchiveWindowOnClosed;
-                    _archiveWindow.Show();
+                    WindowThemeHelper.ShowPrepared(_archiveWindow);
                     return;
                 }
 
@@ -3217,7 +3270,7 @@ namespace MyNewsFeeder.ViewModels
                     Owner = Application.Current?.MainWindow
                 };
                 window.PrepareInitialWindowPlacement(GetFeedAllWindowPreferences());
-                window.Show();
+                WindowThemeHelper.ShowPrepared(window);
             }
             catch (Exception)
             {
@@ -3753,13 +3806,15 @@ namespace MyNewsFeeder.ViewModels
 
         private string CreateArticleHtml(FeedItem feedItem)
         {
-            var backgroundColor = _settings.DarkMode ? "#121212" : "#ffffff";
-            var textColor = _settings.DarkMode ? "#e0e0e0" : "#333";
-            var headerColor = _settings.DarkMode ? "#90caf9" : "#673ab7";
-            var metaColor = _settings.DarkMode ? "#b0b0b0" : "#666";
-            var readMoreBg = _settings.DarkMode ? "#1e1e1e" : "#f8f8f8";
-            var borderColor = _settings.DarkMode ? "#90caf9" : "#673ab7";
-            var linkColor = _settings.DarkMode ? "#81c784" : "#673ab7";
+            var isDarkMode = _settings.DarkMode;
+            var palette = AppThemeColors.Article(isDarkMode);
+            var backgroundColor = palette.Background;
+            var textColor = palette.Text;
+            var headerColor = palette.Heading;
+            var metaColor = palette.SecondaryText;
+            var readMoreBg = palette.Surface;
+            var borderColor = palette.Border;
+            var linkColor = palette.Link;
 
             var sanitizedDescription = SanitizeHtml(feedItem.Description);
             var normalizedLink = NormalizeExternalLink(feedItem.Link);
@@ -3767,15 +3822,15 @@ namespace MyNewsFeeder.ViewModels
 
             var htmlTemplate = $@"
 <!DOCTYPE html>
-<html>
+<html data-app-theme='{(isDarkMode ? "dark" : "light")}'>
 <head>
     <meta charset='utf-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1'>
-    <meta name='color-scheme' content='{(_settings.DarkMode ? "dark light" : "light dark")}'>
+    <meta name='color-scheme' content='{(isDarkMode ? "dark light" : "light dark")}'>
     <meta http-equiv='Content-Security-Policy' content=""default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; child-src 'none'; frame-ancestors 'none'"">
     <style>
         :root {{
-            color-scheme: {(_settings.DarkMode ? "dark" : "light")};
+            color-scheme: {(isDarkMode ? "dark" : "light")};
         }}
         
         body {{
@@ -3993,7 +4048,7 @@ namespace MyNewsFeeder.ViewModels
                 Owner = Application.Current.MainWindow
             };
             feedManagerWindow.PrepareInitialWindowPlacement(GetFeedManagerWindowPreferences());
-            feedManagerWindow.ShowDialog();
+            WindowThemeHelper.ShowDialogPrepared(feedManagerWindow);
 
             if (feedManagerViewModel.WasClosedBySave)
             {
@@ -4592,11 +4647,28 @@ namespace MyNewsFeeder.ViewModels
             _myFeedsSection?.UpdateUnreadCount();
         }
 
-        private void UpdateFeedSection(ArticleSectionViewModel section, Dictionary<string, List<FeedItem>> groupedItems)
+        private bool UpdateFeedSection(ArticleSectionViewModel section, Dictionary<string, List<FeedItem>> groupedItems)
         {
             if (section == null)
             {
-                return;
+                return false;
+            }
+
+            if (FeedSectionMembershipMatches(section, groupedItems))
+            {
+                foreach (var categoryGroup in section.Items.OfType<CategoryGroupViewModel>())
+                {
+                    foreach (var feedGroup in categoryGroup.Feeds)
+                    {
+                        if (groupedItems.TryGetValue(feedGroup.Name, out var items))
+                        {
+                            UpdateItemsInPlace(feedGroup, items, _readArticleLinks);
+                        }
+                    }
+                }
+
+                section.UpdateUnreadCount();
+                return false;
             }
 
             var categoryStates = section.Items
@@ -4679,8 +4751,43 @@ namespace MyNewsFeeder.ViewModels
                         Items = new ObservableCollection<FeedItem>(kvp.Value)
                     })
                     .ToList();
-                OnArchiveItemsChanged();
             }
+
+            return true;
+        }
+
+        private bool FeedSectionMembershipMatches(
+            ArticleSectionViewModel section,
+            Dictionary<string, List<FeedItem>> groupedItems)
+        {
+            static string GetItemIdentity(FeedItem item)
+            {
+                var link = item?.Link?.Trim();
+                if (!string.IsNullOrWhiteSpace(link))
+                {
+                    return link;
+                }
+
+                return $"{item?.Title?.Trim()}\u001e{item?.PublicationDate.Ticks ?? 0}";
+            }
+
+            var currentItems = section.Items
+                .OfType<CategoryGroupViewModel>()
+                .SelectMany(category => category.Feeds.SelectMany(feed =>
+                    feed.Items.Select(item =>
+                        $"{GetItemIdentity(item)}\u001f{feed.Name?.Trim()}\u001f{category.Name?.Trim()}")))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(key => key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var incomingItems = groupedItems
+                .SelectMany(pair => pair.Value.Select(item =>
+                    $"{GetItemIdentity(item)}\u001f{pair.Key?.Trim()}\u001f{ResolveCategoryNameForFeed(pair.Key).Trim()}"))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(key => key, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return currentItems.SequenceEqual(incomingItems, StringComparer.OrdinalIgnoreCase);
         }
 
         private string ResolveCategoryNameForFeed(string feedName)
@@ -5903,9 +6010,15 @@ namespace MyNewsFeeder.ViewModels
                 {
                     _allCategoryGroups.Clear();
             CategoryGroups.Clear();
-            UpdateFeedSection(_pinnedSection, new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase));
-            UpdateFeedSection(_readLaterSection, new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase));
-            UpdateFeedSection(_archivedSection, new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase));
+            var emptyLibraryItems = new Dictionary<string, List<FeedItem>>(StringComparer.OrdinalIgnoreCase);
+            var emptyLibrarySectionsChanged =
+                UpdateFeedSection(_pinnedSection, emptyLibraryItems) |
+                UpdateFeedSection(_readLaterSection, emptyLibraryItems) |
+                UpdateFeedSection(_archivedSection, emptyLibraryItems);
+            if (emptyLibrarySectionsChanged)
+            {
+                OnArchiveItemsChanged();
+            }
             SyncMyFeedsSection();
             _allCategoryGroups.Clear();
             FilterCategories.Clear();
@@ -6264,9 +6377,14 @@ namespace MyNewsFeeder.ViewModels
                 }
 
                 OnPropertyChanged(nameof(CurrentFeedSettingsDisplay));
-                UpdateFeedSection(_pinnedSection, pinnedLookup);
-                UpdateFeedSection(_readLaterSection, readLaterLookup);
-                UpdateFeedSection(_archivedSection, archivedLookup);
+                var librarySectionsChanged =
+                    UpdateFeedSection(_pinnedSection, pinnedLookup) |
+                    UpdateFeedSection(_readLaterSection, readLaterLookup) |
+                    UpdateFeedSection(_archivedSection, archivedLookup);
+                if (librarySectionsChanged)
+                {
+                    OnArchiveItemsChanged();
+                }
                 SyncMyFeedsSection();
                 SelectedSection ??= _myFeedsSection;
 
@@ -6975,9 +7093,15 @@ namespace MyNewsFeeder.ViewModels
 
         private void SelectMainAllArticles()
         {
+            var scopeChanged = !string.IsNullOrWhiteSpace(_selectedMainCategoryName) ||
+                               !string.IsNullOrWhiteSpace(_selectedMainFeedName);
             _selectedMainCategoryName = null;
             _selectedMainFeedName = null;
             RefreshCurrentArticleList();
+            if (scopeChanged)
+            {
+                ArticleListScrollToTopRequested?.Invoke();
+            }
         }
 
         private void SelectMainCategory(CategoryGroupViewModel category)
@@ -6987,9 +7111,15 @@ namespace MyNewsFeeder.ViewModels
                 return;
             }
 
+            var scopeChanged = !string.Equals(_selectedMainCategoryName, category.Name, StringComparison.OrdinalIgnoreCase) ||
+                               !string.IsNullOrWhiteSpace(_selectedMainFeedName);
             _selectedMainCategoryName = category.Name;
             _selectedMainFeedName = null;
             RefreshCurrentArticleList();
+            if (scopeChanged)
+            {
+                ArticleListScrollToTopRequested?.Invoke();
+            }
         }
 
         private void SelectMainFeed(FeedGroupViewModel feed)
@@ -6999,9 +7129,15 @@ namespace MyNewsFeeder.ViewModels
                 return;
             }
 
+            var scopeChanged = !string.Equals(_selectedMainCategoryName, feed.Category, StringComparison.OrdinalIgnoreCase) ||
+                               !string.Equals(_selectedMainFeedName, feed.Name, StringComparison.OrdinalIgnoreCase);
             _selectedMainCategoryName = feed.Category;
             _selectedMainFeedName = feed.Name;
             RefreshCurrentArticleList();
+            if (scopeChanged)
+            {
+                ArticleListScrollToTopRequested?.Invoke();
+            }
         }
 
         private void RefreshCurrentArticleList()
@@ -7844,7 +7980,7 @@ namespace MyNewsFeeder.ViewModels
             try
             {
                 var aboutWindow = new AboutWindow();
-                aboutWindow.ShowDialog();
+                WindowThemeHelper.ShowDialogPrepared(aboutWindow);
             }
             catch (Exception)
             {
@@ -7898,7 +8034,12 @@ namespace MyNewsFeeder.ViewModels
                 return string.Empty;
             }
 
-            if (string.IsNullOrEmpty(feedItem.CachedArticleSummaryHtml))
+            var expectedThemeMarker = _settings.DarkMode
+                ? "data-app-theme='dark'"
+                : "data-app-theme='light'";
+
+            if (string.IsNullOrEmpty(feedItem.CachedArticleSummaryHtml) ||
+                !feedItem.CachedArticleSummaryHtml.Contains(expectedThemeMarker, StringComparison.Ordinal))
             {
                 feedItem.CachedArticleSummaryHtml = CreateArticleHtml(feedItem);
             }

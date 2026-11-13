@@ -9,6 +9,7 @@ namespace MyNewsFeeder.ViewModels
     {
         private readonly FeedItem _item;
         private bool _isSelected;
+        private bool _areItemNotificationsSuspended;
 
         public ArchiveEntryViewModel(FeedItem item, string category)
         {
@@ -54,8 +55,23 @@ namespace MyNewsFeeder.ViewModels
             _item.PropertyChanged -= ItemOnPropertyChanged;
         }
 
+        public void SuspendItemNotifications()
+        {
+            _areItemNotificationsSuspended = true;
+        }
+
+        public void ResumeItemNotifications()
+        {
+            _areItemNotificationsSuspended = false;
+        }
+
         private void ItemOnPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
+            if (_areItemNotificationsSuspended)
+            {
+                return;
+            }
+
             switch (e.PropertyName)
             {
                 case nameof(FeedItem.Title):

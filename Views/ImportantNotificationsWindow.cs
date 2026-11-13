@@ -10,19 +10,13 @@ using System.Windows.Input;
 using HtmlAgilityPack;
 using System.Windows.Interop;
 using MyNewsFeeder.Models;
+using MyNewsFeeder.Services;
 using MyNewsFeeder.ViewModels;
 
 namespace MyNewsFeeder.Views
 {
     public partial class ImportantNotificationsWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private sealed class RetentionOption
         {
             public int Hours { get; init; }
@@ -53,7 +47,7 @@ namespace MyNewsFeeder.Views
             int maxStoredItems = 200)
         {
             InitializeComponent();
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
+            WindowThemeHelper.Prepare(this);
 
             _clearAllAction = clearAllAction;
             _removeItemAction = removeItemAction;
@@ -66,16 +60,6 @@ namespace MyNewsFeeder.Views
             InitializeRetentionControls(currentRetentionHours);
             SetItems(items);
             AdjustTitleColumnWidth();
-        }
-
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
         }
 
         public void SetRetentionSelection(int retentionHours)
@@ -301,7 +285,7 @@ namespace MyNewsFeeder.Views
                 {
                     Owner = Application.Current?.MainWindow
                 };
-                articleWindow.Show();
+                WindowThemeHelper.ShowPrepared(articleWindow);
             }
             catch
             {
@@ -465,11 +449,12 @@ namespace MyNewsFeeder.Views
 
         private static string BuildFeedItemSummaryHtml(FeedItem item, bool darkMode)
         {
-            var backgroundColor = darkMode ? "#121212" : "#ffffff";
-            var textColor = darkMode ? "#e0e0e0" : "#333333";
-            var titleColor = darkMode ? "#90caf9" : "#673ab7";
-            var metaColor = darkMode ? "#b0b0b0" : "#666666";
-            var borderColor = darkMode ? "#90caf9" : "#673ab7";
+            var palette = AppThemeColors.Article(darkMode);
+            var backgroundColor = palette.Background;
+            var textColor = palette.Text;
+            var titleColor = palette.Heading;
+            var metaColor = palette.SecondaryText;
+            var borderColor = palette.Border;
 
             var title = System.Web.HttpUtility.HtmlEncode(item?.Title ?? "Article");
             var link = System.Web.HttpUtility.HtmlEncode(item?.Link ?? string.Empty);

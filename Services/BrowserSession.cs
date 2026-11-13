@@ -21,7 +21,9 @@ namespace MyNewsFeeder.Services
         private Task<bool> _initializationTask;
         private CoreWebView2 _wiredCore;
         private bool _mediaPlaybackEnabled;
-        private string CurrentTransitionMaskColor => _darkModeEnabled ? "#111111" : "#ffffff";
+        private string CurrentTransitionMaskColor => _darkModeEnabled
+            ? AppThemeColors.DarkBackground
+            : "#ffffff";
         internal BrowserSession(BrowserService owner, WebView2 webView, bool darkModeEnabled, bool adBlockerEnabled)
         {
             _owner = owner ?? throw new ArgumentNullException(nameof(owner));
@@ -476,7 +478,7 @@ namespace MyNewsFeeder.Services
 
         private string CreatePlaceholderHtml()
         {
-            var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
+            var backgroundColor = AppThemeColors.BrowserChrome(_darkModeEnabled).Background;
             return $@"<!DOCTYPE html>
 <html>
 <head>
@@ -497,7 +499,7 @@ namespace MyNewsFeeder.Services
 
         private string CreateTransitionHtml()
         {
-            var backgroundColor = _darkModeEnabled ? "#121212" : "#f5f5f5";
+            var backgroundColor = AppThemeColors.BrowserChrome(_darkModeEnabled).Background;
             return $@"<!DOCTYPE html>
 <html>
 <head>

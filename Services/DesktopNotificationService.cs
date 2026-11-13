@@ -624,7 +624,7 @@ namespace MyNewsFeeder.Services
                         _notificationsWindow.Owner = WpfApplication.Current.MainWindow;
                     }
                     _notificationsWindow.Closed += NotificationsWindow_Closed;
-                    _notificationsWindow.Show();
+                    WindowThemeHelper.ShowPrepared(_notificationsWindow);
                     return;
                 }
 

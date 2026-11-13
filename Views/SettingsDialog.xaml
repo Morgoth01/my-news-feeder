@@ -8,7 +8,7 @@
         MinHeight="560"
         MinWidth="760"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         TextElement.FontWeight="Regular"
         TextElement.FontSize="13"
@@ -24,11 +24,13 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Text="Settings"
-                   Style="{StaticResource MaterialDesignHeadline5TextBlock}"
-                   Margin="0,0,0,16"
-                   HorizontalAlignment="Center"/>
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Settings"
+                       Style="{StaticResource MaterialDesignHeadline5TextBlock}"/>
+            <TextBlock Text="Configure appearance, refresh behavior, feeds, filters, and tools."
+                       Margin="0,4,0,0"
+                       Foreground="{DynamicResource MaterialDesignBodyLight}"/>
+        </StackPanel>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
@@ -39,11 +41,14 @@
 
             <GroupBox Grid.Column="0"
                       Header="Topics"
-                      Style="{StaticResource MaterialDesignCardGroupBox}">
+                      Style="{StaticResource AppSectionGroupBoxStyle}">
                 <ListBox x:Name="TopicsListBox"
                          SelectionChanged="TopicsListBox_SelectionChanged"
                          Style="{StaticResource MaterialDesignListBox}"
-                         Margin="8">
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ItemContainerStyle="{StaticResource AppNavigationListItemStyle}"
+                         Margin="10">
                     <ListBoxItem Content="General" Tag="general" IsSelected="True"/>
                     <ListBoxItem Content="Terminal (Preview)" Tag="terminal"/>
                     <ListBoxItem Content="Refresh" Tag="refresh"/>
@@ -56,8 +61,8 @@
 
             <GroupBox Grid.Column="2"
                       Header="Settings"
-                      Style="{StaticResource MaterialDesignCardGroupBox}">
-                <Grid Margin="10">
+                      Style="{StaticResource AppSectionGroupBoxStyle}">
+                <Grid Margin="14">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -66,7 +71,7 @@
                     <TextBlock x:Name="SelectedTopicTitle"
                                Grid.Row="0"
                                Text="General"
-                               FontSize="18"
+                               FontSize="20"
                                FontWeight="SemiBold"
                                Margin="0,0,0,8"/>
 
@@ -80,12 +85,12 @@
                                           Margin="0,2"/>
                                 <TextBlock Text="Dark mode applies to app surfaces, article view, and browser panel."
                                            Margin="20,2,0,0"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            TextWrapping="Wrap"/>
                                 <TextBlock Text="For websites: only native website dark themes are used (no CSS filter forcing)."
                                            Margin="20,2,0,0"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            TextWrapping="Wrap"/>
                                 <CheckBox Content="Show Content Always-On"
@@ -94,7 +99,7 @@
                                           ToolTip="Keep browser window open and auto-load articles when switching"/>
                                 <TextBlock Text="When enabled, the content panel stays open and automatically loads the newly selected article."
                                            Margin="20,2,0,0"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            TextWrapping="Wrap"/>
                             </StackPanel>
@@ -106,7 +111,7 @@
                                           Margin="0,2"/>
                                 <TextBlock Text="When enabled, future app launches open the terminal first. Closing the terminal returns to the GUI."
                                            Margin="20,2,0,8"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            TextWrapping="Wrap"/>
 
@@ -122,7 +127,7 @@
                                 </StackPanel>
                                 <TextBlock Text="Theme changes apply to newly opened terminal windows and are shared with the terminal 'theme' command."
                                            Margin="20,0,0,8"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            TextWrapping="Wrap"/>
 
@@ -131,7 +136,7 @@
                                           Margin="0,4,0,2"/>
                                 <TextBlock Text="Disable this for a faster terminal startup. You can still preview it with the terminal command 'bootanim preview'."
                                            Margin="20,2,0,0"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            TextWrapping="Wrap"/>
                             </StackPanel>
@@ -174,14 +179,34 @@
                                         Padding="8,6"
                                         CornerRadius="4"
                                         BorderThickness="2"
-                                        BorderBrush="#FFB00020"
-                                        Background="#FFFDE9EC"
                                         Visibility="{Binding IsLiveRefreshExpertModeWarningVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="#FFB00020"/>
+                                            <Setter Property="Background" Value="#FFFDE9EC"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding PendingDarkMode}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AppDarkErrorBrush}"/>
+                                                    <Setter Property="Background" Value="{DynamicResource AppDarkErrorSurfaceBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <TextBlock Text="Warning: 10s increases load and can trigger feed timeouts or rate limits."
                                                FontSize="11"
                                                FontWeight="ExtraBold"
-                                               Foreground="#FFB00020"
-                                               TextWrapping="Wrap"/>
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#FFB00020"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding PendingDarkMode}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AppDarkErrorBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Border>
                                 <StackPanel Orientation="Horizontal"
                                             Margin="20,0,0,4"
@@ -248,7 +273,7 @@
                                           ToolTip="Filter feed items that look like ads based on configurable keywords."/>
                                 <TextBlock Text="Filter keywords (one per line)"
                                            Margin="20,2,0,2"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            Visibility="{Binding PendingAdvertisementFilterEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                 <TextBox Text="{Binding PendingAdvertisementKeywordsText, UpdateSourceTrigger=LostFocus}"
@@ -265,7 +290,7 @@
                                           Margin="0,2"/>
                                 <TextBlock Text="Important keywords (one per line)"
                                            Margin="20,2,0,2"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            Visibility="{Binding PendingDesktopNotificationsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                 <TextBox Text="{Binding PendingImportantKeywordsText, UpdateSourceTrigger=LostFocus}"
@@ -289,7 +314,8 @@
                                         Margin="0,10,0,0">
                                     <Button.Style>
                                         <Style TargetType="Button"
-                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                               BasedOn="{StaticResource AppPrimaryButtonStyle}">
+                                            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
                                             <Setter Property="Foreground" Value="#FFFFFFFF"/>
                                             <Setter Property="TextElement.Foreground" Value="#FFFFFFFF"/>
                                             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -302,12 +328,12 @@
                                         Visibility="Collapsed">
                                 <Button Content="Clear Browser Cache"
                                         Command="{Binding ClearCacheCommand}"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Style="{StaticResource AppSecondaryButtonStyle}"
                                         Margin="0,0,0,6"
                                         HorizontalAlignment="Left"
                                         ToolTip="Clear cached images, files and browsing data to free up space"/>
                                 <TextBlock Text="Automatically clears old cache every 2 hours"
-                                           FontSize="10"
+                                           FontSize="11"
                                            Margin="0,0,0,8"
                                            Foreground="{DynamicResource MaterialDesignBodyLight}"
                                            TextWrapping="Wrap"/>
@@ -324,34 +350,16 @@
                     Margin="0,14,0,0">
             <Button Content="Save Settings"
                     Command="{Binding SaveSettingsCommand}"
-                    Style="{StaticResource MaterialDesignRaisedButton}"
+                    Style="{StaticResource AppPrimaryButtonStyle}"
                     Margin="0,0,8,0"/>
             <Button Content="Reset to Default"
                     Command="{Binding ResetSettingsCommand}"
-                    Margin="0,0,8,0">
-                <Button.Style>
-                    <Style TargetType="Button"
-                           BasedOn="{StaticResource MaterialDesignRaisedButton}">
-                        <Setter Property="Background" Value="#FF5F6368"/>
-                        <Setter Property="Foreground" Value="#FFFFFFFF"/>
-                        <Setter Property="TextElement.Foreground" Value="#FFFFFFFF"/>
-                        <Setter Property="FontWeight" Value="SemiBold"/>
-                    </Style>
-                </Button.Style>
-            </Button>
+                    Style="{StaticResource AppSecondaryButtonStyle}"
+                    Margin="0,0,8,0"/>
             <Button Content="Close"
                     Click="CloseButton_Click"
-                    Margin="0,0,0,0">
-                <Button.Style>
-                    <Style TargetType="Button"
-                           BasedOn="{StaticResource MaterialDesignOutlinedButton}">
-                        <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
-                        <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
-                        <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
-                        <Setter Property="FontWeight" Value="SemiBold"/>
-                    </Style>
-                </Button.Style>
-            </Button>
+                    Style="{StaticResource AppGhostButtonStyle}"
+                    Margin="0"/>
         </StackPanel>
     </Grid>
 </Window>

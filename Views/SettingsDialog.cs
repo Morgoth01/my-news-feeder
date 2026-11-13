@@ -10,29 +10,12 @@ namespace MyNewsFeeder.Views
 {
     public partial class SettingsDialog : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private Dictionary<string, FrameworkElement> _topicPanels;
 
         public SettingsDialog()
         {
             InitializeComponent();
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
-        }
-
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
+            WindowThemeHelper.Prepare(this);
         }
 
         private void SettingsDialog_Loaded(object sender, RoutedEventArgs e)

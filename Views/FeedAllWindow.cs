@@ -12,7 +12,6 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using MaterialDesignThemes.Wpf;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -24,13 +23,6 @@ namespace MyNewsFeeder.Views
 {
     public partial class FeedAllWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private static readonly StringComparer FeedComparer = StringComparer.OrdinalIgnoreCase;
 
         private readonly MainViewModel _viewModel;
@@ -51,7 +43,6 @@ namespace MyNewsFeeder.Views
         private bool _hasShownLocalWarmupHint;
         private bool _isApplyingWindowPlacement;
         private bool _hasInitialWindowPlacementApplied;
-        private bool _hasRevealedInitialFrame;
         private GridLength _savedArticlesColumnWidth;
         private GridLength _savedSplitterColumnWidth;
         private WindowState _savedWindowState;
@@ -79,9 +70,8 @@ namespace MyNewsFeeder.Views
             ReadStateComboBox.SelectedIndex = 0;
             FeedSelectorComboBox.ItemsSource = _availableFeeds;
 
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
+            WindowThemeHelper.Prepare(this);
             Loaded += FeedAllWindow_Loaded;
-            ContentRendered += FeedAllWindow_ContentRendered;
             Closed += FeedAllWindow_Closed;
             LocationChanged += FeedAllWindow_PlacementChanged;
             SizeChanged += FeedAllWindow_PlacementChanged;
@@ -94,41 +84,10 @@ namespace MyNewsFeeder.Views
             UpdateButtons();
         }
 
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
-        }
-
         private void FeedAllWindow_Loaded(object sender, RoutedEventArgs e)
         {
             PopulateFeedSelector();
             Dispatcher.BeginInvoke(new Action(() => _ = LoadFeedAsync()), DispatcherPriority.Background);
-        }
-
-        private void FeedAllWindow_ContentRendered(object sender, EventArgs e)
-        {
-            if (_hasRevealedInitialFrame)
-            {
-                return;
-            }
-
-            _hasRevealedInitialFrame = true;
-
-            var fadeIn = new DoubleAnimation
-            {
-                From = 0,
-                To = 1,
-                Duration = TimeSpan.FromMilliseconds(90),
-                FillBehavior = FillBehavior.Stop
-            };
-
-            fadeIn.Completed += (_, __) => Opacity = 1;
-            BeginAnimation(OpacityProperty, fadeIn, HandoffBehavior.SnapshotAndReplace);
         }
 
         private void FeedAllWindow_Closed(object sender, EventArgs e)
@@ -255,7 +214,7 @@ namespace MyNewsFeeder.Views
 
         private void FeedAllWindow_PlacementChanged(object sender, EventArgs e)
         {
-            if (!IsLoaded || _isApplyingWindowPlacement || _isPreviewFullscreen)
+            if (!IsLoaded || _isApplyingWindowPlacement || _isPreviewFullscreen || WindowThemeHelper.IsStagingFirstFrame(this))
             {
                 return;
             }
@@ -1237,12 +1196,13 @@ namespace MyNewsFeeder.Views
 
         private string BuildReaderModeHtml(ReaderArticleContent content)
         {
-            var backgroundColor = _viewModel.DarkMode ? "#121212" : "#ffffff";
-            var textColor = _viewModel.DarkMode ? "#e0e0e0" : "#333333";
-            var headerColor = _viewModel.DarkMode ? "#90caf9" : "#673ab7";
-            var metaColor = _viewModel.DarkMode ? "#b0b0b0" : "#666666";
-            var borderColor = _viewModel.DarkMode ? "#90caf9" : "#673ab7";
-            var linkColor = _viewModel.DarkMode ? "#81c784" : "#673ab7";
+            var palette = AppThemeColors.Article(_viewModel.DarkMode);
+            var backgroundColor = palette.Background;
+            var textColor = palette.Text;
+            var headerColor = palette.Heading;
+            var metaColor = palette.SecondaryText;
+            var borderColor = palette.Border;
+            var linkColor = palette.Link;
             var title = string.IsNullOrWhiteSpace(content.Title) ? _selectedItem?.Title : content.Title;
             var encodedTitle = System.Web.HttpUtility.HtmlEncode(title ?? "Article");
             var encodedLink = System.Web.HttpUtility.HtmlEncode(_selectedItem?.Link ?? string.Empty);

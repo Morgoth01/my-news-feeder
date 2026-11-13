@@ -9,7 +9,7 @@
         MinHeight="520"
         MinWidth="720"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         PreviewKeyDown="Window_PreviewKeyDown"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         TextElement.FontWeight="Regular"
@@ -25,8 +25,8 @@
                 Grid.Row="0"
                 Padding="10"
                 Margin="0,0,0,8"
-                Background="{DynamicResource MaterialDesignCardBackground}"
-                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                Background="{DynamicResource AppPanelBrush}"
+                BorderBrush="{DynamicResource AppStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="8">
             <Grid>
@@ -54,7 +54,7 @@
                         x:Name="ShowContentButton"
                         Content="Show Content"
                         Click="ShowContentButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Style="{StaticResource AppPrimaryButtonStyle}"
                         Margin="0,0,8,0"
                         VerticalAlignment="Top"/>
 
@@ -62,7 +62,7 @@
                         x:Name="ReaderModeButton"
                         Content="Reader Mode"
                         Click="ReaderModeButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Style="{StaticResource AppSecondaryButtonStyle}"
                         Margin="0,0,8,0"
                         VerticalAlignment="Top"/>
 
@@ -70,7 +70,7 @@
                         x:Name="EnableVideoButton"
                         Content="Allow Media"
                         Click="EnableVideoButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Style="{StaticResource AppSecondaryButtonStyle}"
                         Margin="0,0,8,0"
                         ToolTip="Allow embedded media on this page. Some sites need this for custom video players."
                         VerticalAlignment="Top"
@@ -94,7 +94,7 @@
         </Border>
 
         <Border Grid.Row="1"
-                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                BorderBrush="{DynamicResource AppStrokeBrush}"
                 BorderThickness="1"
                 CornerRadius="8">
             <Grid>

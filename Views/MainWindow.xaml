@@ -22,7 +22,7 @@
         TextElement.FontSize="13"
         TextOptions.TextFormattingMode="Ideal"
         TextOptions.TextRenderingMode="Auto"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         FontFamily="{DynamicResource MaterialDesignFont}"
         Loaded="MainWindow_Loaded"
         Closing="Window_Closing">
@@ -36,6 +36,37 @@
         <conv:HtmlToPlainTextConverter x:Key="HtmlToPlainTextConverter"/>
         <conv:CollectionViewGroupCategoryConverter x:Key="CollectionViewGroupCategoryConverter"/>
 
+        <Style x:Key="AppPrimaryButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+            <Setter Property="Background" Value="{DynamicResource AppBrandBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppBrandTextBrush}"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource AppBrandTextBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
+        </Style>
+
+        <Style x:Key="AppSecondaryButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceRaisedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
+        </Style>
+
+        <Style x:Key="AppGhostButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MaterialDesignFlatButton}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
+        </Style>
+
         <!-- Modern context menu styling (light/dark aware) -->
         <Style x:Key="ArticleContextMenuStyle" TargetType="ContextMenu">
             <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -44,8 +75,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ContextMenu">
-                        <Border Background="{DynamicResource MaterialDesignPaper}"
-                                BorderBrush="{DynamicResource PrimaryHueMidBrush}"
+                        <Border Background="{DynamicResource AppPopupBackgroundBrush}"
+                                BorderBrush="{DynamicResource AppPopupBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="4"
@@ -70,6 +101,7 @@
             <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="Icon" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -95,13 +127,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupHighlightBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppPopupHighlightTextBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter TargetName="Outer" Property="Background" Value="#33272727"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupCheckedBrush}"/>
                             </Trigger>
                             <!-- Ensure good contrast when a checked item is highlighted -->
                             <MultiTrigger>
@@ -109,9 +141,9 @@
                                     <Condition Property="IsChecked" Value="True"/>
                                     <Condition Property="IsHighlighted" Value="True"/>
                                 </MultiTrigger.Conditions>
-                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppPopupHighlightTextBrush}"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
-                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupHighlightBrush}"/>
                             </MultiTrigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
@@ -129,8 +161,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ContextMenu">
-                        <Border Background="{DynamicResource MaterialDesignPaper}"
-                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                        <Border Background="{DynamicResource AppPopupBackgroundBrush}"
+                                BorderBrush="{DynamicResource AppPopupBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="8"
                                 Padding="6"
@@ -154,6 +186,7 @@
             <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -185,8 +218,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource PrimaryHueMidBrush}"/>
-                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignPaper}"/>
+                                <Setter TargetName="Outer" Property="Background" Value="{DynamicResource AppPopupHighlightBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppPopupHighlightTextBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}"/>
@@ -289,7 +322,8 @@
         <!-- Toolbar -->
         <ToolBar x:Name="MainToolbar"
                  Grid.Row="0"
-                 Style="{StaticResource MaterialDesignToolBar}">
+                 Style="{StaticResource MaterialDesignToolBar}"
+                 Background="{DynamicResource AppPanelBrush}">
             <DockPanel LastChildFill="True">
                 <TextBlock Text="{Binding NextAutoRefreshDisplay}"
                            DockPanel.Dock="Right"
@@ -300,7 +334,7 @@
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Manage Feeds"
                             Command="{Binding ManageFeedsCommand}"
-                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                            Style="{StaticResource AppSecondaryButtonStyle}"/>
                     <Separator/>
                     <Button x:Name="HelpMenuButton"
                             Content="Help"
@@ -382,7 +416,7 @@
                     </TextBox>
                     <Button Content="Refresh"
                             Command="{Binding RefreshCommand}"
-                            Style="{StaticResource MaterialDesignRaisedButton}"/>
+                            Style="{StaticResource AppPrimaryButtonStyle}"/>
                     <Button Command="{Binding ShowImportantNotificationsCommand}"
                             Style="{StaticResource MaterialDesignFlatButton}"
                             Margin="4,0,0,0"
@@ -436,14 +470,15 @@
                     Grid.Column="0"
                     Margin="5"
                     Padding="6"
-                    Background="{DynamicResource MaterialDesignPaper}"
-                    BorderBrush="{DynamicResource MaterialDesignDivider}"
-                    BorderThickness="1">
+                    Background="{DynamicResource AppPanelBrush}"
+                    BorderBrush="{DynamicResource AppStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
                 <StackPanel>
                     <StackPanel.Resources>
                         <Style x:Key="SectionShortcutButtonStyle" TargetType="Button">
-                            <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
-                            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderBrush" Value="Transparent"/>
                             <Setter Property="BorderThickness" Value="1"/>
                             <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
                             <Setter Property="Padding" Value="6"/>
@@ -465,8 +500,8 @@
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Bd" Property="Background" Value="#0F1E88E5"/>
-                                                <Setter TargetName="Bd" Property="BorderBrush" Value="#1E88E5"/>
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AppSurfaceRaisedBrush}"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
                                             </Trigger>
                                             <Trigger Property="IsPressed" Value="True">
                                                 <Setter TargetName="Bd" Property="Background" Value="#1A7C4DFF"/>
@@ -489,8 +524,8 @@
                                              Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Border}}">
                 <materialDesign:PopupBox.ToggleContent>
                             <Border Padding="6,4"
-                                    Background="{DynamicResource MaterialDesignCardBackground}"
-                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                    Background="{DynamicResource AppSurfaceRaisedBrush}"
+                                    BorderBrush="{DynamicResource AppStrokeBrush}"
                                     BorderThickness="1"
                                     CornerRadius="6"
                                     HorizontalAlignment="Stretch"
@@ -519,7 +554,7 @@
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding DataContext.DarkMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                                             <!-- High-contrast light blue for dark mode -->
-                                            <Setter Property="Foreground" Value="#64B5F6"/>
+                                            <Setter Property="Foreground" Value="{DynamicResource AppDarkInfoBrush}"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -671,9 +706,9 @@
                             <DataTemplate DataType="{x:Type vm:ArticleSectionViewModel}">
                                 <Border Padding="6"
                                         CornerRadius="8"
-                                        Background="{DynamicResource MaterialDesignCardBackground}"
-                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                        BorderThickness="1"
+                                        Background="{DynamicResource AppSurfaceRaisedBrush}"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="0"
                                         MouseLeftButtonUp="SectionTile_MouseLeftButtonUp">
                                     <Border.ContextMenu>
                                         <ContextMenu Style="{StaticResource ArticleContextMenuStyle}">
@@ -748,18 +783,19 @@
                     Grid.Column="2"
                     Margin="5"
                     Padding="6"
-                    Background="{DynamicResource MaterialDesignPaper}"
-                    BorderBrush="{DynamicResource MaterialDesignDivider}"
-                    BorderThickness="1">
+                    Background="{DynamicResource AppPanelBrush}"
+                    BorderBrush="{DynamicResource AppStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
                 <Border.Resources>
                     <DataTemplate DataType="{x:Type models:FeedItem}">
                         <Border x:Name="ArticleCard"
                                 Margin="22,4,6,4"
                                 Padding="12,8"
-                                Background="{DynamicResource MaterialDesignCardBackground}"
+                                Background="{DynamicResource AppSurfaceRaisedBrush}"
                                 CornerRadius="8"
-                                BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                BorderThickness="2"
+                                BorderBrush="{DynamicResource AppStrokeBrush}"
+                                BorderThickness="1"
                                 Focusable="True">
                             <Border.InputBindings>
                                 <MouseBinding MouseAction="LeftClick"
@@ -838,9 +874,9 @@
                             </Border.ContextMenu>
                             <Border.Style>
                                 <Style TargetType="Border">
-                                    <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
-                                    <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
-                                    <Setter Property="BorderThickness" Value="2"/>
+                                    <Setter Property="Background" Value="{DynamicResource AppSurfaceRaisedBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="Pinned">
                                             <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
@@ -856,16 +892,16 @@
                                                 <Condition Binding="{Binding IsSelected}" Value="True"/>
                                                 <Condition Binding="{Binding DataContext.SuppressAutoScroll, ElementName=RootWindow}" Value="False"/>
                                             </MultiDataTrigger.Conditions>
-                                            <Setter Property="Background" Value="#221642"/>
-                                            <Setter Property="BorderBrush" Value="#FF80FF"/>
-                                            <Setter Property="BorderThickness" Value="3"/>
+                                            <Setter Property="Background" Value="{DynamicResource AppDarkSelectionBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource AppBrandHoverBrush}"/>
+                                            <Setter Property="BorderThickness" Value="2"/>
                                             <Setter Property="behaviors:BringIntoViewBehavior.Enabled" Value="True"/>
                                             <Setter Property="Effect">
                                                 <Setter.Value>
-                                                    <DropShadowEffect Color="#FF80FF"
-                                                                      BlurRadius="12"
+                                                    <DropShadowEffect Color="{DynamicResource AppDarkGlowColor}"
+                                                                      BlurRadius="8"
                                                                       ShadowDepth="0"
-                                                                      Opacity="0.45"/>
+                                                                      Opacity="0.22"/>
                                                 </Setter.Value>
                                             </Setter>
                                         </MultiDataTrigger>
@@ -1426,9 +1462,6 @@
                         <StackPanel>
                             <Border Margin="0,0,0,10"
                                     Padding="10"
-                                    Background="{DynamicResource MaterialDesignCardBackground}"
-                                    BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                    BorderThickness="2"
                                     CornerRadius="8">
                                 <Border.InputBindings>
                                     <MouseBinding MouseAction="LeftClick"
@@ -1436,8 +1469,9 @@
                                 </Border.InputBindings>
                                 <Border.Style>
                                     <Style TargetType="Border">
-                                        <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
-                                        <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="Background" Value="{DynamicResource AppSurfaceSubtleBrush}"/>
                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
                                         <Setter Property="Effect" Value="{x:Null}"/>
                                         <Style.Triggers>
@@ -1446,36 +1480,22 @@
                                                     <Condition Binding="{Binding CurrentArticleListTitle}" Value="Latest Articles"/>
                                                     <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True"/>
                                                 </MultiDataTrigger.Conditions>
-                                                <Setter Property="Background" Value="#221642"/>
-                                                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                 <Setter Property="BorderThickness" Value="3"/>
-                                                <Setter Property="TextElement.Foreground" Value="White"/>
-                                                <Setter Property="Effect">
-                                                    <Setter.Value>
-                                                        <DropShadowEffect Color="#FF80FF"
-                                                                          BlurRadius="12"
-                                                                          ShadowDepth="0"
-                                                                          Opacity="0.45"/>
-                                                    </Setter.Value>
-                                                </Setter>
+                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
+                                                <Setter Property="Effect" Value="{x:Null}"/>
                                             </MultiDataTrigger>
                                             <MultiDataTrigger>
                                                 <MultiDataTrigger.Conditions>
                                                     <Condition Binding="{Binding CurrentArticleListTitle}" Value="Latest Articles"/>
                                                     <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="False"/>
                                                 </MultiDataTrigger.Conditions>
-                                                <Setter Property="Background" Value="#221642"/>
-                                                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                 <Setter Property="BorderThickness" Value="3"/>
                                                 <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
-                                                <Setter Property="Effect">
-                                                    <Setter.Value>
-                                                        <DropShadowEffect Color="#FF80FF"
-                                                                          BlurRadius="12"
-                                                                          ShadowDepth="0"
-                                                                          Opacity="0.45"/>
-                                                    </Setter.Value>
-                                                </Setter>
+                                                <Setter Property="Effect" Value="{x:Null}"/>
                                             </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -1504,8 +1524,8 @@
                                                     <Setter Property="Padding" Value="0"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsExpanded}" Value="True">
-                                                            <Setter Property="Background" Value="#1C7C4DFF"/>
-                                                            <Setter Property="BorderBrush" Value="#337C4DFF"/>
+                                                            <Setter Property="Background" Value="{DynamicResource AppFeedGroupBackgroundBrush}"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource AppFeedGroupBorderBrush}"/>
                                                             <Setter Property="BorderThickness" Value="1"/>
                                                             <Setter Property="CornerRadius" Value="12"/>
                                                             <Setter Property="Padding" Value="10,10,10,10"/>
@@ -1514,13 +1534,12 @@
                                                 </Style>
                                             </Border.Style>
                                             <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
-                                                      Margin="0">
+                                                      Margin="0"
+                                                      Background="{DynamicResource AppFeedGroupBackgroundBrush}"
+                                                      BorderBrush="Transparent">
                                                 <Expander.Header>
                                                     <Border Padding="10,8"
-                                                            CornerRadius="8"
-                                                            Background="{DynamicResource MaterialDesignCardBackground}"
-                                                            BorderThickness="2"
-                                                            BorderBrush="{DynamicResource MaterialDesignDivider}">
+                                                            CornerRadius="8">
                                                         <Border.InputBindings>
                                                             <MouseBinding MouseAction="LeftClick"
                                                                           Command="{Binding DataContext.SelectMainCategoryCommand, ElementName=RootWindow}"
@@ -1528,8 +1547,9 @@
                                                         </Border.InputBindings>
                                                         <Border.Style>
                                                             <Style TargetType="Border">
-                                                                <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
-                                                                <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                                                <Setter Property="Background" Value="{DynamicResource AppFeedHeaderBackgroundBrush}"/>
+                                                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                                                <Setter Property="BorderThickness" Value="0"/>
                                                                 <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
                                                                 <Setter Property="Effect" Value="{x:Null}"/>
                                                                 <Style.Triggers>
@@ -1538,36 +1558,22 @@
                                                                             <Condition Binding="{Binding IsNavigationSelected}" Value="True"/>
                                                                             <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True"/>
                                                                         </MultiDataTrigger.Conditions>
-                                                                        <Setter Property="Background" Value="#221642"/>
-                                                                        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                        <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                                        <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                                         <Setter Property="BorderThickness" Value="3"/>
-                                                                        <Setter Property="TextElement.Foreground" Value="White"/>
-                                                                        <Setter Property="Effect">
-                                                                            <Setter.Value>
-                                                                                <DropShadowEffect Color="#FF80FF"
-                                                                                                  BlurRadius="12"
-                                                                                                  ShadowDepth="0"
-                                                                                                  Opacity="0.45"/>
-                                                                            </Setter.Value>
-                                                                        </Setter>
+                                                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
+                                                                        <Setter Property="Effect" Value="{x:Null}"/>
                                                                     </MultiDataTrigger>
                                                                     <MultiDataTrigger>
                                                                         <MultiDataTrigger.Conditions>
                                                                             <Condition Binding="{Binding IsNavigationSelected}" Value="True"/>
                                                                             <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="False"/>
                                                                         </MultiDataTrigger.Conditions>
-                                                                        <Setter Property="Background" Value="#221642"/>
-                                                                        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                        <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                                        <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                                         <Setter Property="BorderThickness" Value="3"/>
                                                                         <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
-                                                                        <Setter Property="Effect">
-                                                                            <Setter.Value>
-                                                                                <DropShadowEffect Color="#FF80FF"
-                                                                                                  BlurRadius="12"
-                                                                                                  ShadowDepth="0"
-                                                                                                  Opacity="0.45"/>
-                                                                            </Setter.Value>
-                                                                        </Setter>
+                                                                        <Setter Property="Effect" Value="{x:Null}"/>
                                                                     </MultiDataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
@@ -1630,10 +1636,7 @@
                                                     <DataTemplate DataType="{x:Type vm:FeedGroupViewModel}">
                                                         <Border Margin="0,4,0,0"
                                                                 Padding="10,8"
-                                                                CornerRadius="8"
-                                                                Background="{DynamicResource MaterialDesignCardBackground}"
-                                                                BorderThickness="2"
-                                                                BorderBrush="{DynamicResource MaterialDesignDivider}">
+                                                                CornerRadius="8">
                                                             <Border.InputBindings>
                                                                 <MouseBinding MouseAction="LeftClick"
                                                                               Command="{Binding DataContext.SelectMainFeedCommand, ElementName=RootWindow}"
@@ -1678,8 +1681,9 @@
                                                             </Border.ContextMenu>
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
-                                                                    <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
-                                                                    <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
+                                                                    <Setter Property="Background" Value="{DynamicResource AppFeedRowBackgroundBrush}"/>
+                                                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                                                    <Setter Property="BorderThickness" Value="0"/>
                                                                     <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
                                                                     <Setter Property="Effect" Value="{x:Null}"/>
                                                                     <Style.Triggers>
@@ -1688,36 +1692,22 @@
                                                                                 <Condition Binding="{Binding IsNavigationSelected}" Value="True"/>
                                                                                 <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True"/>
                                                                             </MultiDataTrigger.Conditions>
-                                                                            <Setter Property="Background" Value="#221642"/>
-                                                                            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                            <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                                             <Setter Property="BorderThickness" Value="3"/>
-                                                                            <Setter Property="TextElement.Foreground" Value="White"/>
-                                                                            <Setter Property="Effect">
-                                                                                <Setter.Value>
-                                                                                    <DropShadowEffect Color="#FF80FF"
-                                                                                                      BlurRadius="12"
-                                                                                                      ShadowDepth="0"
-                                                                                                      Opacity="0.45"/>
-                                                                                </Setter.Value>
-                                                                            </Setter>
+                                                                            <Setter Property="TextElement.Foreground" Value="{DynamicResource AppDarkTextPrimaryBrush}"/>
+                                                                            <Setter Property="Effect" Value="{x:Null}"/>
                                                                         </MultiDataTrigger>
                                                                         <MultiDataTrigger>
                                                                             <MultiDataTrigger.Conditions>
                                                                                 <Condition Binding="{Binding IsNavigationSelected}" Value="True"/>
                                                                                 <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="False"/>
                                                                             </MultiDataTrigger.Conditions>
-                                                                            <Setter Property="Background" Value="#221642"/>
-                                                                            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                                            <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                                             <Setter Property="BorderThickness" Value="3"/>
                                                                             <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
-                                                                            <Setter Property="Effect">
-                                                                                <Setter.Value>
-                                                                                    <DropShadowEffect Color="#FF80FF"
-                                                                                                      BlurRadius="12"
-                                                                                                      ShadowDepth="0"
-                                                                                                      Opacity="0.45"/>
-                                                                                </Setter.Value>
-                                                                            </Setter>
+                                                                            <Setter Property="Effect" Value="{x:Null}"/>
                                                                         </MultiDataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
@@ -1797,9 +1787,10 @@
                     Grid.Column="4"
                     Margin="5"
                     Padding="6"
-                    Background="{DynamicResource MaterialDesignPaper}"
-                    BorderBrush="{DynamicResource MaterialDesignDivider}"
-                    BorderThickness="1">
+                    Background="{DynamicResource AppPanelBrush}"
+                    BorderBrush="{DynamicResource AppStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1889,8 +1880,8 @@
                             <GroupStyle>
                                 <GroupStyle.HeaderTemplate>
                                     <DataTemplate>
-                                        <Border Background="{DynamicResource MaterialDesignCardBackground}"
-                                                BorderBrush="{DynamicResource MaterialDesignDivider}"
+                                        <Border Background="{DynamicResource AppSurfaceSubtleBrush}"
+                                                BorderBrush="{DynamicResource AppStrokeBrush}"
                                                 BorderThickness="1"
                                                 CornerRadius="8"
                                                 Padding="10,8"
@@ -1962,10 +1953,7 @@
                                 <Border x:Name="ArticleListCard"
                                         Margin="0,0,0,8"
                                         Padding="12,8"
-                                        Background="{DynamicResource MaterialDesignCardBackground}"
-                                        CornerRadius="8"
-                                        BorderBrush="{DynamicResource MaterialDesignDivider}"
-                                        BorderThickness="2">
+                                        CornerRadius="8">
                                     <Border.InputBindings>
                                         <MouseBinding MouseAction="LeftDoubleClick"
                                                       Command="{Binding DataContext.OpenArticleInWindowCommand, ElementName=RootWindow}"
@@ -2008,9 +1996,9 @@
                                     </Border.ContextMenu>
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
-                                            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
+                                            <Setter Property="Background" Value="{DynamicResource AppSurfaceRaisedBrush}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
                                             <Setter Property="Effect" Value="{x:Null}"/>
                                             <Style.Triggers>
                                                 <MultiDataTrigger>
@@ -2018,34 +2006,20 @@
                                                         <Condition Binding="{Binding IsSelected}" Value="True"/>
                                                         <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True"/>
                                                     </MultiDataTrigger.Conditions>
-                                                    <Setter Property="Background" Value="#221642"/>
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                    <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                     <Setter Property="BorderThickness" Value="3"/>
-                                                    <Setter Property="Effect">
-                                                        <Setter.Value>
-                                                            <DropShadowEffect Color="#FF80FF"
-                                                                              BlurRadius="12"
-                                                                              ShadowDepth="0"
-                                                                              Opacity="0.45"/>
-                                                        </Setter.Value>
-                                                    </Setter>
+                                                    <Setter Property="Effect" Value="{x:Null}"/>
                                                 </MultiDataTrigger>
                                                 <MultiDataTrigger>
                                                     <MultiDataTrigger.Conditions>
                                                         <Condition Binding="{Binding IsSelected}" Value="True"/>
                                                         <Condition Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="False"/>
                                                     </MultiDataTrigger.Conditions>
-                                                    <Setter Property="Background" Value="#221642"/>
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                    <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
                                                     <Setter Property="BorderThickness" Value="3"/>
-                                                    <Setter Property="Effect">
-                                                        <Setter.Value>
-                                                            <DropShadowEffect Color="#FF80FF"
-                                                                              BlurRadius="12"
-                                                                              ShadowDepth="0"
-                                                                              Opacity="0.45"/>
-                                                        </Setter.Value>
-                                                    </Setter>
+                                                    <Setter Property="Effect" Value="{x:Null}"/>
                                                 </MultiDataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -2177,10 +2151,11 @@
                 <!-- Article Content with Dark Mode Support -->
                 <Border x:Name="ArticleContentPane"
                         Grid.Row="0"
-                        BorderBrush="{DynamicResource MaterialDesignDivider}"
+                        BorderBrush="{DynamicResource AppStrokeBrush}"
                         BorderThickness="1"
                         Margin="5"
-                        Background="{DynamicResource MaterialDesignPaper}">
+                        Background="{DynamicResource AppSurfaceBrush}"
+                        CornerRadius="8">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -2189,7 +2164,7 @@
 
                         <!-- Article Header with Show Content Button -->
                         <Grid Grid.Row="0"
-                              Background="{DynamicResource MaterialDesignToolBarBackground}"
+                              Background="{DynamicResource AppPanelBrush}"
                               Margin="2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -2211,19 +2186,19 @@
                                         Height="30">
                                     <Button.Style>
                                         <Style TargetType="Button"
-                                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                               BasedOn="{StaticResource AppPrimaryButtonStyle}">
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
                                                              Value="True">
                                                     <Setter Property="Background"
-                                                            Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                            Value="{DynamicResource AppBrandBrush}"/>
                                                     <Setter Property="ToolTip"
                                                             Value="Always-On mode is active"/>
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding IsShowContentAlwaysOn}"
                                                              Value="False">
                                                     <Setter Property="Background"
-                                                            Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                            Value="{DynamicResource AppBrandBrush}"/>
                                                     <Setter Property="ToolTip"
                                                             Value="Click to show/hide content"/>
                                                 </DataTrigger>
@@ -2235,14 +2210,14 @@
                                 <Button Grid.Column="1"
                                         Content="{Binding ReaderModeButtonText}"
                                         Command="{Binding ToggleReaderModeCommand}"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Style="{StaticResource AppSecondaryButtonStyle}"
                                         Margin="0,0,8,0"
                                         Height="30"/>
 
                                 <Button Grid.Column="2"
                                         Content="{Binding CopyLinkButtonText}"
                                         Command="{Binding CopyLinkCommand}"
-                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Style="{StaticResource AppGhostButtonStyle}"
                                         Height="30"/>
                             </Grid>
 
@@ -2260,51 +2235,141 @@
                                       Grid.Row="1"
                                       Margin="2"
                                       Padding="0"
-                                      Background="#0B0B0B"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled"
                                       PreviewMouseWheel="FeedSummaryScrollViewer_PreviewMouseWheel"
                                       Visibility="{Binding IsFeedSummaryVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <ScrollViewer.Style>
+                                <Style TargetType="ScrollViewer">
+                                    <Setter Property="Background" Value="#FFFFFF"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource AppDarkBackgroundBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ScrollViewer.Style>
                             <Border Padding="15">
                                 <StackPanel HorizontalAlignment="Stretch">
                                     <TextBlock Text="{Binding FeedSummaryTitle}"
-                                               Foreground="#90CAF9"
                                                FontSize="{Binding FeedSummaryTitleFontSize}"
                                                FontWeight="Bold"
                                                TextWrapping="Wrap"
-                                               Margin="0,0,0,8"/>
+                                               Margin="0,0,0,8">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#673AB7"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AppDarkAccentHoverBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                     <StackPanel Orientation="Horizontal"
                                                 Margin="0,0,0,10">
                                         <TextBlock Text="{Binding FeedSummaryFeedName}"
-                                                   Foreground="#90CAF9"
                                                    FontSize="{Binding FeedSummaryMetaFontSize}"
-                                                   FontWeight="SemiBold"/>
+                                                   FontWeight="SemiBold">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#673AB7"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AppDarkAccentHoverBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <TextBlock Text=" • "
-                                                   Foreground="#BDBDBD"
-                                                   FontSize="{Binding FeedSummaryMetaFontSize}"/>
+                                                   FontSize="{Binding FeedSummaryMetaFontSize}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#666666"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AppDarkTextSecondaryBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <TextBlock Text="{Binding FeedSummaryPublicationDate}"
-                                                   Foreground="#BDBDBD"
-                                                   FontSize="{Binding FeedSummaryMetaFontSize}"/>
+                                                   FontSize="{Binding FeedSummaryMetaFontSize}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#666666"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AppDarkTextSecondaryBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                     <Border Height="2"
-                                            Background="#90CAF9"
-                                            Margin="0,0,0,15"/>
+                                            Margin="0,0,0,15">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#673AB7"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource AppDarkAccentBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                    </Border>
                                     <TextBlock Text="{Binding FeedSummaryDescription}"
-                                               Foreground="#EDEDED"
                                                FontSize="{Binding FeedSummaryBodyFontSize}"
                                                LineHeight="{Binding FeedSummaryBodyLineHeight}"
                                                TextWrapping="Wrap"
-                                               Margin="0,0,0,15"/>
-                                    <Border BorderBrush="#90CAF9"
+                                               Margin="0,0,0,15">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#333333"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource AppDarkTextBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <Border
                                             BorderThickness="3,0,0,0"
-                                            Background="#151515"
                                             Padding="10"
                                             Margin="0,0,0,0">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="BorderBrush" Value="#673AB7"/>
+                                                <Setter Property="Background" Value="#F8F8F8"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource AppDarkAccentBrush}"/>
+                                                        <Setter Property="Background" Value="{DynamicResource AppDarkSurfaceBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <TextBlock Text="{Binding FeedSummaryLink, StringFormat=Full Article (Use Show Content for integrated browser): {0}}"
-                                                   Foreground="#81C784"
                                                    FontSize="{Binding FeedSummaryMetaFontSize}"
                                                    FontWeight="SemiBold"
-                                                   TextWrapping="Wrap"/>
+                                                   TextWrapping="Wrap">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="#673AB7"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding DataContext.DarkMode, ElementName=RootWindow}" Value="True">
+                                                            <Setter Property="Foreground" Value="{DynamicResource AppDarkSuccessBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </Border>
                                 </StackPanel>
                             </Border>

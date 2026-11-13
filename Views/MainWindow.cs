@@ -21,14 +21,9 @@ namespace MyNewsFeeder.Views
 {
     public partial class MainWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int WH_MOUSE_LL = 14;
         private const int WM_MOUSEWHEEL = 0x020A;
         private const int VK_CONTROL = 0x11;
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -137,6 +132,7 @@ namespace MyNewsFeeder.Views
             _viewModel.IsTerminalModeActive = () => IsTerminalModeActive;
             _viewModel.ScrollOffsetRestoreRequested += ViewModel_ScrollOffsetRestoreRequested;
             _viewModel.ScrollSelectionToTopRequested += ViewModel_ScrollSelectionToTopRequested;
+            _viewModel.ArticleListScrollToTopRequested += ViewModel_ArticleListScrollToTopRequested;
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
 
             Loaded += MainWindow_Loaded;
@@ -499,12 +495,8 @@ namespace MyNewsFeeder.Views
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // dark title‐bar on Win10+
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf(typeof(int)));
-
             _viewModel = DataContext as MainViewModel;
+            WindowThemeHelper.Apply(this, _viewModel?.DarkMode == true);
             UpdatePaneToggleButtons();
             await Dispatcher.Yield(DispatcherPriority.Render);
             _viewModel?.StartInitialRefresh();
@@ -712,7 +704,7 @@ namespace MyNewsFeeder.Views
             try
             {
                 var aboutWindow = new AboutWindow { Owner = this };
-                aboutWindow.ShowDialog();
+                WindowThemeHelper.ShowDialogPrepared(aboutWindow);
             }
             catch (Exception)
             {
@@ -1064,7 +1056,7 @@ namespace MyNewsFeeder.Views
                         Owner = this
                     };
                     _helpWindow.Closed += HelpWindow_Closed;
-                    _helpWindow.Show();
+                    WindowThemeHelper.ShowPrepared(_helpWindow);
                     if (!string.IsNullOrWhiteSpace(topicId))
                     {
                         _helpWindow.SelectTopicById(topicId);
@@ -1111,7 +1103,7 @@ namespace MyNewsFeeder.Views
                         DataContext = DataContext
                     };
                     _settingsWindow.Closed += SettingsWindow_Closed;
-                    _settingsWindow.Show();
+                    WindowThemeHelper.ShowPrepared(_settingsWindow);
                     return;
                 }
 
@@ -1154,7 +1146,7 @@ namespace MyNewsFeeder.Views
                         ShowInTaskbar = true
                     };
                     _terminalWindow.Closed += TerminalWindow_Closed;
-                    _terminalWindow.Show();
+                    WindowThemeHelper.ShowPrepared(_terminalWindow);
                     _terminalWindow.Activate();
                     Hide();
                     return;
@@ -1346,6 +1338,7 @@ namespace MyNewsFeeder.Views
             if (_viewModel != null)
             {
                 _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+                _viewModel.ArticleListScrollToTopRequested -= ViewModel_ArticleListScrollToTopRequested;
             }
 
             if (_webViewShortcutHandlersAttached)
@@ -1715,6 +1708,27 @@ namespace MyNewsFeeder.Views
             Dispatcher.BeginInvoke(new Action(Align), DispatcherPriority.Loaded);
             Dispatcher.BeginInvoke(new Action(Align), DispatcherPriority.ContextIdle);
             Dispatcher.BeginInvoke(new Action(Align), DispatcherPriority.ApplicationIdle);
+        }
+
+        private void ViewModel_ArticleListScrollToTopRequested()
+        {
+            void ScrollToTop()
+            {
+                try
+                {
+                    MainArticleList?.UpdateLayout();
+                    FindScrollViewer(MainArticleList)?.ScrollToTop();
+                }
+                catch
+                {
+                    // Ignore transient layout failures while the virtualized list is rebuilding.
+                }
+            }
+
+            // Apply after item regeneration and once more after idle to handle virtualization.
+            Dispatcher.BeginInvoke(new Action(ScrollToTop), DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(new Action(ScrollToTop), DispatcherPriority.ContextIdle);
+            Dispatcher.BeginInvoke(new Action(ScrollToTop), DispatcherPriority.ApplicationIdle);
         }
 
         private bool TryAlignFeedItemToTop(FeedItem targetItem)

@@ -18,11 +18,11 @@
 
                         <!-- Accent fallbacks to avoid missing resource warnings -->
                         <!-- Fallback primary to match default DeepPurple theme (aligns button colors) -->
-                        <SolidColorBrush x:Key="PrimaryHueMidBrush" Color="#673AB7"/>
+                        <SolidColorBrush x:Key="PrimaryHueMidBrush" Color="#5F36A8"/>
                         <SolidColorBrush x:Key="PrimaryHueMidForegroundBrush" Color="#FFFFFF"/>
                         <SolidColorBrush x:Key="SecondaryHueMidBrush" Color="#B0D442"/>
                         <SolidColorBrush x:Key="SecondaryHueMidForegroundBrush" Color="#000000"/>
-                        <SolidColorBrush x:Key="UnreadDotBrush" Color="#9C7CFF"/>
+                        <SolidColorBrush x:Key="UnreadDotBrush" Color="#7C4FD3"/>
 
                         <!-- Small glow for unread dots -->
                         <DropShadowEffect x:Key="GlowPurpleEffect"
@@ -31,19 +31,177 @@
                                           ShadowDepth="0"
                                           Opacity="1"/>
 
-                        <!-- Enhanced Dark Mode Colors -->
-                        <SolidColorBrush x:Key="DarkModeBackground"
-                                         Color="#1E1E1E"/>
-                        <SolidColorBrush x:Key="DarkModeCardBackground"
-                                         Color="#2D2D2D"/>
-                        <SolidColorBrush x:Key="DarkModeText"
-                                         Color="#E0E0E0"/>
-                        <SolidColorBrush x:Key="DarkModeTextSecondary"
-                                         Color="#B0B0B0"/>
-                        <SolidColorBrush x:Key="DarkModeAccent"
-                                         Color="#90CAF9"/>
-                        <SolidColorBrush x:Key="DarkModeBorder"
-                                         Color="#404040"/>
+                        <!-- Application-specific dark palette. These resources are only
+                             consumed by explicit dark-mode triggers, keeping light mode intact. -->
+                        <Color x:Key="AppDarkGlowColor">#667A5AF8</Color>
+                        <Color x:Key="AppSelectedGlowColor">#B9A3FF</Color>
+                        <SolidColorBrush x:Key="AppDarkBackgroundBrush" Color="#17181C"/>
+                        <SolidColorBrush x:Key="AppDarkPanelBrush" Color="#1D1F24"/>
+                        <SolidColorBrush x:Key="AppDarkSurfaceBrush" Color="#23262C"/>
+                        <SolidColorBrush x:Key="AppDarkElevatedSurfaceBrush" Color="#292D34"/>
+                        <SolidColorBrush x:Key="AppDarkInputBrush" Color="#202329"/>
+                        <SolidColorBrush x:Key="AppDarkTextPrimaryBrush" Color="#F1F3F5"/>
+                        <SolidColorBrush x:Key="AppDarkTextBrush" Color="#D9DDE3"/>
+                        <SolidColorBrush x:Key="AppDarkTextSecondaryBrush" Color="#AEB5C0"/>
+                        <SolidColorBrush x:Key="AppDarkTextDisabledBrush" Color="#7F8793"/>
+                        <SolidColorBrush x:Key="AppDarkBorderBrush" Color="#383D46"/>
+                        <SolidColorBrush x:Key="AppDarkBorderStrongBrush" Color="#4B5260"/>
+                        <SolidColorBrush x:Key="AppDarkAccentBrush" Color="#A78BFA"/>
+                        <SolidColorBrush x:Key="AppDarkAccentHoverBrush" Color="#B9A3FF"/>
+                        <SolidColorBrush x:Key="AppDarkFocusBrush" Color="#93C5FD"/>
+                        <SolidColorBrush x:Key="AppDarkInfoBrush" Color="#7DD3FC"/>
+                        <SolidColorBrush x:Key="AppDarkSuccessBrush" Color="#6EE7A8"/>
+                        <SolidColorBrush x:Key="AppDarkWarningBrush" Color="#F6C76E"/>
+                        <SolidColorBrush x:Key="AppDarkErrorBrush" Color="#FF8A9A"/>
+                        <SolidColorBrush x:Key="AppDarkErrorSurfaceBrush" Color="#3A2027"/>
+                        <SolidColorBrush x:Key="AppDarkSelectionBrush" Color="#31284A"/>
+                        <SolidColorBrush x:Key="AppDarkHoverBrush" Color="#2B2F37"/>
+                        <SolidColorBrush x:Key="AppFocusBrush" Color="#6D3FC0"/>
+                        <SolidColorBrush x:Key="AppPopupBackgroundBrush" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="AppPopupBorderBrush" Color="#5F36A8"/>
+                        <SolidColorBrush x:Key="AppPopupHighlightBrush" Color="#5F36A8"/>
+                        <SolidColorBrush x:Key="AppPopupHighlightTextBrush" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="AppPopupCheckedBrush" Color="#33272727"/>
+                        <!-- Mode-aware workspace surfaces. Light values mirror the existing
+                             Material baseline; dark values are applied by MainViewModel. -->
+                        <SolidColorBrush x:Key="AppCanvasBrush" Color="#F5F6F8"/>
+                        <SolidColorBrush x:Key="AppPanelBrush" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="AppSurfaceBrush" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="AppSurfaceRaisedBrush" Color="#F8F9FB"/>
+                        <SolidColorBrush x:Key="AppSurfaceSubtleBrush" Color="#EEF1F5"/>
+                        <SolidColorBrush x:Key="AppStrokeBrush" Color="#D8DDE6"/>
+                        <SolidColorBrush x:Key="AppBrandBrush" Color="#5F36A8"/>
+                        <SolidColorBrush x:Key="AppBrandHoverBrush" Color="#512C91"/>
+                        <SolidColorBrush x:Key="AppBrandTextBrush" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="AppSelectedSurfaceBrush" Color="#EEE8F8"/>
+                        <SolidColorBrush x:Key="AppSelectedBorderBrush" Color="#6D3FC0"/>
+                        <SolidColorBrush x:Key="AppFeedGroupBackgroundBrush" Color="#F7F8FA"/>
+                        <SolidColorBrush x:Key="AppFeedHeaderBackgroundBrush" Color="#F0F2F5"/>
+                        <SolidColorBrush x:Key="AppFeedRowBackgroundBrush" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="AppFeedGroupBorderBrush" Color="#D8DDE6"/>
+
+                        <Style x:Key="AppKeyboardFocusVisualStyle" TargetType="Control">
+                                <Setter Property="Template">
+                                        <Setter.Value>
+                                                <ControlTemplate>
+                                                        <Border Margin="-3"
+                                                                CornerRadius="5"
+                                                                BorderThickness="2"
+                                                                BorderBrush="{DynamicResource AppFocusBrush}"
+                                                                SnapsToDevicePixels="True"/>
+                                                </ControlTemplate>
+                                        </Setter.Value>
+                                </Setter>
+                        </Style>
+
+                        <!-- Shared button hierarchy for every application window. -->
+                        <Style x:Key="AppPrimaryButtonStyle"
+                               TargetType="Button"
+                               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                <Setter Property="Background" Value="{DynamicResource AppBrandBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppBrandTextBrush}"/>
+                                <Setter Property="TextElement.Foreground" Value="{DynamicResource AppBrandTextBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
+                        </Style>
+
+                        <Style x:Key="AppSecondaryButtonStyle"
+                               TargetType="Button"
+                               BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+                                <Setter Property="Background" Value="{DynamicResource AppSurfaceRaisedBrush}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
+                        </Style>
+
+                        <Style x:Key="AppGhostButtonStyle"
+                               TargetType="Button"
+                               BasedOn="{StaticResource MaterialDesignFlatButton}">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                <Setter Property="TextElement.Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="FocusVisualStyle" Value="{DynamicResource AppKeyboardFocusVisualStyle}"/>
+                        </Style>
+
+                        <!-- Shared neutral section container used by dialogs and utility windows. -->
+                        <Style x:Key="AppSectionGroupBoxStyle" TargetType="GroupBox">
+                                <Setter Property="Background" Value="{DynamicResource AppPanelBrush}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppStrokeBrush}"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="Template">
+                                        <Setter.Value>
+                                                <ControlTemplate TargetType="GroupBox">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="10"
+                                                                SnapsToDevicePixels="True">
+                                                                <Grid>
+                                                                        <Grid.RowDefinitions>
+                                                                                <RowDefinition Height="Auto"/>
+                                                                                <RowDefinition Height="*"/>
+                                                                        </Grid.RowDefinitions>
+                                                                        <Grid Grid.Row="0" Margin="14,12,14,8">
+                                                                                <Grid.ColumnDefinitions>
+                                                                                        <ColumnDefinition Width="3"/>
+                                                                                        <ColumnDefinition Width="*"/>
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <Border Grid.Column="0"
+                                                                                        Background="{DynamicResource AppBrandBrush}"
+                                                                                        CornerRadius="2"/>
+                                                                                <ContentPresenter Grid.Column="1"
+                                                                                                  ContentSource="Header"
+                                                                                                  Margin="10,0,0,0"
+                                                                                                  VerticalAlignment="Center"
+                                                                                                  TextElement.FontSize="15"
+                                                                                                  TextElement.FontWeight="SemiBold"
+                                                                                                  TextElement.Foreground="{DynamicResource MaterialDesignBody}"/>
+                                                                        </Grid>
+                                                                        <Border Grid.Row="0"
+                                                                                Height="1"
+                                                                                Margin="14,0"
+                                                                                VerticalAlignment="Bottom"
+                                                                                Background="{DynamicResource AppStrokeBrush}"/>
+                                                                        <ContentPresenter Grid.Row="1" ContentSource="Content"/>
+                                                                </Grid>
+                                                        </Border>
+                                                </ControlTemplate>
+                                        </Setter.Value>
+                                </Setter>
+                        </Style>
+
+                        <Style x:Key="AppNavigationListItemStyle"
+                               TargetType="ListBoxItem"
+                               BasedOn="{StaticResource MaterialDesignListBoxItem}">
+                                <Setter Property="Padding" Value="12,9"/>
+                                <Setter Property="Margin" Value="0,2"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="3,0,0,0"/>
+                                <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource AppSurfaceSubtleBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource AppSelectedSurfaceBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AppSelectedBorderBrush}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                        </Trigger>
+                                </Style.Triggers>
+                        </Style>
+
+                        <!-- Compatibility aliases for existing styles. -->
+                        <SolidColorBrush x:Key="DarkModeBackground" Color="#17181C"/>
+                        <SolidColorBrush x:Key="DarkModeCardBackground" Color="#23262C"/>
+                        <SolidColorBrush x:Key="DarkModeText" Color="#D9DDE3"/>
+                        <SolidColorBrush x:Key="DarkModeTextSecondary" Color="#AEB5C0"/>
+                        <SolidColorBrush x:Key="DarkModeAccent" Color="#A78BFA"/>
+                        <SolidColorBrush x:Key="DarkModeBorder" Color="#383D46"/>
 
                         <!-- Custom CheckBox Style for Dark Mode -->
                         <Style x:Key="DarkModeCheckBox"

@@ -35,6 +35,7 @@ namespace MyNewsFeeder.Views
         public TerminalWindow(MainViewModel mainViewModel)
         {
             InitializeComponent();
+            WindowThemeHelper.Prepare(this, true);
             _viewModel = new TerminalViewModel(mainViewModel);
             DataContext = _viewModel;
             _viewModel.CloseRequested += ViewModel_CloseRequested;

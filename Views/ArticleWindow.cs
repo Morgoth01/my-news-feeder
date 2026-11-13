@@ -11,13 +11,6 @@ namespace MyNewsFeeder.Views
 {
     public partial class ArticleWindow : Window
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private readonly string _summaryArticleHtml;
         private readonly string _articleLink;
         private readonly bool _darkMode;
@@ -64,19 +57,9 @@ namespace MyNewsFeeder.Views
             ArticleLinkText.Text = string.IsNullOrWhiteSpace(_articleLink) ? "No external link" : _articleLink;
             UpdateActionButtons();
 
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
+            WindowThemeHelper.Prepare(this, _darkMode);
             Loaded += ArticleWindow_Loaded;
             Closed += ArticleWindow_Closed;
-        }
-
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
         }
 
         private async void ArticleWindow_Loaded(object sender, RoutedEventArgs e)
@@ -516,12 +499,13 @@ namespace MyNewsFeeder.Views
 
         private string BuildReaderModeHtml(ReaderArticleContent content)
         {
-            var backgroundColor = _darkMode ? "#121212" : "#ffffff";
-            var textColor = _darkMode ? "#e0e0e0" : "#333333";
-            var headerColor = _darkMode ? "#90caf9" : "#673ab7";
-            var metaColor = _darkMode ? "#b0b0b0" : "#666666";
-            var borderColor = _darkMode ? "#90caf9" : "#673ab7";
-            var linkColor = _darkMode ? "#81c784" : "#673ab7";
+            var palette = AppThemeColors.Article(_darkMode);
+            var backgroundColor = palette.Background;
+            var textColor = palette.Text;
+            var headerColor = palette.Heading;
+            var metaColor = palette.SecondaryText;
+            var borderColor = palette.Border;
+            var linkColor = palette.Link;
             var title = string.IsNullOrWhiteSpace(content.Title) ? ArticleTitleText.Text : content.Title;
             var encodedTitle = System.Web.HttpUtility.HtmlEncode(title);
             var encodedLink = System.Web.HttpUtility.HtmlEncode(_articleLink);

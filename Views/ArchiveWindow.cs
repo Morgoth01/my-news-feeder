@@ -26,13 +26,6 @@ namespace MyNewsFeeder.Views
 {
     public partial class ArchiveWindow : Window, INotifyPropertyChanged
     {
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19;
-
-        [DllImport("dwmapi.dll", PreserveSig = true)]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd, int attribute, ref int attributeValue, int attributeSize);
-
         private readonly LibrarySectionMode _initialMode;
         private readonly ObservableCollection<ArchiveEntryViewModel> _archiveEntries = new ObservableCollection<ArchiveEntryViewModel>();
         private readonly ArticleReaderService _articleReaderService = new ArticleReaderService();
@@ -67,10 +60,16 @@ namespace MyNewsFeeder.Views
         private bool _isReaderModeActive;
         private bool _isReaderModeLoading;
         private bool _isPreviewPageLoading;
-        private bool _hasRevealedInitialFrame;
         private bool _isPreviewFullscreen;
         private bool _archivedColumnRequestedVisible = true;
         private bool _isSynchronizingSelection;
+        private bool _archiveRebuildPending;
+        private bool _archiveRebuildRequestedDuringFeedRefresh;
+        private readonly List<string> _preservedSelectionLinks = new List<string>();
+        private readonly List<string> _refreshPreservedSelectionLinks = new List<string>();
+        private bool _isMainFeedRefreshActive;
+        private double _refreshPreservedVerticalOffset;
+        private double _refreshPreservedHorizontalOffset;
         private GridLength _savedOverviewColumnWidth;
         private GridLength _savedOverviewSplitterColumnWidth;
         private GridLength _savedItemsColumnWidth;
@@ -272,7 +271,7 @@ namespace MyNewsFeeder.Views
             _isUpdatingControls = true;
             InitializeComponent();
             PreviewWebView.PreviewKeyDown += PreviewWebView_PreviewKeyDown;
-            SourceInitialized += (_, __) => EnableDarkTitleBar();
+            WindowThemeHelper.Prepare(this);
             Loaded += ArchiveWindow_Loaded;
             Closed += ArchiveWindow_Closed;
             LocationChanged += ArchiveWindow_PlacementChanged;
@@ -295,17 +294,6 @@ namespace MyNewsFeeder.Views
             UpdatePreviewState();
         }
 
-        private void RevealInitialFrame()
-        {
-            if (_hasRevealedInitialFrame)
-            {
-                return;
-            }
-
-            _hasRevealedInitialFrame = true;
-            Opacity = 1;
-        }
-
         public void SwitchToMode(LibrarySectionMode mode)
         {
             if (_currentMode == mode && IsLoaded)
@@ -315,6 +303,7 @@ namespace MyNewsFeeder.Views
             }
 
             _currentMode = mode;
+            _preservedSelectionLinks.Clear();
             ResetPreviewBrowserState(navigateToPlaceholder: true);
             UpdateLibraryModeUi();
 
@@ -544,13 +533,13 @@ namespace MyNewsFeeder.Views
                     _viewModel.ArchiveItemsChanged += ViewModel_ArchiveItemsChanged;
                     _viewModel.ArticleLabelsChanged += ViewModel_ArticleLabelsChanged;
                     _viewModel.ArticleNotesChanged += ViewModel_ArticleNotesChanged;
+                    _viewModel.PropertyChanged += ViewModel_PropertyChanged;
                 }
 
                 RefreshSavedViewOptions();
                 ApplySavedPreferences();
                 SwitchToMode(_initialMode);
                 RebuildArchiveEntries();
-                Dispatcher.InvokeAsync(RevealInitialFrame, DispatcherPriority.Loaded);
                 WriteArchiveDiagnostic("ArchiveWindow_Loaded completed.");
             }
             catch (Exception ex)
@@ -567,6 +556,7 @@ namespace MyNewsFeeder.Views
                 _viewModel.ArchiveItemsChanged -= ViewModel_ArchiveItemsChanged;
                 _viewModel.ArticleLabelsChanged -= ViewModel_ArticleLabelsChanged;
                 _viewModel.ArticleNotesChanged -= ViewModel_ArticleNotesChanged;
+                _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
             }
 
             _preferencesSaveTimer.Stop();
@@ -593,7 +583,160 @@ namespace MyNewsFeeder.Views
 
         private void ViewModel_ArchiveItemsChanged()
         {
-            Dispatcher.BeginInvoke(new Action(RebuildArchiveEntries));
+            if (_isMainFeedRefreshActive)
+            {
+                _archiveRebuildRequestedDuringFeedRefresh = true;
+                return;
+            }
+
+            if (_archiveRebuildPending)
+            {
+                return;
+            }
+
+            _archiveRebuildPending = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    RebuildArchiveEntries();
+                }
+                finally
+                {
+                    _archiveRebuildPending = false;
+                }
+            }), DispatcherPriority.Background);
+        }
+
+        private void ViewModel_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(MainViewModel.IsLoading) || _viewModel == null)
+            {
+                return;
+            }
+
+            if (_viewModel.IsLoading)
+            {
+                CaptureGridStateForFeedRefresh();
+                return;
+            }
+
+            RestoreGridStateAfterFeedRefresh();
+        }
+
+        private void CaptureGridStateForFeedRefresh()
+        {
+            if (_isMainFeedRefreshActive || ArchiveDataGrid == null)
+            {
+                return;
+            }
+
+            _isMainFeedRefreshActive = true;
+            foreach (var entry in _archiveEntries)
+            {
+                entry.SuspendItemNotifications();
+            }
+
+            _refreshPreservedSelectionLinks.Clear();
+            _refreshPreservedSelectionLinks.AddRange(ArchiveDataGrid.SelectedItems
+                .OfType<ArchiveEntryViewModel>()
+                .Select(entry => entry.Link?.Trim())
+                .Where(link => !string.IsNullOrWhiteSpace(link))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+
+            if (_refreshPreservedSelectionLinks.Count == 0 &&
+                !string.IsNullOrWhiteSpace(SelectedArchiveEntry?.Link))
+            {
+                _refreshPreservedSelectionLinks.Add(SelectedArchiveEntry.Link.Trim());
+            }
+
+            var scrollViewer = FindVisualChild<ScrollViewer>(ArchiveDataGrid);
+            _refreshPreservedVerticalOffset = scrollViewer?.VerticalOffset ?? 0d;
+            _refreshPreservedHorizontalOffset = scrollViewer?.HorizontalOffset ?? 0d;
+        }
+
+        private void RestoreGridStateAfterFeedRefresh()
+        {
+            if (!_isMainFeedRefreshActive)
+            {
+                return;
+            }
+
+            _isMainFeedRefreshActive = false;
+            var selectedLinks = _refreshPreservedSelectionLinks.ToList();
+            _refreshPreservedSelectionLinks.Clear();
+
+            if (_archiveRebuildRequestedDuringFeedRefresh)
+            {
+                _archiveRebuildRequestedDuringFeedRefresh = false;
+                var displayedLinks = new HashSet<string>(
+                    _archiveEntries
+                        .Select(entry => entry.Link?.Trim())
+                        .Where(link => !string.IsNullOrWhiteSpace(link)),
+                    StringComparer.OrdinalIgnoreCase);
+                var sourceLinks = GetCurrentSectionLinks();
+                if (!displayedLinks.SetEquals(sourceLinks))
+                {
+                    RebuildArchiveEntries();
+                }
+            }
+
+            foreach (var entry in _archiveEntries)
+            {
+                entry.ResumeItemNotifications();
+            }
+
+            RestoreSelection(selectedLinks);
+            ArchiveDataGrid?.UpdateLayout();
+            var scrollViewer = FindVisualChild<ScrollViewer>(ArchiveDataGrid);
+            scrollViewer?.ScrollToHorizontalOffset(
+                Math.Max(0d, Math.Min(_refreshPreservedHorizontalOffset, scrollViewer.ScrollableWidth)));
+            scrollViewer?.ScrollToVerticalOffset(
+                Math.Max(0d, Math.Min(_refreshPreservedVerticalOffset, scrollViewer.ScrollableHeight)));
+
+            RestoreArchiveGridState(
+                selectedLinks,
+                _refreshPreservedVerticalOffset,
+                _refreshPreservedHorizontalOffset);
+        }
+
+        private HashSet<string> GetCurrentSectionLinks()
+        {
+            var links = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var section = GetCurrentSection();
+            if (section == null)
+            {
+                return links;
+            }
+
+            foreach (var category in section.Items.OfType<CategoryGroupViewModel>())
+            {
+                foreach (var feed in category.Feeds)
+                {
+                    foreach (var item in feed.Items)
+                    {
+                        var link = item?.Link?.Trim();
+                        if (!string.IsNullOrWhiteSpace(link))
+                        {
+                            links.Add(link);
+                        }
+                    }
+                }
+            }
+
+            foreach (var feed in section.Items.OfType<FeedGroupViewModel>())
+            {
+                foreach (var item in feed.Items)
+                {
+                    var link = item?.Link?.Trim();
+                    if (!string.IsNullOrWhiteSpace(link))
+                    {
+                        links.Add(link);
+                    }
+                }
+            }
+
+            return links;
         }
 
         private void ViewModel_ArticleLabelsChanged()
@@ -612,16 +755,6 @@ namespace MyNewsFeeder.Views
                 RefreshArchiveView();
                 UpdatePreviewState();
             }));
-        }
-
-        private void EnableDarkTitleBar()
-        {
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int useDark = 1;
-            if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDark, Marshal.SizeOf<int>()) != 0)
-            {
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, ref useDark, Marshal.SizeOf<int>());
-            }
         }
 
         private void ApplySavedPreferences()
@@ -1070,23 +1203,52 @@ namespace MyNewsFeeder.Views
                     .Where(link => !string.IsNullOrWhiteSpace(link))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
+                var previewLink = SelectedArchiveEntry?.Link?.Trim();
+                if (selectedLinks.Count == 0 && !string.IsNullOrWhiteSpace(previewLink))
+                {
+                    selectedLinks.Add(previewLink);
+                }
+                if (selectedLinks.Count == 0 && _preservedSelectionLinks.Count > 0)
+                {
+                    selectedLinks.AddRange(_preservedSelectionLinks);
+                }
+
+                var scrollViewer = FindVisualChild<ScrollViewer>(ArchiveDataGrid);
+                var verticalOffset = scrollViewer?.VerticalOffset ?? 0d;
+                var horizontalOffset = scrollViewer?.HorizontalOffset ?? 0d;
 
                 var currentCategory = _pendingCategorySelection;
                 var currentFeed = _pendingFeedSelection;
                 var currentLabel = _pendingLabelSelection;
 
-                ClearArchiveEntries();
-
-                foreach (var entry in FlattenArchiveEntries(GetCurrentSection()))
+                _isSynchronizingSelection = true;
+                try
                 {
-                    entry.PropertyChanged += ArchiveEntryOnPropertyChanged;
-                    _archiveEntries.Add(entry);
+                    ClearArchiveEntries();
+
+                    foreach (var entry in FlattenArchiveEntries(GetCurrentSection()))
+                    {
+                        if (_isMainFeedRefreshActive)
+                        {
+                            entry.SuspendItemNotifications();
+                        }
+
+                        entry.PropertyChanged += ArchiveEntryOnPropertyChanged;
+                        _archiveEntries.Add(entry);
+                    }
+
+                    RefreshFilterOptions(currentCategory, currentFeed, currentLabel);
+                    RefreshArchiveView();
+                    RestoreSelection(selectedLinks);
+                }
+                finally
+                {
+                    _isSynchronizingSelection = false;
                 }
 
-                RefreshFilterOptions(currentCategory, currentFeed, currentLabel);
-                RefreshArchiveView();
-                RestoreSelection(selectedLinks);
+                SyncEntrySelectionFlagsFromGrid();
                 UpdatePreviewState();
+                RestoreArchiveGridState(selectedLinks, verticalOffset, horizontalOffset);
                 WriteArchiveDiagnostic($"RebuildArchiveEntries completed. Entries={_archiveEntries.Count}.");
             }
             catch (Exception ex)
@@ -1509,6 +1671,97 @@ namespace MyNewsFeeder.Views
             UpdatePreviewState();
         }
 
+        private void RestoreArchiveGridState(
+            IReadOnlyCollection<string> selectedLinks,
+            double verticalOffset,
+            double horizontalOffset)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                ArchiveDataGrid?.UpdateLayout();
+                if (ArchiveDataGrid == null)
+                {
+                    return;
+                }
+
+                var links = new HashSet<string>(
+                    selectedLinks ?? Array.Empty<string>(),
+                    StringComparer.OrdinalIgnoreCase);
+                var visibleSelections = (_archiveEntriesView?.Cast<ArchiveEntryViewModel>()
+                        ?? Enumerable.Empty<ArchiveEntryViewModel>())
+                    .Where(entry => links.Contains(entry.Link?.Trim() ?? string.Empty))
+                    .ToList();
+
+                _isSynchronizingSelection = true;
+                try
+                {
+                    ArchiveDataGrid.SelectedItems.Clear();
+                    foreach (var entry in visibleSelections)
+                    {
+                        ArchiveDataGrid.SelectedItems.Add(entry);
+                    }
+
+                    ArchiveDataGrid.CurrentItem = visibleSelections.FirstOrDefault();
+                }
+                finally
+                {
+                    _isSynchronizingSelection = false;
+                }
+
+                SyncEntrySelectionFlagsFromGrid();
+                RememberSelectedLinks();
+                UpdateCounts();
+                UpdateSelectionState();
+                UpdatePreviewState();
+
+                var scrollViewer = FindVisualChild<ScrollViewer>(ArchiveDataGrid);
+                if (scrollViewer == null)
+                {
+                    return;
+                }
+
+                scrollViewer.ScrollToHorizontalOffset(
+                    Math.Max(0d, Math.Min(horizontalOffset, scrollViewer.ScrollableWidth)));
+                scrollViewer.ScrollToVerticalOffset(
+                    Math.Max(0d, Math.Min(verticalOffset, scrollViewer.ScrollableHeight)));
+            }), DispatcherPriority.ApplicationIdle);
+        }
+
+        private void RememberSelectedLinks()
+        {
+            _preservedSelectionLinks.Clear();
+            _preservedSelectionLinks.AddRange(ArchiveDataGrid.SelectedItems
+                .OfType<ArchiveEntryViewModel>()
+                .Select(entry => entry.Link?.Trim())
+                .Where(link => !string.IsNullOrWhiteSpace(link))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+
+        private static T FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            if (parent == null)
+            {
+                return null;
+            }
+
+            for (var childIndex = 0; childIndex < VisualTreeHelper.GetChildrenCount(parent); childIndex++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, childIndex);
+                if (child is T match)
+                {
+                    return match;
+                }
+
+                var descendant = FindVisualChild<T>(child);
+                if (descendant != null)
+                {
+                    return descendant;
+                }
+            }
+
+            return null;
+        }
+
         private void UpdateCounts()
         {
             if (ArchivedCountTextBlock != null)
@@ -1649,6 +1902,7 @@ namespace MyNewsFeeder.Views
             UpdateCounts();
             UpdateSelectionState();
             UpdatePreviewState();
+            RememberSelectedLinks();
             CommandManager.InvalidateRequerySuggested();
         }
 
@@ -1925,6 +2179,9 @@ namespace MyNewsFeeder.Views
                 return;
             }
 
+            _pendingCategorySelection = CategoryFilterComboBox.SelectedItem as string ?? "All categories";
+            _pendingFeedSelection = FeedFilterComboBox.SelectedItem as string ?? "All feeds";
+            _pendingLabelSelection = LabelFilterComboBox.SelectedItem as string ?? "All labels";
             RefreshArchiveView();
         }
 
@@ -2119,7 +2376,7 @@ namespace MyNewsFeeder.Views
 
         private void ArchiveWindow_PlacementChanged(object sender, EventArgs e)
         {
-            if (!IsLoaded || _viewModel == null || _isApplyingWindowPlacement)
+            if (!IsLoaded || _viewModel == null || _isApplyingWindowPlacement || WindowThemeHelper.IsStagingFirstFrame(this))
             {
                 return;
             }
@@ -2308,6 +2565,7 @@ namespace MyNewsFeeder.Views
             }
 
             SyncEntrySelectionFlagsFromGrid();
+            RememberSelectedLinks();
             UpdateCounts();
             UpdateSelectionState();
         }
@@ -2316,6 +2574,7 @@ namespace MyNewsFeeder.Views
         {
             ArchiveDataGrid.SelectedItems.Clear();
             SyncEntrySelectionFlagsFromGrid();
+            RememberSelectedLinks();
             UpdateCounts();
             UpdateSelectionState();
             UpdatePreviewState();
@@ -2350,8 +2609,14 @@ namespace MyNewsFeeder.Views
 
         private void ArchiveDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (_isSynchronizingSelection)
+            {
+                return;
+            }
+
             var previousSelectedLink = SelectedArchiveEntry?.Item?.Link;
             SyncEntrySelectionFlagsFromGrid();
+            RememberSelectedLinks();
             UpdateCounts();
             UpdateSelectionState();
             UpdatePreviewState();
@@ -2476,7 +2741,7 @@ namespace MyNewsFeeder.Views
             {
                 Owner = this
             };
-            window.ShowDialog();
+            WindowThemeHelper.ShowDialogPrepared(window);
             RefreshLabelOptions(LabelFilterComboBox?.SelectedItem as string ?? _pendingLabelSelection);
             RefreshArchiveView();
             CommandManager.InvalidateRequerySuggested();
@@ -3303,11 +3568,12 @@ namespace MyNewsFeeder.Views
 
         private string BuildReaderModeHtml(ReaderArticleContent content)
         {
-            var backgroundColor = _viewModel?.DarkMode == true ? "#121212" : "#ffffff";
-            var textColor = _viewModel?.DarkMode == true ? "#e0e0e0" : "#333333";
-            var headerColor = _viewModel?.DarkMode == true ? "#90caf9" : "#673ab7";
-            var metaColor = _viewModel?.DarkMode == true ? "#b0b0b0" : "#666666";
-            var borderColor = _viewModel?.DarkMode == true ? "#90caf9" : "#673ab7";
+            var palette = AppThemeColors.Article(_viewModel?.DarkMode == true);
+            var backgroundColor = palette.Background;
+            var textColor = palette.Text;
+            var headerColor = palette.Heading;
+            var metaColor = palette.SecondaryText;
+            var borderColor = palette.Border;
             var title = string.IsNullOrWhiteSpace(content?.Title) ? SelectedArchiveEntry?.Title : content.Title;
             var encodedTitle = WebUtility.HtmlEncode(title ?? "Article");
             var encodedFeedName = WebUtility.HtmlEncode(SelectedArchiveEntry?.FeedName ?? "Unknown feed");
@@ -3476,6 +3742,7 @@ namespace MyNewsFeeder.Views
                 parentGrid.ColumnDefinitions[1].Width = new GridLength(0);
                 parentGrid.ColumnDefinitions[2].Width = new GridLength(0);
                 PreviewSplitterColumnDefinition.Width = new GridLength(0);
+                PreviewColumnDefinition.Width = new GridLength(1, GridUnitType.Star);
                 Grid.SetColumn(PreviewGroupBox, 0);
                 Grid.SetColumnSpan(PreviewGroupBox, 5);
                 WindowState = WindowState.Maximized;

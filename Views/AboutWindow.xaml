@@ -8,7 +8,7 @@
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         WindowStyle="ToolWindow"
-        Background="{DynamicResource MaterialDesignPaper}"
+        Background="{DynamicResource AppCanvasBrush}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
         FontFamily="{DynamicResource MaterialDesignFont}">
     
@@ -16,7 +16,10 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- App Info -->
-                <materialDesign:Card Padding="16" Margin="0,0,0,16">
+                <materialDesign:Card Padding="16" Margin="0,0,0,16"
+                                     Background="{DynamicResource AppPanelBrush}"
+                                     BorderBrush="{DynamicResource AppStrokeBrush}"
+                                     BorderThickness="1">
                     <StackPanel>
                         <TextBlock Text="My News Feeder"
                                    FontSize="24"
@@ -37,7 +40,10 @@
                 </materialDesign:Card>
 
                 <!-- GitHub Repository -->
-                <materialDesign:Card Padding="16" Margin="0,0,0,16">
+                <materialDesign:Card Padding="16" Margin="0,0,0,16"
+                                     Background="{DynamicResource AppPanelBrush}"
+                                     BorderBrush="{DynamicResource AppStrokeBrush}"
+                                     BorderThickness="1">
                     <StackPanel>
                         <TextBlock Text="GitHub Repository"
                                    FontSize="16"
@@ -46,7 +52,7 @@
                         <TextBlock>
                             <Hyperlink NavigateUri="https://github.com/Morgoth01/My-News-Feeder"
                                        RequestNavigate="Hyperlink_RequestNavigate"
-                                       Foreground="{DynamicResource SecondaryHueMidBrush}">
+                                       Foreground="{DynamicResource AppBrandBrush}">
                                 https://github.com/Morgoth01/My-News-Feeder
                             </Hyperlink>
                         </TextBlock>
@@ -58,7 +64,10 @@
                 </materialDesign:Card>
 
                 <!-- Update Check -->
-                <materialDesign:Card Padding="16" Margin="0,0,0,16">
+                <materialDesign:Card Padding="16" Margin="0,0,0,16"
+                                     Background="{DynamicResource AppPanelBrush}"
+                                     BorderBrush="{DynamicResource AppStrokeBrush}"
+                                     BorderThickness="1">
                     <StackPanel>
                         <TextBlock Text="Updates"
                                    FontSize="16"
@@ -66,7 +75,7 @@
                                    Margin="0,0,0,8"/>
                         <Button Content="Check for Updates"
                                 Click="CheckUpdatesButton_Click"
-                                Style="{StaticResource MaterialDesignRaisedButton}"
+                                Style="{StaticResource AppPrimaryButtonStyle}"
                                 Width="150"
                                 HorizontalAlignment="Left"
                                 Margin="0,0,0,8"/>
@@ -82,7 +91,10 @@
                 </materialDesign:Card>
 
                 <!-- Third-Party Libraries -->
-                <materialDesign:Card Padding="16" Margin="0,0,0,16">
+                <materialDesign:Card Padding="16" Margin="0,0,0,16"
+                                     Background="{DynamicResource AppPanelBrush}"
+                                     BorderBrush="{DynamicResource AppStrokeBrush}"
+                                     BorderThickness="1">
                     <StackPanel>
                         <TextBlock Text="Third-Party Libraries"
                                    FontSize="16"
@@ -179,7 +191,7 @@
                 <!-- Close Button -->
                 <Button Content="Close"
                         Click="CloseButton_Click"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Style="{StaticResource AppSecondaryButtonStyle}"
                         HorizontalAlignment="Right"
                         Width="100"
                         Margin="0,8,0,0"/>
