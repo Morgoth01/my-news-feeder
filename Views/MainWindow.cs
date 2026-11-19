@@ -884,12 +884,22 @@ namespace MyNewsFeeder.Views
 
         private void ToggleFeedsPaneButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!_isArticleListCollapsed && ArticleListColumn.ActualWidth > 0)
+            {
+                _savedExpandedArticleListWidth = ArticleListColumn.ActualWidth;
+            }
+
             _isFeedExplorerCollapsed = !_isFeedExplorerCollapsed;
             ApplyPaneCollapseState();
         }
 
         private void ToggleArticlesPaneButton_Click(object sender, RoutedEventArgs e)
         {
+            if (!_isFeedExplorerCollapsed && ExplorerColumn.ActualWidth > 0)
+            {
+                _savedExpandedExplorerWidth = ExplorerColumn.ActualWidth;
+            }
+
             _isArticleListCollapsed = !_isArticleListCollapsed;
             ApplyPaneCollapseState();
         }

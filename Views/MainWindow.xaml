@@ -1863,14 +1863,19 @@
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Padding" Value="0"/>
-                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="Margin" Value="0,0,6,0"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="Focusable" Value="True"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="MaxWidth"
+                                        Value="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListBoxItem">
-                                            <ContentPresenter/>
+                                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                              SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
@@ -2112,6 +2117,7 @@
                                         <Setter TargetName="MainListDescriptionText" Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding DataContext.UseCompactArticleCards, ElementName=RootWindow}" Value="False">
+                                        <Setter TargetName="ArticleListCard" Property="Margin" Value="0,0,4,8"/>
                                         <Setter TargetName="MainListDescriptionText" Property="Visibility" Value="Visible"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding Description}" Value="">
